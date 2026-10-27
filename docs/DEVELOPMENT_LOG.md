@@ -71,3 +71,37 @@ PASS main scene nodes=153 nav_polygons=624
 **推送：** `refactor/modular-base` 已成功推送到 `origin`，并设置为跟踪 `origin/refactor/modular-base`。首次推送因远端 LFS locking API 返回 EOF 失败，按 Git LFS 提示在本仓库设置 `lfs.https://github.com/renyuba123/song-wai-mai.git/info/lfs.locksverify=false` 后成功；此前 GitHub 403 写权限问题已不再出现。
 
 **PR：** 分支已推送，PR 创建入口为 <https://github.com/renyuba123/song-wai-mai/compare/main...refactor/modular-base?expand=1>。当前环境没有 `gh` CLI，PR 尚未自动创建；安装并登录 `gh`，或由有权限的成员打开上述链接即可补建。
+
+## 2026-10-27 16:54 确认每轮日志、推送与远端同步规则
+
+**本轮需求（原文）：** 本机对话新增规则：编写log，每轮对话完成后编写，简要说明修改，并同步提交并推送；定期提交推送与PR，时机自行确认；监控远端，出现新的更新时拉取更新
+
+**做了什么：**
+
+- 将这条规则写入本机长期记忆，后续每轮按此执行。
+- 本轮开始前检查远端，发现 `origin/main` 和 `origin/refactor/modular-base` 都有新提交，已用快进方式同步到本地。
+- 将原本只在当前会话内生效的远端监控改为持久定时任务 `855c72c4`：每 2 小时检查一次 `origin/main` 和 `origin/refactor/modular-base`；有更新时先保留本地改动，再安全整合、运行测试、追加日志、提交并推送；遇到冲突或权限问题停止并报告。
+- 仓库现有的 `CONTRIBUTING.md` 和 `docs/DEVELOPMENT_LOG.md` 规则与本条一致，本轮不需要改代码。
+
+**修改目录：** `docs/DEVELOPMENT_LOG.md`。本机记忆和定时任务配置在仓库外。
+
+**远端同步：**
+
+- `origin/main`：`67bc997` → `a720b65 Document CI integrity checks`。
+- `origin/refactor/modular-base`：`2bddb89` → `50eb89c Merge branch 'main' into refactor/modular-base`。
+- 本地已快进到 `50eb89c`，工作区干净。
+
+**校验：** 同步后重新运行了两项检查：
+
+```text
+PASS seed=42 nodes=153 edges=220 kinds=[48, 108, 64]
+PASS seed=1 nodes=27 edges=32 kinds=[8, 20, 4]
+PASS seed=73 nodes=307 edges=466 kinds=[110, 196, 160]
+PASS main scene nodes=153 nav_polygons=624
+```
+
+**提交：** `docs: record recurring round workflow rules`（本条日志）。
+
+**推送：** 提交后推送到 `origin/refactor/modular-base`。
+
+**PR：** 分支已推送，PR 创建入口见上一轮记录；PR 尚未自动创建。
