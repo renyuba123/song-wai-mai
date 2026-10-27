@@ -71,11 +71,25 @@ func _check_main_scene() -> void:
 	var nodes := world.network.nodes
 	var from := Vector3(nodes[0].x, 0.0, nodes[0].y)
 	var to := Vector3(nodes[nodes.size() - 1].x, 0.0, nodes[nodes.size() - 1].y)
-	var snapped_from := navigation.get_closest_point(from)
-	var snapped_to := navigation.get_closest_point(to)
+	# 新烘焙的地图在部分平台上要到下一个物理帧才完成同步，查询做有界重试。
+	var snapped_from := Vector3.INF
+	var snapped_to := Vector3.INF
+	var path := PackedVector3Array()
+	for _frame in 30:
+		snapped_from = navigation.get_closest_point(from)
+		snapped_to = navigation.get_closest_point(to)
+		path = navigation.find_path(snapped_from, snapped_to)
+		if path.size() >= 2:
+			break
+		await physics_frame
 	_expect(snapped_from.is_finite() and snapped_to.is_finite(), "最近可导航点不是有限值")
-	var path := navigation.find_path(snapped_from, snapped_to)
-	_expect(path.size() >= 2, "路径为空或只有一点：%d" % path.size())
+	_expect(snapped_from.distance_to(snapped_to) > 0.0, "路网两端吸附到了同一点")
+	_expect(
+		path.size() >= 2,
+		"30 个物理帧内未得到路径：from=%s to=%s snapped_from=%s snapped_to=%s" % [
+			from, to, snapped_from, snapped_to
+		]
+	)
 	_expect(navigation.is_reachable(snapped_from, snapped_to), "路网两端应可达")
 	_expect(NavigationService.get_path_length(path) > 0.0, "路径长度应大于 0")
 	var far_point := navigation.get_closest_point(Vector3(9000.0, 100.0, 9000.0))

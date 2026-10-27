@@ -233,7 +233,7 @@ PASS main scene nodes=153 nav_polygons=624
 - 五个 headless 测试全部 `exit=0`：路网生成（3 个种子）、主场景冒烟、数据契约、输入动作与玩家移动、导航查询。
 - `git diff --check` 和 `git lfs fsck --pointers` 通过。
 - 搜索确认没有 `is_physical_key_pressed` 和 `get_random_spawn_point` 残留；`NavigationRegion3D` 只出现在导航模块。
-- 首轮 CI 在 Linux 上发现刚就绪时 `find_path()` 返回空路径（本地未复现）；已在 `is_ready()` 中检查导航地图激活状态并强制同步，本地复跑主场景和导航查询测试通过。
+- 首轮 CI 在 Linux 上发现刚就绪时 `find_path()` 返回空路径（本地未复现）；已在 `is_ready()` 中检查导航地图激活状态并强制同步，并让导航查询测试在最多 30 个物理帧内重试，避免新烘焙地图跨平台同步时机差异。
 
 **提交：** `d9014a6 feat(world): add spawn and city site contracts`、`715f4d8 feat(orders): add delivery order contract`、`01e697b feat(navigation): add query interface and readiness gate`、`a77ee86 feat(input): add gameplay input actions`、`5b6603b test: cover phase-zero contracts, input, and navigation`、`eac5c91 ci: run Godot 4.7.2 headless tests`；文档与本条日志随 `docs: document phase-zero contracts and ownership` 提交。
 
