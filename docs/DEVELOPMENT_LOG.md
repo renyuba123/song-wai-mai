@@ -320,3 +320,20 @@ PASS main scene nodes=153 nav_polygons=624
 **提交：** `b991258 feat(dev): add test-only god view camera`、`894ad30 test: cover test-only god view`；文档与本条日志随 `docs: document test god view` 提交。
 
 **推送与 PR：** 推送到 `feature/jzy070407-stage-one-city`，更新 PR [#7](https://github.com/renyuba123/song-wai-mai/pull/7)，等待 CI 和负责人评审。
+
+## 2026-10-27 20:29 运行测试用上帝视角
+
+**本轮需求（原文）：** 运行一下
+
+**做了什么：** 用 Godot 4.7.2 启动 `scenes/main/main.tscn`，确认新加入的测试用上帝视角不会影响主场景启动。
+
+**运行结果：**
+
+- 使用 D3D12 12_0、Forward+，显卡为 NVIDIA GeForce RTX 5070 Laptop GPU。
+- 路网校验通过（节点 153、路段 220），城市生成通过（地块 152、建筑 152、站点 32、出入口 40），交通模块正常接入。
+- 启动和退出日志没有脚本错误或资源错误，程序退出码为 0。
+- 调试构建中可按 F3 打开上帝视角，WASD 平移、滚轮缩放，再按 F3 返回第一人称。
+
+**修改：** 本轮只运行验证，不改代码，仅追加本条日志。
+
+**提交：** 本条日志随 `docs: log god view runtime check` 提交并推送。
