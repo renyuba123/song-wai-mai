@@ -175,3 +175,19 @@ PASS main scene nodes=153 nav_polygons=624
 **推送与 PR：** 使用 `git pushpr` 推送并自动创建 PR，同时发送通知栏提醒。
 
 **待确认：** 是否删除远端已合并分支 `chore/pr-automation` 和 `refactor/modular-base`；以及请仓库 owner 在 GitHub 设置中为 `main` 启用分支保护并开启合并后自动删除 head branch。
+
+## 2026-10-27 17:20 补回未进入 main 的分支管理文档提交
+
+**原因：** PR #3 在第二个提交 `838dcac docs: list branch hooks and dev scripts` 推送前已经合并，导致 README 的目录索引和日志中的“修改目录”补充没有进入 `main`；该提交仍留在远端分支 `chore/branch-management` 上。
+
+**处理：**
+
+- 从最新 `main` 建立 `docs/jzy-branch-management-index`，cherry-pick `838dcac`，得到提交 `90b54e1`。
+- 本条目随该分支提交，说明漏合并的原因，避免以后把远端旧分支误判为已全部合并。
+- 新 PR 合并后再删除远端 `chore/branch-management`；删除前要确认 `838dcac` 已进入 `main`。
+
+**校验：** `git log main..origin/chore/branch-management` 显示 `838dcac` 尚未进入 `main`；cherry-pick 后工作区干净，README 和日志改动已恢复。本轮不涉及运行时代码。
+
+**提交：** `90b54e1 docs: list branch hooks and dev scripts` 及本条日志提交。
+
+**推送与 PR：** 使用 `pr-create.sh` 推送并自动创建 PR，同时发送通知栏提醒。
