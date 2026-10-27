@@ -34,9 +34,10 @@ tests/
   test_road_network.gd  路网生成、校验、寻路测试
 docs/
   DEVELOPMENT_LOG.md    每轮开发日志
+  USER_GUIDE.md         各角色操作方法与注意事项
 ```
 
-模块边界与文件所有权、日志和提交流程见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+模块边界与文件所有权、日志和提交流程见 [CONTRIBUTING.md](CONTRIBUTING.md)；建模、世界生成、玩家、导航、技术美术的具体操作见 [docs/USER_GUIDE.md](docs/USER_GUIDE.md)。
 
 ## 运行与校验
 
@@ -79,4 +80,4 @@ godot --headless --path . --script res://tests/test_main_scene.gd
 
 `.github/workflows/repository-integrity.yml` 会在 Pull Request 上运行 `git lfs fsck --pointers`，发现损坏的 LFS 指针时让检查失败。它还会读取同一目标分支上的其他开放 Pull Request；如果多个 PR 同时修改同一个 `.tscn`，会在对应文件上给出 GitHub Actions 警告，提醒合并前一起检查场景文件。
 
-团队协作规则、每轮日志和远端同步要求见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+团队协作规则、每轮日志和远端同步要求见 [CONTRIBUTING.md](CONTRIBUTING.md)。各角色从环境准备到交付的具体步骤和注意事项见 [docs/USER_GUIDE.md](docs/USER_GUIDE.md)。
