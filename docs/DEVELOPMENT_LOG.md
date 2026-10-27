@@ -36,4 +36,8 @@ PASS seed=73 nodes=307 edges=466 kinds=[110, 196, 160]
 
 **提交：** `ec9e9e5 refactor: split road prototype into modular world skeleton`
 
-**下一步：** 把 `refactor/modular-base` 推送并创建 PR；之后按 A（世界与交通）、B（玩家/物理/整合）、C（导航）划分目录继续开发，先补地块和订单起点/终点选择。
+**远端同步：** 准备推送时发现 `origin/road` 新增 `fd164ad Add LFS and Godot scene integrity checks`，已合并进本分支并解决 `README.md` 冲突；新增的 `.github/workflows/repository-integrity.yml` 已纳入。
+
+**推送：** 尝试 `git push -u origin refactor/modular-base` 失败，GitHub 返回 `Permission to renyuba123/song-wai-mai.git denied to jzy070407`（403）。本地提交已就绪，需要仓库 owner 把 `jzy070407` 加为 collaborator，或切换到有写权限的账号后重新推送并创建 PR。
+
+**下一步：** 获得推送权限后推送 `refactor/modular-base` 并创建 PR；之后按 A（世界与交通）、B（玩家/物理/整合）、C（导航）划分目录继续开发，先补地块和订单起点/终点选择。
