@@ -68,4 +68,6 @@ PASS main scene nodes=153 nav_polygons=624
 
 **提交：** `f7e73fe docs: add role-based developer guide`；本条日志单独提交。
 
-**推送：** 本地分支 `refactor/modular-base` 仍受 GitHub 403 权限限制；获得 `renyuba123/song-wai-mai` 的写权限后推送并创建 PR。
+**推送：** `refactor/modular-base` 已成功推送到 `origin`，并设置为跟踪 `origin/refactor/modular-base`。首次推送因远端 LFS locking API 返回 EOF 失败，按 Git LFS 提示在本仓库设置 `lfs.https://github.com/renyuba123/song-wai-mai.git/info/lfs.locksverify=false` 后成功；此前 GitHub 403 写权限问题已不再出现。
+
+**PR：** 分支已推送，PR 创建入口为 <https://github.com/renyuba123/song-wai-mai/compare/main...refactor/modular-base?expand=1>。当前环境没有 `gh` CLI，自动模式也不允许提取 Git 凭据调用 GitHub API，因此 PR 尚未自动创建；安装并登录 `gh`，或由有权限的成员打开上述链接即可补建。
