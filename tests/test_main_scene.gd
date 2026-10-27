@@ -17,7 +17,28 @@ func _run() -> void:
 	await process_frame
 	var world := main.get_node_or_null("World") as WorldGenerator
 	var navigation := main.get_node_or_null("NavigationSystem") as NavigationService
-	var ok := world != null and world.network != null and navigation != null
+	var player := main.get_node_or_null("Player") as PlayerController
+	var city_builder := main.get_node_or_null("World/CityBuilder")
+	var world_environment := main.get_node_or_null("World/WorldEnvironment") as WorldEnvironment
+	var sky_ready := (
+		world_environment != null and world_environment.environment != null
+		and world_environment.environment.sky != null
+		and world_environment.environment.background_mode == Environment.BG_SKY
+	)
+	var ok := (
+		world != null and world.network != null and world.city != null
+		and navigation != null and player != null
+		and city_builder != null and city_builder.get_child_count() > 0
+		and sky_ready
+		and bool(world.city_report.get("valid", false))
+		and world.city.is_valid(world.network)
+	)
+	if ok:
+		await physics_frame
+		await physics_frame
+		var start := world.city.player_start.position
+		var player_xz := Vector2(player.global_position.x, player.global_position.z)
+		ok = player_xz.distance_to(Vector2(start.x, start.z)) < 1.0
 	if ok:
 		for _frame in 10:
 			if navigation.is_ready():
@@ -25,9 +46,19 @@ func _run() -> void:
 			await physics_frame
 		ok = navigation.is_ready()
 	if ok:
-		print("PASS main scene nodes=", world.network.nodes.size())
+		print(
+			"PASS main scene nodes=", world.network.nodes.size(),
+			" lots=", world.city.lots.size(),
+			" sites=", world.city.sites.size(),
+			" sky=", sky_ready
+		)
 	else:
 		printerr("FAIL main scene world=", world != null, " network=", world != null and world.network != null,
+			" city=", world != null and world.city != null,
+			" city_valid=", world != null and not world.city_report.is_empty() and world.city_report.valid,
+			" player=", player != null,
+			" city_builder=", city_builder != null and city_builder.get_child_count() > 0,
+			" sky=", sky_ready,
 			" navigation_ready=", navigation != null and navigation.is_ready())
 	main.queue_free()
 	quit(0 if ok else 1)

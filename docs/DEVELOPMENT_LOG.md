@@ -238,3 +238,102 @@ PASS main scene nodes=153 nav_polygons=624
 **提交：** `d9014a6 feat(world): add spawn and city site contracts`、`715f4d8 feat(orders): add delivery order contract`、`01e697b feat(navigation): add query interface and readiness gate`、`a77ee86 feat(input): add gameplay input actions`、`5b6603b test: cover phase-zero contracts, input, and navigation`、`eac5c91 ci: run Godot 4.7.2 headless tests`；文档与本条日志随 `docs: document phase-zero contracts and ownership` 提交。
 
 **推送与 PR：** 使用 `git pushpr` 推送分支并自动创建 PR，同时发送通知栏提醒；等待 `integrity`（含 Godot 4.7.2 headless 测试）通过后再合并。
+
+## 2026-10-27 19:57 实施阶段一：城市地块、建筑、商家和顾客站点
+
+**本轮需求（原文）：** 开始阶段一
+
+**做了什么：**
+
+- `RoadNetwork` 新增 `SURFACE_Y`、`CARRIAGEWAY_RATIO`、`sidewalk_offset()` 和 `get_entrance_setback()`；入口可选键 `width`、`facing_yaw`、`lot_id` 加入校验。主干路、次干路、支路和困难模式的退让规则集中到同一函数，出生点不再各写一套。
+- `SpawnPoint` 新增 `lateral_offset_m`，用路段左法线计算人行道位置；位置与偏移不一致、横向偏移超出红线时校验失败。出入口退让改用 `network.get_entrance_setback()`，支路出生点不再固定按 30 米处理。
+- 新增 `CityContent` 纯数据契约，统一保存地块、建筑、站点、玩家起点和出入口交叉引用；校验地块重叠、建筑超出地块、入口退让、站点与入口关联、站点/玩家出生点不在建筑内、玩家起点不在道路中心。
+- 新增 `CityGenerator`，从真实路段和轴线生成城市。每条非支路最多一个入口；地块临街宽 18～40 米、进深 18～28 米，全局最多 240 个；商家最多 12、顾客最多 20；同种子逐字段可复现。种子 42、2400 米、密度 0.5 生成 152 个地块、152 栋建筑、40 个出入口、32 个站点（16 商家 + 16 顾客）；1200 米、种子 1、密度 1.0 生成 16 个地块、16 栋建筑、4 个出入口、4 个站点。
+- 新增 `CityBuilder`：绘制人行道、方块建筑和商家/顾客标记；人行道和建筑使用 `WORLD_STATIC` 碰撞，但不加入 `navigation_source`。`world.tscn` 增加 `CityBuilder` 兄弟节点。
+- `RoadBuilder` 把所有可走碰撞体顶面统一到 `RoadNetwork.SURFACE_Y = 0`，视觉网格只抬高几厘米；修掉人行道与车行道之间约 20 厘米、玩家无法自然跨越的台阶。
+- `WorldGenerator` 生成顺序改为路网 → 城市 → 校验 → 道路绘制 → 城市绘制 → 报告 → `world_generated`；新增 `generate_city`、`city` 和 `city_report`，信号签名不变。
+- `main.gd` 在世界生成后把玩家放到 `CityContent.player_start` 的位置和朝向；`city_demo.gd` 增加地块、建筑、站点和出入口数量。
+- 新增 `tests/test_city.gd`，覆盖同种子确定性、不同种子差异、两组地图参数、入口/地块/建筑/站点交叉引用、六类反向数据、主场景城市装配、导航源分组隔离，以及玩家起点到每个站点的 30 帧有界可达性查询。扩展 `test_contracts.gd` 和 `test_main_scene.gd`，CI 测试列表加入 `test_city`。
+
+**共享契约变化：** `RoadNetwork.entrances` 的 `width`、`facing_yaw`、`lot_id` 已成为阶段一城市必要键；`SpawnPoint` 新增 `lateral_offset_m`；新增 `CityContent`。旧的“新生成路网不应已有出入口”测试保留，因为入口只在 `CityGenerator` 中写入。导航源仍只有 `RoadCollision`。
+
+**修改目录：** `scripts/world/`、`scripts/core/`、`scripts/demo/`、`scenes/world/`、`tests/`、`.github/workflows/`、`README.md`、`CONTRIBUTING.md`、`docs/`。
+
+**本地校验：**
+
+- `godot --headless --path . --import` 成功，注册 `CityContent`、`CityGenerator`、`CityBuilder` 并生成 `.uid`。
+- 六个 headless 测试全部 `exit=0`：`test_road_network` 三种子通过；`test_main_scene` 输出 `nodes=153 lots=152 sites=32`；`test_contracts` 通过；`test_input_actions` 通过；`test_navigation_queries` 通过；`test_city` 两组种子通过，主场景全部 32 个站点可达。
+- `git diff --check` 通过，`git lfs fsck --pointers` 输出 `Git LFS fsck OK`。
+- 边界搜索确认 `navigation_source` 仍只用于道路和碰撞层常量；建筑/人行道没有加入导航源；没有 `get_random_spawn_point` 或 `is_physical_key_pressed` 残留。
+- 本轮以 headless 测试验证主场景装配和可达性，未在图形窗口中手动漫游；F5 的视觉效果和“从人行道走上车行道”留给 PR 评审时确认。
+
+**提交：** `369a5cb feat(world): add entrance setback and surface metrics`、`daf5c42 feat(world): add spawn lateral offset and city content contract`、`0cd534c feat(world): generate city lots, buildings, and sites`、`1fe23af feat(world): render sidewalks, buildings, and site markers`、`2a52eb0 feat(core): spawn player at the generated city start`、`bbc9ab1 test: cover stage-one city generation and reachability`；文档与本条日志随 `docs: document stage-one city generation` 提交。
+
+**推送与 PR：** 已推送 `feature/jzy070407-stage-one-city`，使用 `D:\Tools\gh\pr-create.sh` 创建 PR [#7](https://github.com/renyuba123/song-wai-mai/pull/7)，标题为 `feat: implement stage one city lots and sites`，同时发送通知栏提醒。GitHub Actions `integrity` 已通过（14 秒，Godot 4.7.2 headless 六个测试全部通过，LFS 与场景检查通过）。按规则不在本轮自行合并，等待负责人评审。
+
+## 2026-10-27 20:17 运行阶段一并载入天空盒
+
+**本轮需求（原文）：** 运行一下；天空盒没有载入，载入一个天空盒
+
+**做了什么：**
+
+- 运行 `scenes/main/main.tscn`，启动日志显示路网和城市校验通过；玩家出生在人行道起点，运行期间没有报错，关闭窗口时退出码为 0。
+- 新增 `scenes/world/sky_environment.tres`：用 `ProceduralSkyMaterial` 提供天空渐变、地平线、地面色和太阳圆盘，并用 `Environment` 的 Sky 环境光和 Sky 反射照亮城市；不依赖外部贴图，也不增加 LFS 资源。
+- 在 `scenes/world/world.tscn` 增加 `WorldEnvironment` 并引用该资源。主场景和 F6 路网演示都实例化 `World`，因此共用同一份天空环境，不需要在两个场景里各配一套。
+- `test_main_scene.gd` 增加天空环境断言：`WorldEnvironment` 存在、`environment.sky` 已加载，且背景模式为 `BG_SKY`；输出增加 `sky=true`。
+
+**修改文件：** `scenes/world/world.tscn`、`scenes/world/sky_environment.tres`、`tests/test_main_scene.gd`、`README.md`、`docs/USER_GUIDE.md`、`docs/DEVELOPMENT_LOG.md`。
+
+**校验：**
+
+- `godot --headless --path . --import` 成功加载新的 `.tres`，没有资源解析错误。
+- 六个 headless 测试全部 `exit=0`；`test_main_scene` 输出 `PASS main scene nodes=153 lots=152 sites=32 sky=true`。
+- `git diff --check` 通过，`git lfs fsck --pointers` 输出 `Git LFS fsck OK`。
+- 已在图形窗口启动主场景，天空资源加载无报错；本机未自动截图，天空视觉效果以窗口目视和评审为准。
+
+**提交：** `c344f1d feat(world): add procedural sky environment`、`2a4aa30 test: verify sky environment in main scene`；文档与本条日志随 `docs: document sky environment` 提交。
+
+**推送与 PR：** 推送到 `feature/jzy070407-stage-one-city`，更新 PR [#7](https://github.com/renyuba123/song-wai-mai/pull/7)，等待 CI 和负责人评审。
+
+## 2026-10-27 20:22 新增测试用上帝视角
+
+**本轮需求（原文）：** 新增一个测试用上帝视角，此功能仅在测试时启用
+
+**做了什么：**
+
+- 新增 `scripts/dev/test_god_view.gd`，提供正交俯视相机：F3 开关，WASD 按当前视野大小平移，鼠标滚轮缩放，左上角显示操作提示。
+- 开启时相机对准玩家当前位置并成为当前相机，暂停玩家物理移动、清零速度、释放鼠标；关闭时恢复玩家相机、物理处理、鼠标捕获，隐藏提示。
+- `main.gd` 在世界生成和玩家落位后调用 `TestGodView.is_test_only_enabled()`；只有调试/测试构建（当前为 `OS.is_debug_build()`）才动态创建 `TestGodView`，正式导出不创建节点，也不往 `project.godot` 增加 F3 输入动作。
+- 相机、提示 UI 和地图边界夹取全部由脚本创建；不修改 `main.tscn`，不影响现有七个正式输入动作。
+- 新增 `tests/test_god_view.gd`：检查调试构建创建节点、初始关闭、开启后正交相机成为当前相机并暂停玩家物理、关闭后恢复玩家相机和物理；非调试构建断言节点不存在。
+- CI 测试列表加入 `test_god_view`；README 和用户指南补充 F3 操作、调试构建限制和测试命令。
+
+**修改目录：** `scripts/dev/`、`scripts/core/`、`tests/`、`.github/workflows/`、`README.md`、`docs/`。本轮不修改 `.tscn` 和 `project.godot`。
+
+**本地校验：**
+
+- `godot --headless --path . --import` 成功注册 `TestGodView` 并生成 `.gd.uid`。
+- 七个 headless 测试全部 `exit=0`；`test_main_scene` 仍输出 `PASS main scene nodes=153 lots=152 sites=32 sky=true`，`test_city` 两组参数通过，`test_god_view` 输出 `PASS god view debug=true`（本机为调试构建，实际走完开关和恢复断言）。
+- `git diff --check` 通过，`git lfs fsck --pointers` 输出 `Git LFS fsck OK`。
+- 边界搜索确认 `TestGodView` 只在 `main.gd` 的测试门控后实例化，`project.godot` 没有 F3 输入动作，正式输入仍为七个。
+
+**提交：** `b991258 feat(dev): add test-only god view camera`、`894ad30 test: cover test-only god view`；文档与本条日志随 `docs: document test god view` 提交。
+
+**推送与 PR：** 推送到 `feature/jzy070407-stage-one-city`，更新 PR [#7](https://github.com/renyuba123/song-wai-mai/pull/7)，等待 CI 和负责人评审。
+
+## 2026-10-27 20:29 运行测试用上帝视角
+
+**本轮需求（原文）：** 运行一下
+
+**做了什么：** 用 Godot 4.7.2 启动 `scenes/main/main.tscn`，确认新加入的测试用上帝视角不会影响主场景启动。
+
+**运行结果：**
+
+- 使用 D3D12 12_0、Forward+，显卡为 NVIDIA GeForce RTX 5070 Laptop GPU。
+- 路网校验通过（节点 153、路段 220），城市生成通过（地块 152、建筑 152、站点 32、出入口 40），交通模块正常接入。
+- 启动和退出日志没有脚本错误或资源错误，程序退出码为 0。
+- 调试构建中可按 F3 打开上帝视角，WASD 平移、滚轮缩放，再按 F3 返回第一人称。
+
+**修改：** 本轮只运行验证，不改代码，仅追加本条日志。
+
+**提交：** 本条日志随 `docs: log god view runtime check` 提交并推送。
