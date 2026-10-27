@@ -1,0 +1,78 @@
+name: Repository integrity
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  integrity:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository with LFS objects
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Verify Git LFS pointers
+        run: git lfs fsck --pointers
+
+      - name: Warn about overlapping Godot scene changes
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            try {
+              const owner = context.repo.owner;
+              const repo = context.repo.repo;
+              const currentNumber = context.payload.pull_request.number;
+              const baseBranch = context.payload.pull_request.base.ref;
+
+              const currentFiles = await github.paginate(
+                github.rest.pulls.listFiles,
+                { owner, repo, pull_number: currentNumber, per_page: 100 }
+              );
+              const currentScenes = new Set(
+                currentFiles
+                  .map(file => file.filename)
+                  .filter(name => name.toLowerCase().endsWith('.tscn'))
+              );
+
+              if (currentScenes.size === 0) {
+                core.info('This pull request does not change a .tscn file.');
+                return;
+              }
+
+              const openPulls = await github.paginate(
+                github.rest.pulls.list,
+                { owner, repo, state: 'open', base: baseBranch, per_page: 100 }
+              );
+
+              for (const pull of openPulls) {
+                if (pull.number === currentNumber) continue;
+
+                const otherFiles = await github.paginate(
+                  github.rest.pulls.listFiles,
+                  { owner, repo, pull_number: pull.number, per_page: 100 }
+                );
+                const otherScenes = new Set(
+                  otherFiles
+                    .map(file => file.filename)
+                    .filter(name => name.toLowerCase().endsWith('.tscn'))
+                );
+                const overlap = [...currentScenes].filter(name => otherScenes.has(name));
+
+                for (const filename of overlap) {
+                  core.warning(
+                    `${filename} is also modified by open PR #${pull.number} (${pull.title}). Review the scene changes together to avoid a merge conflict.`,
+                    { file: filename, title: 'Overlapping Godot scene changes' }
+                  );
+                }
+              }
+            } catch (error) {
+              core.warning(`Could not inspect other open PRs for overlapping .tscn files: ${error.message}`);
+            }
