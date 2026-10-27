@@ -26,6 +26,17 @@ func _unhandled_input(event: InputEvent) -> void:
 		camera.rotation.x = _pitch
 
 
+func reset_to(spawn: SpawnPoint) -> void:
+	if spawn == null:
+		return
+	global_position = spawn.position
+	rotation.y = spawn.facing_yaw
+	velocity = Vector3.ZERO
+	_pitch = 0.0
+	camera.rotation.x = 0.0
+	reset_physics_interpolation()
+
+
 func _physics_process(delta: float) -> void:
 	var input := Input.get_vector(
 		"move_left", "move_right", "move_forward", "move_back"

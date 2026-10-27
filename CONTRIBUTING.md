@@ -105,7 +105,7 @@ git push origin --delete <branch-name>
 共享契约的维护责任：
 
 - `RoadNetwork` 字段和 `SpawnPoint`、`CitySite` 由 A 维护。
-- `CityContent` 及 `CityGenerator` 生成的地块、建筑、站点数据由 A 维护。
+- `CityContent` 及 `CityGenerator` 生成的地块、建筑、站点和玩家起点数据由 A 维护；阶段二新增的 `player_starts` 是共享契约，修改前通知 B、C。
 - `RoadNetwork.entrances` 的 `width`、`facing_yaw`、`lot_id` 属于共享契约；修改含义或校验规则前先通知 B、C，并同步更新 `tests/test_contracts.gd` 和 `tests/test_city.gd`。
 - `DeliveryOrder` 由 B 维护。
 - 输入动作和 `project.godot` 由 B 维护。

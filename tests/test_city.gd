@@ -52,7 +52,14 @@ func _check_city(seed_value: int, map_size: Vector2, density: float) -> void:
 	_expect(city.buildings == other_city.buildings, "同种子的建筑不确定")
 	_expect(network.entrances == other_network.entrances, "同种子的出入口不确定")
 	_expect(_site_signatures(city) == _site_signatures(other_city), "同种子的站点不确定")
-	_expect(_spawn_signature(city.player_start) == _spawn_signature(other_city.player_start), "同种子的玩家起点不确定")
+	_expect(
+		_spawn_signatures(city.player_starts) == _spawn_signatures(other_city.player_starts),
+		"同种子的玩家起点列表不确定"
+	)
+	_expect(
+		_spawn_signature(city.player_start) == _spawn_signature(city.player_starts[0]),
+		"player_start 应与 player_starts 首项一致"
+	)
 
 	_expect(not city.lots.is_empty(), "城市没有地块")
 	_expect(city.lots.size() <= CityGenerator.MAX_LOTS, "地块数量超过上限")
@@ -110,6 +117,31 @@ func _check_city(seed_value: int, map_size: Vector2, density: float) -> void:
 		_expect(start.site_id == &"", "玩家起点不应关联站点")
 		_expect(absf(start.lateral_offset_m) > RoadNetwork.EPS, "玩家起点在道路中心")
 		_expect(network.edges[start.road_edge_id].kind != RoadNetwork.LOCAL, "玩家起点不应在支路")
+	_expect(city.player_starts.size() >= 2, "城市至少需要两个安全玩家起点")
+	_expect(
+		city.player_starts.size() <= CityGenerator.MAX_PLAYER_STARTS,
+		"玩家起点数量超过上限"
+	)
+	for index in city.player_starts.size():
+		var candidate := city.player_starts[index]
+		_expect(candidate != null, "玩家起点 %d 为空" % index)
+		if candidate == null:
+			continue
+		_expect(
+			candidate.is_valid(network),
+			"玩家起点 %d 契约无效：%s" % [index, str(candidate.validate(network))]
+		)
+		_expect(candidate.kind == SpawnPoint.Kind.PLAYER_START, "玩家起点 %d 类型错误" % index)
+		_expect(candidate.site_id == &"", "玩家起点 %d 不应关联站点" % index)
+		_expect(absf(candidate.lateral_offset_m) > RoadNetwork.EPS, "玩家起点 %d 在道路中心" % index)
+		_expect(
+			network.edges[candidate.road_edge_id].kind != RoadNetwork.LOCAL,
+			"玩家起点 %d 不应在支路" % index
+		)
+		_expect(
+			not _point_in_building(Vector2(candidate.position.x, candidate.position.z), city),
+			"玩家起点 %d 落在建筑内" % index
+		)
 	print(
 		"PASS city seed=%d lots=%d buildings=%d entrances=%d sites=%d" % [
 			seed_value, city.lots.size(), city.buildings.size(),
@@ -178,6 +210,19 @@ func _check_negative_cases() -> void:
 	_expect(start.is_valid(network), "用于测试的居中玩家起点本身应合法")
 	_expect(not city.is_valid(network), "玩家起点在道路中心时城市应校验失败")
 
+	data = _make_city(42, Vector2(2400.0, 2400.0), 0.5)
+	network = data.network
+	city = data.city
+	var duplicate_start := city.player_starts[0].duplicate(true) as SpawnPoint
+	city.player_starts.append(duplicate_start)
+	_expect(not city.is_valid(network), "重复玩家起点时城市应校验失败")
+
+	data = _make_city(42, Vector2(2400.0, 2400.0), 0.5)
+	network = data.network
+	city = data.city
+	city.player_start = city.player_starts[1]
+	_expect(not city.is_valid(network), "player_start 与首项不一致时城市应校验失败")
+
 
 func _check_main_scene() -> void:
 	var packed := load("res://scenes/main/main.tscn") as PackedScene
@@ -190,8 +235,12 @@ func _check_main_scene() -> void:
 	var world := main.get_node_or_null("World") as WorldGenerator
 	var navigation := main.get_node_or_null("NavigationSystem") as NavigationService
 	var player := main.get_node_or_null("Player") as PlayerController
-	if world == null or navigation == null or player == null or world.city == null:
-		_expect(false, "主场景缺少世界、城市、导航或玩家")
+	var orders := main.get_node_or_null("OrderSystem") as OrderManager
+	if (
+		world == null or navigation == null or player == null
+		or orders == null or world.city == null
+	):
+		_expect(false, "主场景缺少世界、城市、导航、订单系统或玩家")
 		main.queue_free()
 		await process_frame
 		return
@@ -207,34 +256,50 @@ func _check_main_scene() -> void:
 	_expect(building_body != null and not building_body.is_in_group(CollisionLayers.NAVIGATION_SOURCE_GROUP), "建筑碰撞体不应在导航源组")
 	_expect(sidewalk_body != null and not sidewalk_body.is_in_group(CollisionLayers.NAVIGATION_SOURCE_GROUP), "人行道碰撞体不应在导航源组")
 
-	await physics_frame
-	await physics_frame
-	var start_xz := Vector2(world.city.player_start.position.x, world.city.player_start.position.z)
-	var player_xz := Vector2(player.global_position.x, player.global_position.z)
-	_expect(player_xz.distance_to(start_xz) < 1.0, "玩家没有出生在城市起点")
-
 	var ready := navigation.is_ready()
-	for _frame in 30:
-		if ready:
+	var current_order: DeliveryOrder = null
+	for _frame in 120:
+		ready = navigation.is_ready()
+		current_order = orders.get_current_order()
+		if ready and current_order != null:
 			break
 		await physics_frame
-		ready = navigation.is_ready()
-	_expect(ready, "导航在 30 个物理帧内未就绪")
-	if ready:
+	_expect(ready, "导航在 120 个物理帧内未就绪")
+	_expect(current_order != null, "订单系统在 120 个物理帧内没有生成首单")
+	if ready and current_order != null:
+		var start_xz := Vector2(current_order.start.position.x, current_order.start.position.z)
+		var player_xz := Vector2(player.global_position.x, player.global_position.z)
+		_expect(player_xz.distance_to(start_xz) < 1.0, "玩家没有出生在订单起点")
+
 		var from := navigation.get_closest_point(world.city.player_start.position)
 		_expect(from.is_finite(), "玩家起点无法吸附到导航网格")
 		for site in world.city.sites:
 			var target := navigation.get_closest_point(site.spawn_point.position)
 			_expect(target.is_finite(), "站点 %s 无法吸附到导航网格" % site.id)
-			var path := PackedVector3Array()
-			for _frame in 30:
-				path = navigation.find_path(from, target)
-				if path.size() >= 2:
-					break
-				await physics_frame
-			_expect(path.size() >= 2, "站点 %s 在 30 个物理帧内不可达" % site.id)
+			var path := navigation.find_path(from, target)
+			_expect(path.size() >= 2, "站点 %s 不可达" % site.id)
 			if path.size() >= 2:
 				_expect(NavigationService.get_path_length(path) > 0.0, "站点 %s 的路径长度无效" % site.id)
+
+		var first_merchant: CitySite = null
+		var first_customer: CitySite = null
+		for site in world.city.sites:
+			if site.kind == CitySite.Kind.MERCHANT and first_merchant == null:
+				first_merchant = site
+			elif site.kind == CitySite.Kind.RESIDENTIAL and first_customer == null:
+				first_customer = site
+		for start in world.city.player_starts:
+			var start_from := navigation.get_closest_point(start.position)
+			_expect(start_from.is_finite(), "玩家起点无法吸附到导航网格")
+			for site in [first_merchant, first_customer]:
+				if site == null:
+					continue
+				var target := navigation.get_closest_point(site.spawn_point.position)
+				var path := navigation.find_path(start_from, target)
+				_expect(
+					path.size() >= 2,
+					"玩家起点 %d 到站点 %s 不可达" % [start.road_edge_id, site.id]
+				)
 	main.queue_free()
 	await process_frame
 
@@ -256,6 +321,13 @@ func _spawn_signature(spawn: SpawnPoint) -> Array:
 		spawn.kind, spawn.site_id, spawn.position, spawn.facing_yaw,
 		spawn.road_edge_id, spawn.road_offset_m, spawn.lateral_offset_m
 	]
+
+
+func _spawn_signatures(starts: Array[SpawnPoint]) -> Array:
+	var result := []
+	for spawn in starts:
+		result.append(_spawn_signature(spawn))
+	return result
 
 
 func _point_in_building(point: Vector2, city: CityContent) -> bool:
