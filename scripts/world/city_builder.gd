@@ -1,3 +1,4 @@
+@tool
 extends Node3D
 class_name CityBuilder
 
@@ -11,6 +12,7 @@ const RESIDENTIAL_COLOR := Color("71859a")
 const VACANT_COLOR := Color("8c8f91")
 const MERCHANT_MARKER_COLOR := Color("f2c14e")
 const CUSTOMER_MARKER_COLOR := Color("4fc3c8")
+const GENERATED_META := &"world_generator_generated"
 
 var _sidewalk_body: StaticBody3D = null
 var _building_body: StaticBody3D = null
@@ -39,7 +41,7 @@ func _build_sidewalks(network: RoadNetwork) -> void:
 	_sidewalk_body.name = "SidewalkCollision"
 	_sidewalk_body.collision_layer = CollisionLayers.WORLD_STATIC
 	_sidewalk_body.collision_mask = 0
-	add_child(_sidewalk_body)
+	_add_generated_child(_sidewalk_body)
 
 	var nodes: Array = network.nodes
 	var junction_widths: Array = []
@@ -102,7 +104,7 @@ func _build_buildings(city: CityContent) -> void:
 	_building_body.name = "BuildingCollision"
 	_building_body.collision_layer = CollisionLayers.WORLD_STATIC
 	_building_body.collision_mask = 0
-	add_child(_building_body)
+	_add_generated_child(_building_body)
 
 	for building in city.buildings:
 		var rect: Rect2 = building.rect
@@ -141,16 +143,21 @@ func _build_markers(city: CityContent) -> void:
 			else _materials.customer_marker
 		)
 		marker.position = site.spawn_point.position + Vector3(0.0, 1.0, 0.0)
-		add_child(marker)
+		_add_generated_child(marker)
 
 
 func _clear() -> void:
 	for child in get_children():
-		remove_child(child)
-		child.queue_free()
+		if bool(child.get_meta(GENERATED_META, false)):
+			child.free()
 	_sidewalk_body = null
 	_building_body = null
 	_materials = {}
+
+
+func _add_generated_child(child: Node) -> void:
+	child.set_meta(GENERATED_META, true)
+	add_child(child)
 
 
 func _visual_box(size: Vector3, position: Vector3, material: Material) -> void:
@@ -160,7 +167,7 @@ func _visual_box(size: Vector3, position: Vector3, material: Material) -> void:
 	instance.mesh = mesh
 	instance.material_override = material
 	instance.position = position
-	add_child(instance)
+	_add_generated_child(instance)
 
 
 func _collision_box(size: Vector3, position: Vector3, body: StaticBody3D) -> void:

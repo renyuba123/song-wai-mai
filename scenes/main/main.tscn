@@ -21,7 +21,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.0, 0)
 script = ExtResource("6_orders")
 
 [node name="World" parent="." instance=ExtResource("2_world")]
-generate_on_ready = false
+seed = 118
 
 [node name="Sun" type="DirectionalLight3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 0.573576, -0.819152, 0, 0.819152, 0.573576, 0, 20, 0)

@@ -425,3 +425,28 @@ PASS main scene nodes=153 nav_polygons=624
 **修改：** 本轮只启动并运行项目，不改代码，仅追加本条日志。
 
 **提交与推送：** 本条日志提交并推送到 `feature/jzy070407-stage-two-delivery-loop`，更新 PR [#9](https://github.com/renyuba123/song-wai-mai/pull/9)。
+
+## 2026-10-27 22:26 实现 Seed 编辑器实时预览
+
+**用户需求（原文摘要）：** 实现类似 Houdini 的 Seed 编辑器实时预览：城市生成逻辑可在 Godot 编辑器中运行；Inspector 只暴露一个 `seed: int`；修改 Seed 后 3D 视口立即重新生成；同 Seed 稳定复现；重建时清理旧预览且不删除手工节点；复用现有逻辑、场景和资源，不增加 Bake、额外参数或 UI。修改前先检查并解决 Git 冲突，完成后按项目文档记录进度并安全上传。
+
+**做了什么：**
+
+- 在旧 `road` 工作区先检查并解决 `README.md` 与 `.github/workflows/repository-integrity.yml` 的合并冲突；没有从历史 `road` 分支直接上传。同步远端后，基于已合并阶段二的最新 `origin/main`（`91ca87e`，PR #9）复用干净 worktree，创建 `feature/jzy070407-seed-editor-preview` 分支，只移植本轮相关改动。
+- 为 `WorldGenerator` 增加 `@tool`，把自定义 Inspector 属性收敛为唯一的 `@export var seed: int`。Seed setter 在编辑器中延迟触发 `regenerate()`，场景载入时也自动生成预览；地图尺寸、密度和道路宽度等现有值保留为内部变量。
+- 继续复用 `RoadGenerator`、`CityGenerator`、`RoadBuilder` 与 `CityBuilder`。现有 `RandomNumberGenerator` 仍以城市 Seed 设置状态，因此同 Seed 的道路、地块、建筑、站点与阶段二订单输入保持可复现。
+- 为 `RoadBuilder` 和 `CityBuilder` 增加 `@tool`，给程序生成的直接子节点写入 `world_generator_generated` 元数据。重建时只释放带该标记的节点，既不会累积上一轮道路和建筑，也不会删除设计人员手工创建的子节点。
+- 主场景继续使用 `seed = 118`，保留阶段二 `OrderSystem` 及原有 F5 装配流程；演示场景继续由原入口调用 `regenerate()`，覆盖层改读 `world.seed`。没有带入测试过程中产生的 Seed 137/183、场景 UID、天空环境格式变化或其他无关改动。
+
+**修改文件：** `scripts/world/world_generator.gd`、`scripts/world/road_builder.gd`、`scripts/world/city_builder.gd`、`scripts/demo/city_demo.gd`、`scenes/main/main.tscn`、`scenes/demo/city_road_demo.tscn`、`docs/DEVELOPMENT_LOG.md`。
+
+**验证：**
+
+- Godot 4.7.2 执行 `--headless --path . --import` 成功，`WorldGenerator`、`RoadBuilder`、`CityBuilder` 的 `@tool` 脚本完成注册并在编辑器加载阶段生成城市预览。
+- 最新 CI 清单中的八个 headless 测试全部 `exit=0`：`test_road_network`、`test_main_scene`、`test_contracts`、`test_input_actions`、`test_navigation_queries`、`test_city`、`test_god_view`、`test_orders`。其中主场景输出 `nodes=150 lots=152 sites=32 starts=12 order_seed=2 sky=true`，阶段二订单测试输出 `PASS orders starts=12`。
+- 仓库外临时专项脚本在 `--editor` 环境验证通过：脚本导出属性只有 `seed`；把 Seed 改为 43 后自动生成不同城市；同 Seed 再生成时道路节点、路段和建筑数据完全一致；生成节点数量不累积；分别放入两个 Builder 的手工节点均保留。
+- `git diff --check` 通过；功能分支只包含上述目标文件，没有合并冲突或无关场景资源改动。Headless 环境的 Windows 根证书、`user://logs` 与编辑器退出 RID 提示不影响测试结果，所有相关进程均 `exit=0`。
+
+**提交：** `feat(world): add live seed editor preview`，本条日志与功能代码同一提交。
+
+**推送与 PR：** 推送 `feature/jzy070407-seed-editor-preview`，以最新 `main` 为目标创建 PR；PR 链接记录在本轮最终交付中。

@@ -57,6 +57,6 @@ func _update_overlay() -> void:
 			"通过" if world.city_report.valid else "失败"
 		]
 	_overlay.text = "大城市送外卖 · 3D 路网\n主干路：红　次干路：黄　支路：青\n种子 %d · 节点 %d · 路段 %d · 硬规则：%s\n%s" % [
-		world.random_seed, world.report.nodes, world.report.edges,
+		world.seed, world.report.nodes, world.report.edges,
 		"通过" if world.report.valid else "失败", city_line
 	]
