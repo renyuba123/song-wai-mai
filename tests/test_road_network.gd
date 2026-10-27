@@ -1,9 +1,11 @@
 extends SceneTree
 
-const Generator = preload("res://scripts/road_network.gd")
+const Generator = preload("res://scripts/world/road_generator.gd")
+
 
 func _initialize() -> void:
 	call_deferred("_run")
+
 
 func _run() -> void:
 	var cases := [
@@ -14,22 +16,22 @@ func _run() -> void:
 	var failed := false
 	for sample in cases:
 		var widths := Vector3(40.0, 30.0, 18.0)
-		var first := Generator.generate(sample.size, sample.seed, sample.density, widths)
-		var again := Generator.generate(sample.size, sample.seed, sample.density, widths)
-		var result := Generator.validate(first)
-		var route := Generator.find_route(first, 0, first.nodes.size() - 1)
+		var first: RoadNetwork = Generator.generate(sample.size, sample.seed, sample.density, widths)
+		var again: RoadNetwork = Generator.generate(sample.size, sample.seed, sample.density, widths)
+		var result := first.validate()
+		var route := first.find_route(0, first.nodes.size() - 1)
 		if not result.valid or first.nodes != again.nodes or first.edges != again.edges or route.is_empty():
 			failed = true
 			printerr("FAIL seed=", sample.seed, " errors=", result.errors)
 		else:
 			print("PASS seed=", sample.seed, " nodes=", result.nodes, " edges=", result.edges, " kinds=", result.kinds)
-	var invalid_width := Generator.generate(Vector2(2400, 2400), 42, 0.5, Vector3(10.0, 30.0, 18.0))
-	if Generator.validate(invalid_width).valid:
+	var invalid_width: RoadNetwork = Generator.generate(Vector2(2400, 2400), 42, 0.5, Vector3(10.0, 30.0, 18.0))
+	if invalid_width.validate().valid:
 		failed = true
 		printerr("FAIL invalid arterial width was accepted")
-	var invalid_entrance := Generator.generate(Vector2(2400, 2400), 42, 0.5, Vector3(40.0, 30.0, 18.0))
+	var invalid_entrance: RoadNetwork = Generator.generate(Vector2(2400, 2400), 42, 0.5, Vector3(40.0, 30.0, 18.0))
 	invalid_entrance.entrances.append({"edge_id": 0, "offset": 0.0})
-	if Generator.validate(invalid_entrance).valid:
+	if invalid_entrance.validate().valid:
 		failed = true
 		printerr("FAIL entrance inside a junction was accepted")
 	quit(1 if failed else 0)

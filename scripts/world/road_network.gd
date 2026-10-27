@@ -1,7 +1,10 @@
-extends RefCounted
+extends Resource
 class_name RoadNetwork
 
-## All distances are metres; one Godot world unit is one metre.
+## 路网数据。生成、道路绘制、碰撞和导航都读取同一份 RoadNetwork，
+## 避免各模块各自维护一套道路数据。所有距离单位为米，1 个 Godot
+## 世界单位 = 1 米。
+
 const MAIN := 0
 const SECONDARY := 1
 const LOCAL := 2
@@ -19,112 +22,27 @@ const ENTRANCE_CLEARANCE := [100.0, 60.0, 30.0]
 const DIFFICULT_CLEARANCE := [80.0, 50.0]
 const EPS := 0.01
 
-static func generate(map_size: Vector2, seed_value: int, density: float, widths: Vector3, allow_difficult: bool = false) -> Dictionary:
-	# An axis interval is half the arterial interval. Branches occupy the
-	# half-axis intervals, so 600 m is the densest valid arterial spacing.
-	var arterial_step: float = snappedf(clampf(800.0 - density * 200.0, 600.0, 800.0), 10.0)
-	var x_axes := _axes(map_size.x, arterial_step)
-	var y_axes := _axes(map_size.y, arterial_step)
-	var network := {
-		"nodes": [], "edges": [], "entrances": [], "map_size": map_size,
-		"seed": seed_value, "density": density, "widths": widths,
-		"allow_difficult": allow_difficult, "arterial_step": arterial_step,
-		"x_axes": x_axes, "y_axes": y_axes,
-	}
-	var lookup := {}
-	# The seed controls the order in which independent blocks are constructed.
-	# Positions are deterministic and rule-driven; a later decorative layer can
-	# use the same seed without changing the legal road topology.
-	var cells := []
-	for xi in range(x_axes.size() - 1):
-		for yi in range(y_axes.size() - 1):
-			cells.append(Vector2i(xi, yi))
-	var rng := RandomNumberGenerator.new()
-	rng.seed = seed_value
-	for i in range(cells.size() - 1, 0, -1):
-		var j := rng.randi_range(0, i)
-		var item: Vector2i = cells[i]
-		cells[i] = cells[j]
-		cells[j] = item
-	for cell in cells:
-		if not network.edges.is_empty() and rng.randf() > 0.55 + 0.45 * density:
-			continue
-		var xi: int = cell.x
-		var yi: int = cell.y
-		var left: Dictionary = x_axes[xi]
-		var right: Dictionary = x_axes[xi + 1]
-		var bottom: Dictionary = y_axes[yi]
-		var top: Dictionary = y_axes[yi + 1]
-		# Each full cell has exactly one secondary side on each axis.
-		var sx: float = left.pos if left.kind == SECONDARY else right.pos
-		var sy: float = bottom.pos if bottom.kind == SECONDARY else top.pos
-		var mx: float = (left.pos + right.pos) * 0.5
-		var my: float = (bottom.pos + top.pos) * 0.5
-		var centre := _node(network, lookup, Vector2(mx, my))
-		var on_horizontal := _node(network, lookup, Vector2(mx, sy))
-		var on_vertical := _node(network, lookup, Vector2(sx, my))
-		_edge(network, centre, on_horizontal, LOCAL)
-		_edge(network, centre, on_vertical, LOCAL)
-	# Each axis is split at every crossing and every branch attachment.
-	for y_axis in y_axes:
-		var positions: Array[float] = [-map_size.x * 0.5, map_size.x * 0.5]
-		for x_axis in x_axes:
-			positions.append(x_axis.pos)
-		if y_axis.kind == SECONDARY:
-			for xi in range(x_axes.size() - 1):
-				var midpoint: float = (x_axes[xi].pos + x_axes[xi + 1].pos) * 0.5
-				if lookup.has(Vector2i(roundi(midpoint * 100.0), roundi(y_axis.pos * 100.0))):
-					positions.append(midpoint)
-		positions.sort()
-		for i in range(positions.size() - 1):
-			var a := _node(network, lookup, Vector2(positions[i], y_axis.pos))
-			var b := _node(network, lookup, Vector2(positions[i + 1], y_axis.pos))
-			_edge(network, a, b, y_axis.kind)
-	for x_axis in x_axes:
-		var positions: Array[float] = [-map_size.y * 0.5, map_size.y * 0.5]
-		for y_axis in y_axes:
-			positions.append(y_axis.pos)
-		if x_axis.kind == SECONDARY:
-			for yi in range(y_axes.size() - 1):
-				var midpoint: float = (y_axes[yi].pos + y_axes[yi + 1].pos) * 0.5
-				if lookup.has(Vector2i(roundi(x_axis.pos * 100.0), roundi(midpoint * 100.0))):
-					positions.append(midpoint)
-		positions.sort()
-		for i in range(positions.size() - 1):
-			var a := _node(network, lookup, Vector2(x_axis.pos, positions[i]))
-			var b := _node(network, lookup, Vector2(x_axis.pos, positions[i + 1]))
-			_edge(network, a, b, x_axis.kind)
-	return network
+@export var nodes: Array[Vector2] = []
+@export var edges: Array[Dictionary] = []
+@export var entrances: Array[Dictionary] = []
+@export var map_size: Vector2 = Vector2.ZERO
+@export var seed_value: int = 0
+@export var density: float = 0.0
+@export var widths: Vector3 = Vector3.ZERO
+@export var allow_difficult: bool = false
+@export var arterial_step: float = 0.0
+@export var x_axes: Array[Dictionary] = []
+@export var y_axes: Array[Dictionary] = []
 
-static func _axes(size: float, step: float) -> Array[Dictionary]:
-	var axes: Array[Dictionary] = []
-	var half_step := step * 0.5
-	var largest := int(floor((size * 0.5 - MIN_JUNCTION_SPACING) / half_step))
-	for n in range(-largest, largest + 1):
-		axes.append({"pos": n * half_step, "kind": MAIN if n % 2 == 0 else SECONDARY})
-	return axes
 
-static func _node(network: Dictionary, lookup: Dictionary, position: Vector2) -> int:
-	var key := Vector2i(roundi(position.x * 100.0), roundi(position.y * 100.0))
-	if lookup.has(key):
-		return lookup[key]
-	var id: int = network.nodes.size()
-	lookup[key] = id
-	network.nodes.append(position)
-	return id
-
-static func _edge(network: Dictionary, a: int, b: int, kind: int) -> void:
-	network.edges.append({"a": a, "b": b, "kind": kind})
-
-static func find_route(network: Dictionary, start: int, destination: int) -> Array[int]:
-	var nodes: Array = network.nodes
+func find_route(start: int, destination: int) -> Array[int]:
 	var route: Array[int] = []
 	if start < 0 or destination < 0 or start >= nodes.size() or destination >= nodes.size():
 		return route
 	var adjacency: Array = []
 	for _id in nodes.size():
 		adjacency.append([])
-	for edge in network.edges:
+	for edge in edges:
 		adjacency[edge.a].append(edge.b)
 		adjacency[edge.b].append(edge.a)
 	var previous := {start: -1}
@@ -145,11 +63,10 @@ static func find_route(network: Dictionary, start: int, destination: int) -> Arr
 		id = previous[id]
 	return route
 
-static func validate(network: Dictionary) -> Dictionary:
+
+func validate() -> Dictionary:
 	var errors: Array[String] = []
 	var notes: Array[String] = []
-	var nodes: Array = network.nodes
-	var edges: Array = network.edges
 	var adjacency: Array = []
 	for _node_id in nodes.size():
 		adjacency.append([])
@@ -184,7 +101,7 @@ static func validate(network: Dictionary) -> Dictionary:
 	if unmerged_crossings > 0:
 		errors.append("%d 处道路几何相交却没有共享交叉口节点" % unmerged_crossings)
 	for kind in 3:
-		var width: float = network.widths[kind]
+		var width: float = widths[kind]
 		var limits: Vector2 = WIDTH_LIMITS[kind]
 		if width < limits.x or width > limits.y:
 			errors.append("%s红线宽度 %.1f 米不在 %.0f～%.0f 米范围内" % [NAMES[kind], width, limits.x, limits.y])
@@ -234,20 +151,20 @@ static func validate(network: Dictionary) -> Dictionary:
 	# Compare distances between successive intersection nodes along each
 	# centreline. Road ends are checked for the 150 m hard limit above.
 	var arterial_outliers := 0
-	for axis in network.x_axes:
+	for axis in x_axes:
 		if axis.kind == MAIN:
 			var main_positions: Array[float] = []
-			for cross in network.y_axes:
+			for cross in y_axes:
 				if cross.kind == MAIN:
 					main_positions.append(cross.pos)
 			for i in range(main_positions.size() - 1):
 				var gap: float = main_positions[i + 1] - main_positions[i]
 				if gap < MAIN_PREFERRED.x - EPS or gap > MAIN_PREFERRED.y + EPS:
 					arterial_outliers += 1
-	for axis in network.y_axes:
+	for axis in y_axes:
 		if axis.kind == MAIN:
 			var main_positions: Array[float] = []
-			for cross in network.x_axes:
+			for cross in x_axes:
 				if cross.kind == MAIN:
 					main_positions.append(cross.pos)
 			for i in range(main_positions.size() - 1):
@@ -262,11 +179,11 @@ static func validate(network: Dictionary) -> Dictionary:
 			secondary_short += 1
 	if secondary_short > 0:
 		notes.append("%d 段次干路交叉口间距低于建议的 %.0f 米；为连接支路保留，均满足 %.0f 米硬下限" % [secondary_short, SECONDARY_PREFERRED.x, MIN_JUNCTION_SPACING])
-	var entrance_errors := _validate_entrances(network, nodes, adjacency)
-	errors.append_array(entrance_errors)
-	if network.entrances.is_empty():
+	errors.append_array(_validate_entrances(nodes, adjacency))
+	if entrances.is_empty():
 		notes.append("地块出入口规则：未适用（本演示未生成地块或出入口）")
 	return {"valid": errors.is_empty(), "errors": errors, "notes": notes, "nodes": nodes.size(), "edges": edges.size(), "kinds": kind_counts}
+
 
 static func _segments_touch_without_node(a: Vector2, b: Vector2, c: Vector2, d: Vector2) -> bool:
 	var first_horizontal := absf(a.y - b.y) < EPS
@@ -286,16 +203,17 @@ static func _segments_touch_without_node(a: Vector2, b: Vector2, c: Vector2, d: 
 		return absf(a.y - c.y) < EPS and maxf(minf(a.x, b.x), minf(c.x, d.x)) <= minf(maxf(a.x, b.x), maxf(c.x, d.x)) + EPS
 	return absf(a.x - c.x) < EPS and maxf(minf(a.y, b.y), minf(c.y, d.y)) <= minf(maxf(a.y, b.y), maxf(c.y, d.y)) + EPS
 
-static func _validate_entrances(network: Dictionary, nodes: Array, adjacency: Array) -> Array[String]:
+
+func _validate_entrances(road_nodes: Array, adjacency: Array) -> Array[String]:
 	var errors: Array[String] = []
 	var grouped := {}
-	for entrance in network.entrances:
+	for entrance in entrances:
 		var edge_id: int = entrance.edge_id
-		if edge_id < 0 or edge_id >= network.edges.size():
+		if edge_id < 0 or edge_id >= edges.size():
 			errors.append("地块出入口引用了无效路段")
 			continue
-		var edge: Dictionary = network.edges[edge_id]
-		var length: float = nodes[edge.a].distance_to(nodes[edge.b])
+		var edge: Dictionary = edges[edge_id]
+		var length: float = road_nodes[edge.a].distance_to(road_nodes[edge.b])
 		var offset: float = entrance.offset
 		if offset < 0.0 or offset > length:
 			errors.append("地块出入口位于路段外")
@@ -309,7 +227,7 @@ static func _validate_entrances(network: Dictionary, nodes: Array, adjacency: Ar
 			for arm in adjacency[edge.b]:
 				connects_higher = connects_higher or arm.kind < LOCAL
 			required = ENTRANCE_SETBACK[2] if connects_higher else ENTRANCE_SETBACK[3]
-		elif network.allow_difficult:
+		elif allow_difficult:
 			required = DIFFICULT_SETBACK[kind]
 		if minf(offset, length - offset) < required - EPS:
 			errors.append("出入口距交叉口退让不足 %.0f 米" % required)
@@ -319,9 +237,9 @@ static func _validate_entrances(network: Dictionary, nodes: Array, adjacency: Ar
 	for edge_id in grouped:
 		var offsets: Array = grouped[edge_id]
 		offsets.sort()
-		var kind: int = network.edges[edge_id].kind
+		var kind: int = edges[edge_id].kind
 		var required: float = ENTRANCE_CLEARANCE[kind]
-		if kind != LOCAL and network.allow_difficult:
+		if kind != LOCAL and allow_difficult:
 			required = DIFFICULT_CLEARANCE[kind]
 		for i in range(offsets.size() - 1):
 			if offsets[i + 1] - offsets[i] < required - EPS:
