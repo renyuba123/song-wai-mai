@@ -160,7 +160,7 @@ PASS main scene nodes=153 nav_polygons=624
 - 远端检查发现 `main` 当前没有启用分支保护（GitHub API 返回 404），当前账号 `jzy070407` 只有 `push` 权限，没有 `admin` / `maintain`，无法代为配置。
 - 远端两个已合并分支尚未删除；远端删除属于共享引用操作，本轮未擅自执行。
 
-**修改目录：** `.githooks/`、`scripts/dev/`、`CONTRIBUTING.md`、`docs/USER_GUIDE.md`、`docs/DEVELOPMENT_LOG.md`。
+**修改目录：** `.githooks/`、`scripts/dev/`、`CONTRIBUTING.md`、`docs/USER_GUIDE.md`、`README.md`、`docs/DEVELOPMENT_LOG.md`。
 
 **校验：**
 
