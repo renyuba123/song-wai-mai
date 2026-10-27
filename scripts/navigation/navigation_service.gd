@@ -44,7 +44,15 @@ func build(source_network: RoadNetwork) -> void:
 
 
 func is_ready() -> bool:
-	return _baked and _region != null and _region.is_inside_tree()
+	if not _baked or _region == null or not _region.is_inside_tree():
+		return false
+	var map_rid := _region.get_navigation_map()
+	if not NavigationServer3D.map_is_active(map_rid):
+		return false
+	# 烘焙发生在主场景 _ready 内，导航地图可能要到下一个物理帧才同步。
+	# 查询前强制同步一次，避免刚就绪时拿到空路径。
+	NavigationServer3D.map_force_update(map_rid)
+	return true
 
 
 func get_closest_point(world_position: Vector3) -> Vector3:
