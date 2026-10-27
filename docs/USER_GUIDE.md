@@ -59,9 +59,10 @@ godot --headless --path . --script res://tests/test_contracts.gd
 godot --headless --path . --script res://tests/test_input_actions.gd
 godot --headless --path . --script res://tests/test_navigation_queries.gd
 godot --headless --path . --script res://tests/test_city.gd
+godot --headless --path . --script res://tests/test_god_view.gd
 ```
 
-前两条检查路网生成、校验、寻路和主场景启动；中间三条分别检查共享数据契约、输入映射与玩家移动、导航查询接口；最后一条检查城市确定性、反向数据、主场景城市装配和站点可达性。新增脚本后先执行一次 `godot --headless --path . --import`，让 Godot 注册 `class_name` 并生成 `.gd.uid`。
+前两条检查路网生成、校验、寻路和主场景启动；中间三条分别检查共享数据契约、输入映射与玩家移动、导航查询接口；`test_city` 检查城市确定性、反向数据、主场景城市装配和站点可达性；`test_god_view` 检查测试用上帝视角只在调试构建创建、开关时相机和玩家状态正确切换并恢复。新增脚本后先执行一次 `godot --headless --path . --import`，让 Godot 注册 `class_name` 并生成 `.gd.uid`。
 
 ## 2. 所有人：日常操作流程
 
@@ -324,7 +325,16 @@ project.godot
 
 移动使用 `Input.get_vector("move_left", "move_right", "move_forward", "move_back")`，不要退回 `Input.is_physical_key_pressed`。
 
-### 5.3 主场景装配
+### 5.3 测试用上帝视角
+
+`scripts/dev/test_god_view.gd` 提供只在调试/测试构建启用的俯视相机，用来快速检查地块、建筑和站点分布：
+
+- 按 **F3** 开关；开启后正交俯视玩家位置，**WASD** 平移，**鼠标滚轮**缩放，再按 **F3** 返回第一人称。
+- 开启时暂停玩家物理移动、清零速度并释放鼠标；关闭时恢复玩家相机、物理处理和鼠标捕获。
+- 入口是 `TestGodView.is_test_only_enabled()`（当前基于 `OS.is_debug_build()`），`main.gd` 只在返回 `true` 时动态创建节点。正式导出不创建该节点，也不往 `project.godot` 增加 F3 输入动作。
+- 相机和提示 UI 都由脚本创建，不改 `main.tscn`；测试见 `tests/test_god_view.gd`。不要把调试功能改成正式快捷键，也不要绕过 `is_test_only_enabled()` 在发布场景里直接实例化。
+
+### 5.4 主场景装配
 
 `scenes/main/main.tscn` 只做装配：
 
@@ -345,7 +355,7 @@ Main
 
 不要把业务逻辑写进 `main.gd`；它只负责接线。新增模块时，先在模块内部提供入口场景和信号，再在 `main.tscn` 里实例化。`World` 场景内 `RoadBuilder` 与 `CityBuilder` 是兄弟节点，`CityBuilder` 只清理自己的子节点，不删除道路。
 
-### 5.4 整合者职责
+### 5.5 整合者职责
 
 - 维护 `project.godot`、输入映射、碰撞层、`main.tscn`、`.gitattributes`、`.gitignore`。
 - 审核 PR：是否只改自己负责的目录、是否夹带调试残留、是否更新日志。

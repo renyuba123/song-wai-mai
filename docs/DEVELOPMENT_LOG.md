@@ -294,3 +294,29 @@ PASS main scene nodes=153 nav_polygons=624
 **提交：** `c344f1d feat(world): add procedural sky environment`、`2a4aa30 test: verify sky environment in main scene`；文档与本条日志随 `docs: document sky environment` 提交。
 
 **推送与 PR：** 推送到 `feature/jzy070407-stage-one-city`，更新 PR [#7](https://github.com/renyuba123/song-wai-mai/pull/7)，等待 CI 和负责人评审。
+
+## 2026-10-27 20:22 新增测试用上帝视角
+
+**本轮需求（原文）：** 新增一个测试用上帝视角，此功能仅在测试时启用
+
+**做了什么：**
+
+- 新增 `scripts/dev/test_god_view.gd`，提供正交俯视相机：F3 开关，WASD 按当前视野大小平移，鼠标滚轮缩放，左上角显示操作提示。
+- 开启时相机对准玩家当前位置并成为当前相机，暂停玩家物理移动、清零速度、释放鼠标；关闭时恢复玩家相机、物理处理、鼠标捕获，隐藏提示。
+- `main.gd` 在世界生成和玩家落位后调用 `TestGodView.is_test_only_enabled()`；只有调试/测试构建（当前为 `OS.is_debug_build()`）才动态创建 `TestGodView`，正式导出不创建节点，也不往 `project.godot` 增加 F3 输入动作。
+- 相机、提示 UI 和地图边界夹取全部由脚本创建；不修改 `main.tscn`，不影响现有七个正式输入动作。
+- 新增 `tests/test_god_view.gd`：检查调试构建创建节点、初始关闭、开启后正交相机成为当前相机并暂停玩家物理、关闭后恢复玩家相机和物理；非调试构建断言节点不存在。
+- CI 测试列表加入 `test_god_view`；README 和用户指南补充 F3 操作、调试构建限制和测试命令。
+
+**修改目录：** `scripts/dev/`、`scripts/core/`、`tests/`、`.github/workflows/`、`README.md`、`docs/`。本轮不修改 `.tscn` 和 `project.godot`。
+
+**本地校验：**
+
+- `godot --headless --path . --import` 成功注册 `TestGodView` 并生成 `.gd.uid`。
+- 七个 headless 测试全部 `exit=0`；`test_main_scene` 仍输出 `PASS main scene nodes=153 lots=152 sites=32 sky=true`，`test_city` 两组参数通过，`test_god_view` 输出 `PASS god view debug=true`（本机为调试构建，实际走完开关和恢复断言）。
+- `git diff --check` 通过，`git lfs fsck --pointers` 输出 `Git LFS fsck OK`。
+- 边界搜索确认 `TestGodView` 只在 `main.gd` 的测试门控后实例化，`project.godot` 没有 F3 输入动作，正式输入仍为七个。
+
+**提交：** `b991258 feat(dev): add test-only god view camera`、`894ad30 test: cover test-only god view`；文档与本条日志随 `docs: document test god view` 提交。
+
+**推送与 PR：** 推送到 `feature/jzy070407-stage-one-city`，更新 PR [#7](https://github.com/renyuba123/song-wai-mai/pull/7)，等待 CI 和负责人评审。
