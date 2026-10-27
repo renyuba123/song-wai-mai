@@ -96,11 +96,20 @@ git push origin --delete <branch-name>
 | 模块 | 负责人 | 主要文件 | 不修改 |
 |---|---|---|---|
 | 世界与交通生成 | A | `scripts/world/`、`scripts/traffic/`、`scenes/world/`、`scenes/traffic/` | 玩家、导航、`main.tscn` |
-| 玩家、物理与整合 | B | `scripts/player/`、`scripts/core/`、`scenes/player/`、`scenes/main/main.tscn`、`project.godot` | 世界生成、导航内部实现 |
+| 玩家、物理与整合 | B | `scripts/player/`、`scripts/core/`、`scripts/orders/`、`scenes/player/`、`scenes/main/main.tscn`、`project.godot` | 世界生成、导航内部实现、`SpawnPoint` / `CitySite` 字段 |
 | 导航 | C | `scripts/navigation/`、`scenes/navigation/` | 车辆/行人场景、玩家场景 |
 | 建模 | 美术 | `assets/models/`、`assets/textures/` 中交付的 `.glb` | 任何 `.tscn` |
 
 共享文件（`scenes/main/main.tscn`、`project.godot`、`scripts/core/collision_layers.gd`、`.gitattributes`、`.gitignore`）由整合者统一修改；其他人需要变更时先提出，不要直接改。
+
+共享契约的维护责任：
+
+- `RoadNetwork` 字段和 `SpawnPoint`、`CitySite` 由 A 维护。
+- `DeliveryOrder` 由 B 维护。
+- 输入动作和 `project.godot` 由 B 维护。
+- `NavigationService` 查询接口由 C 维护。
+
+契约字段只做新增；修改或删除现有字段、改变单位或坐标约定前，先通知相关模块负责人并补测试。世界数据契约改变后，订单、导航和玩家模块必须能继续通过 `tests/test_contracts.gd`。
 
 ## 场景与资产规则
 

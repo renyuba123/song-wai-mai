@@ -210,3 +210,30 @@ PASS main scene nodes=153 nav_polygons=624
 **提交：** `docs: add approved development roadmap`（本条日志随该提交）。
 
 **推送与 PR：** 使用 `git pushpr` 推送并自动创建 PR，同时发送通知栏提醒。
+
+## 2026-10-27 18:01 实施阶段零：共享契约与工程基线
+
+**本轮需求（原文）：** 开始阶段零
+
+**做了什么：**
+
+- 新增 `SpawnPoint`、`CitySite`、`DeliveryOrder` 三个纯数据契约，带 `validate()` / `is_valid()`，不保存 `Node` 引用。
+- 冻结 `RoadNetwork` 字段和坐标约定，只补说明，不改行为和校验；删除未被调用的 `WorldGenerator.get_random_spawn_point()`，避免出现第二套出生点来源。
+- `NavigationService` 增加 `is_ready()`、`get_closest_point()`、`find_path()`、`is_reachable()` 和静态 `get_path_length()`；同步烘焙后强制更新导航地图并设置就绪状态，外部模块不再直接读取 `NavigationRegion3D`。
+- `project.godot` 增加 `move_forward`、`move_back`、`move_left`、`move_right`、`interact`、`pause`、`restart` 七个输入动作；`PlayerController` 改用 `Input.get_vector`，不再轮询物理按键。
+- 新增 `test_contracts.gd`、`test_input_actions.gd`、`test_navigation_queries.gd`；`test_main_scene.gd` 改为通过 `NavigationService.is_ready()` 判断导航。
+- 持续集成在现有 `integrity` 任务中安装固定版本 Godot 4.7.2，执行 headless 导入和全部五个测试，并增加 15 分钟超时。
+- 更新 `CONTRIBUTING.md` 的文件所有权、`docs/USER_GUIDE.md` 的契约与接口说明、`README.md` 的目录与测试命令、`docs/ROADMAP.md` 的阶段状态。
+
+**修改目录：** `scripts/world/`、`scripts/orders/`、`scripts/navigation/`、`scripts/player/`、`tests/`、`project.godot`、`.github/workflows/`、`CONTRIBUTING.md`、`README.md`、`docs/`。本轮不修改任何 `.tscn`。
+
+**校验：**
+
+- `godot --headless --path . --import` 成功，注册 `SpawnPoint`、`CitySite`、`DeliveryOrder` 全局类名并生成 `.gd.uid`。
+- 五个 headless 测试全部 `exit=0`：路网生成（3 个种子）、主场景冒烟、数据契约、输入动作与玩家移动、导航查询。
+- `git diff --check` 和 `git lfs fsck --pointers` 通过。
+- 搜索确认没有 `is_physical_key_pressed` 和 `get_random_spawn_point` 残留；`NavigationRegion3D` 只出现在导航模块。
+
+**提交：** `d9014a6 feat(world): add spawn and city site contracts`、`715f4d8 feat(orders): add delivery order contract`、`01e697b feat(navigation): add query interface and readiness gate`、`a77ee86 feat(input): add gameplay input actions`、`5b6603b test: cover phase-zero contracts, input, and navigation`、`eac5c91 ci: run Godot 4.7.2 headless tests`；文档与本条日志随 `docs: document phase-zero contracts and ownership` 提交。
+
+**推送与 PR：** 使用 `git pushpr` 推送分支并自动创建 PR，同时发送通知栏提醒；等待 `integrity`（含 Godot 4.7.2 headless 测试）通过后再合并。
