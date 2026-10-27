@@ -393,4 +393,4 @@ PASS main scene nodes=153 nav_polygons=624
 
 **提交：** `99a929c feat(world): add multiple safe player starts`、`5dde243 feat(orders): add deterministic order generation`、`8794580 feat(orders): add delivery session state machine`、`eb6d06c feat(orders): add HUD, target beacon, and order manager`、`2da36d7 feat(core): wire order system into main scene`、`45052ce test: cover stage-two order loop`；文档与本条日志随 `docs: document stage-two delivery loop` 提交。
 
-**推送与 PR：** 将分支推送到 `origin` 后创建 PR，等待 `integrity` 和负责人评审；不自行合并。
+**推送与 PR：** 分支已推送到 `origin`，创建 PR [#9](https://github.com/renyuba123/song-wai-mai/pull/9)，`integrity` 检查 21 秒通过。等待负责人评审，不自行合并。
