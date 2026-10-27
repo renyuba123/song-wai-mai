@@ -13,6 +13,7 @@ func _ready() -> void:
 	world.world_generated.connect(_on_world_generated)
 	world.regenerate()
 	_place_player()
+	_setup_test_god_view()
 
 
 func _on_world_generated(network: RoadNetwork) -> void:
@@ -27,3 +28,13 @@ func _place_player() -> void:
 	player.global_position = start.position
 	player.rotation.y = start.facing_yaw
 	player.velocity = Vector3.ZERO
+
+
+func _setup_test_god_view() -> void:
+	## 只在调试/测试构建中创建；正式导出不会出现 F3 上帝视角。
+	if not TestGodView.is_test_only_enabled():
+		return
+	var god_view := TestGodView.new()
+	god_view.name = "TestGodView"
+	god_view.setup(player, Vector2(world.map_width_m, world.map_height_m))
+	add_child(god_view)
