@@ -8,8 +8,12 @@ class_name RoadNetwork
 ## 字段冻结（阶段零）：下列字段的含义、单位和坐标约定已确认，只允许新增，
 ## 修改或删除前先通知 A、B、C 并补测试。nodes 的 XY 对应世界 XZ，Y 轴向上；
 ## edges 使用 {"a": int, "b": int, "kind": int}；entrances 使用
-## {"edge_id": int, "offset": float}；x_axes / y_axes 使用
+## {"edge_id": int, "offset": float}，阶段一可附带 "width": float、
+## "facing_yaw": float、"lot_id": int；x_axes / y_axes 使用
 ## {"kind": int, "pos": float}。
+##
+## SURFACE_Y 是所有可走表面（地面、车行道、人行道）的统一顶面高度；
+## 视觉网格可以略高于它，但碰撞体必须齐平，避免出现无法跨越的台阶。
 
 const MAIN := 0
 const SECONDARY := 1
@@ -27,6 +31,8 @@ const DIFFICULT_SETBACK := [80.0, 50.0]
 const ENTRANCE_CLEARANCE := [100.0, 60.0, 30.0]
 const DIFFICULT_CLEARANCE := [80.0, 50.0]
 const EPS := 0.01
+const SURFACE_Y := 0.0
+const CARRIAGEWAY_RATIO := 0.55
 
 @export var nodes: Array[Vector2] = []
 @export var edges: Array[Dictionary] = []
@@ -68,6 +74,35 @@ func find_route(start: int, destination: int) -> Array[int]:
 		route.push_front(id)
 		id = previous[id]
 	return route
+
+
+static func sidewalk_offset(redline: float) -> float:
+	## 单侧人行道中心到道路中心线的横向距离。
+	var carriageway := redline * CARRIAGEWAY_RATIO
+	return carriageway * 0.5 + (redline - carriageway) * 0.25
+
+
+func get_entrance_setback(edge_id: int) -> float:
+	## 地块出入口和出生点共用的交叉口退让。无效路段返回 0，由调用方另行报错。
+	if edge_id < 0 or edge_id >= edges.size():
+		return 0.0
+	var edge: Dictionary = edges[edge_id]
+	var kind: int = edge.kind
+	if kind < MAIN or kind > LOCAL:
+		return 0.0
+	if kind == LOCAL:
+		var connects_higher := false
+		var endpoints := [edge.a, edge.b]
+		for other in edges:
+			if other.kind >= LOCAL:
+				continue
+			if other.a in endpoints or other.b in endpoints:
+				connects_higher = true
+				break
+		return ENTRANCE_SETBACK[2] if connects_higher else ENTRANCE_SETBACK[3]
+	if allow_difficult:
+		return DIFFICULT_SETBACK[kind]
+	return ENTRANCE_SETBACK[kind]
 
 
 func validate() -> Dictionary:
@@ -185,7 +220,7 @@ func validate() -> Dictionary:
 			secondary_short += 1
 	if secondary_short > 0:
 		notes.append("%d 段次干路交叉口间距低于建议的 %.0f 米；为连接支路保留，均满足 %.0f 米硬下限" % [secondary_short, SECONDARY_PREFERRED.x, MIN_JUNCTION_SPACING])
-	errors.append_array(_validate_entrances(nodes, adjacency))
+	errors.append_array(_validate_entrances(nodes))
 	if entrances.is_empty():
 		notes.append("地块出入口规则：未适用（本演示未生成地块或出入口）")
 	return {"valid": errors.is_empty(), "errors": errors, "notes": notes, "nodes": nodes.size(), "edges": edges.size(), "kinds": kind_counts}
@@ -210,7 +245,7 @@ static func _segments_touch_without_node(a: Vector2, b: Vector2, c: Vector2, d: 
 	return absf(a.x - c.x) < EPS and maxf(minf(a.y, b.y), minf(c.y, d.y)) <= minf(maxf(a.y, b.y), maxf(c.y, d.y)) + EPS
 
 
-func _validate_entrances(road_nodes: Array, adjacency: Array) -> Array[String]:
+func _validate_entrances(road_nodes: Array) -> Array[String]:
 	var errors: Array[String] = []
 	var grouped := {}
 	for entrance in entrances:
@@ -224,17 +259,13 @@ func _validate_entrances(road_nodes: Array, adjacency: Array) -> Array[String]:
 		if offset < 0.0 or offset > length:
 			errors.append("地块出入口位于路段外")
 			continue
-		var kind: int = edge.kind
-		var required: float = ENTRANCE_SETBACK[kind]
-		if kind == LOCAL:
-			var connects_higher := false
-			for arm in adjacency[edge.a]:
-				connects_higher = connects_higher or arm.kind < LOCAL
-			for arm in adjacency[edge.b]:
-				connects_higher = connects_higher or arm.kind < LOCAL
-			required = ENTRANCE_SETBACK[2] if connects_higher else ENTRANCE_SETBACK[3]
-		elif allow_difficult:
-			required = DIFFICULT_SETBACK[kind]
+		if entrance.has("width") and float(entrance.width) <= 0.0:
+			errors.append("地块出入口宽度必须为正")
+		if entrance.has("facing_yaw") and not is_finite(float(entrance.facing_yaw)):
+			errors.append("地块出入口朝向无效")
+		if entrance.has("lot_id") and int(entrance.lot_id) < 0:
+			errors.append("地块出入口关联了无效地块")
+		var required: float = get_entrance_setback(edge_id)
 		if minf(offset, length - offset) < required - EPS:
 			errors.append("出入口距交叉口退让不足 %.0f 米" % required)
 		if not grouped.has(edge_id):
