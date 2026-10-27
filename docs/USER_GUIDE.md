@@ -396,6 +396,23 @@ git mergetool --tool=gdmerge
 
 如果 GitHub 提示 `Permission denied`，说明当前 Git 账号没有仓库写权限。让仓库 owner 把你加为 collaborator，或切换到有权限的账号；不要把 token 写进仓库或提交历史。
 
+### 8.9 推送时提示 LFS locking API 不支持
+
+如果推送报错：
+
+```text
+Remote "origin" does not support the Git LFS locking API.
+```
+
+在本仓库关闭 LFS 锁验证后再推送：
+
+```powershell
+git config lfs.https://github.com/renyuba123/song-wai-mai.git/info/lfs.locksverify false
+git push
+```
+
+这是本地配置，不会提交到仓库；它只关闭 Git LFS 的锁检查，不影响文件通过 LFS 上传。
+
 ## 9. 提交前检查清单
 
 - [ ] 已执行 `git fetch origin --prune`，并同步了远端更新。
