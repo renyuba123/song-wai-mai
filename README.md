@@ -28,7 +28,8 @@ scripts/
   dev/                  分支管理 hooks 安装与本地清理脚本
 scenes/
   main/main.tscn        主场景，按 F5 运行
-  world/world.tscn      可复用的世界生成场景
+  world/world.tscn      可复用的世界生成场景（含天空环境）
+  world/sky_environment.tres  程序化天空、环境光与反射
   player/player.tscn
   navigation/navigation_system.tscn
   traffic/traffic_system.tscn
@@ -78,6 +79,7 @@ godot --headless --path . --script res://tests/test_city.gd
 - `CityGenerator` 从真实路段生成 `CityContent`：地块、出入口、建筑、商家/顾客站点和玩家起点；相同城市种子结果一致。
 - `CityContent.validate(network)` 校验地块重叠、建筑归属、出入口退让、站点交叉引用和玩家起点安全位置。
 - `CityBuilder` 绘制人行道、方块建筑和站点标记；人行道与建筑有碰撞，但阶段一不加入导航源，导航网格仍只覆盖车行道。
+- `World` 场景包含 `WorldEnvironment`，引用 `sky_environment.tres` 的程序化天空，提供可见天空、环境光和反射；主场景和路网演示共用。
 - 玩家第一人称移动、导航网格烘焙、交通模块入口已经接好；车辆/行人资产和订单逻辑尚未实现。
 
 当前主场景示例输出约为 152 个地块、152 栋建筑、40 个出入口和 32 个站点（2400 米地图、种子 42、密度 0.5）。所有可走表面统一在 `RoadNetwork.SURFACE_Y = 0`，视觉网格只做几厘米的错层以避免闪烁。为使支路接入次干路，部分次干路交叉口间距低于建议的 300 米，但仍满足 150 米硬下限。当前城市没有高架、匝道或交通信号，建筑内部和人行道导航留给后续阶段。

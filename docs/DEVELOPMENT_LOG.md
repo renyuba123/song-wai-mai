@@ -270,3 +270,27 @@ PASS main scene nodes=153 nav_polygons=624
 **提交：** `369a5cb feat(world): add entrance setback and surface metrics`、`daf5c42 feat(world): add spawn lateral offset and city content contract`、`0cd534c feat(world): generate city lots, buildings, and sites`、`1fe23af feat(world): render sidewalks, buildings, and site markers`、`2a52eb0 feat(core): spawn player at the generated city start`、`bbc9ab1 test: cover stage-one city generation and reachability`；文档与本条日志随 `docs: document stage-one city generation` 提交。
 
 **推送与 PR：** 已推送 `feature/jzy070407-stage-one-city`，使用 `D:\Tools\gh\pr-create.sh` 创建 PR [#7](https://github.com/renyuba123/song-wai-mai/pull/7)，标题为 `feat: implement stage one city lots and sites`，同时发送通知栏提醒。GitHub Actions `integrity` 已通过（14 秒，Godot 4.7.2 headless 六个测试全部通过，LFS 与场景检查通过）。按规则不在本轮自行合并，等待负责人评审。
+
+## 2026-10-27 20:17 运行阶段一并载入天空盒
+
+**本轮需求（原文）：** 运行一下；天空盒没有载入，载入一个天空盒
+
+**做了什么：**
+
+- 运行 `scenes/main/main.tscn`，启动日志显示路网和城市校验通过；玩家出生在人行道起点，运行期间没有报错，关闭窗口时退出码为 0。
+- 新增 `scenes/world/sky_environment.tres`：用 `ProceduralSkyMaterial` 提供天空渐变、地平线、地面色和太阳圆盘，并用 `Environment` 的 Sky 环境光和 Sky 反射照亮城市；不依赖外部贴图，也不增加 LFS 资源。
+- 在 `scenes/world/world.tscn` 增加 `WorldEnvironment` 并引用该资源。主场景和 F6 路网演示都实例化 `World`，因此共用同一份天空环境，不需要在两个场景里各配一套。
+- `test_main_scene.gd` 增加天空环境断言：`WorldEnvironment` 存在、`environment.sky` 已加载，且背景模式为 `BG_SKY`；输出增加 `sky=true`。
+
+**修改文件：** `scenes/world/world.tscn`、`scenes/world/sky_environment.tres`、`tests/test_main_scene.gd`、`README.md`、`docs/USER_GUIDE.md`、`docs/DEVELOPMENT_LOG.md`。
+
+**校验：**
+
+- `godot --headless --path . --import` 成功加载新的 `.tres`，没有资源解析错误。
+- 六个 headless 测试全部 `exit=0`；`test_main_scene` 输出 `PASS main scene nodes=153 lots=152 sites=32 sky=true`。
+- `git diff --check` 通过，`git lfs fsck --pointers` 输出 `Git LFS fsck OK`。
+- 已在图形窗口启动主场景，天空资源加载无报错；本机未自动截图，天空视觉效果以窗口目视和评审为准。
+
+**提交：** `c344f1d feat(world): add procedural sky environment`、`2a4aa30 test: verify sky environment in main scene`；文档与本条日志随 `docs: document sky environment` 提交。
+
+**推送与 PR：** 推送到 `feature/jzy070407-stage-one-city`，更新 PR [#7](https://github.com/renyuba123/song-wai-mai/pull/7)，等待 CI 和负责人评审。

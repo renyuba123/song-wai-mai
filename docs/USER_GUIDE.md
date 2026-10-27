@@ -272,6 +272,7 @@ scenes/traffic/
 ### 4.4 场景与测试
 
 - 在 `scenes/world/world.tscn` 或 `scenes/traffic/traffic_system.tscn` 内增加子场景，不要往 `main.tscn` 里直接加节点。
+- 天空和环境光由 `scenes/world/sky_environment.tres` 提供，`world.tscn` 的 `WorldEnvironment` 引用它；主场景和路网演示共用这一份，不要在别的场景重复新建环境。调整天空颜色、太阳大小或环境光时改这个资源。
 - 新增生成规则时扩展 `tests/test_road_network.gd` 或 `tests/test_city.gd`，至少覆盖：相同种子可复现、路网连通、路径存在、城市数据交叉引用正确。
 - 调试用场景放在 `scenes/dev/<名字>/`，不要提交临时场景。
 - 人行道和建筑碰撞体不加入 `navigation_source`；阶段一导航网格仍只覆盖车行道，人行道/入口导航在阶段三补。
