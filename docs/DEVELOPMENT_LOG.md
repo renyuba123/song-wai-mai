@@ -143,3 +143,35 @@ PASS main scene nodes=153 nav_polygons=624
 **PR：** 使用 `D:\Tools\gh\pr-create.sh` 自动创建，并在通知栏提醒结果。
 
 **下一步：** 后续从最新 `main` 拉分支，完成模块后推送并运行 `pr-create.sh`；车辆/行人资产、订单和地块生成仍按原计划推进。
+
+## 2026-10-27 17:15 加强本地与远端分支管理
+
+**本轮需求（原文）：** 目前项目开发人数较多，请在本地与远端务必做好分支管理
+
+**做了什么：**
+
+- 审计本地和远端分支：本地只剩 `main`，远端保留 `main`、`road`、`chore/pr-automation`、`refactor/modular-base`；后两个分支对应的 PR #1、#2 都已合并。
+- 删除本地已合并的 `chore/pr-automation` 和 `refactor/modular-base` 分支，并执行 `git fetch --prune`。
+- 新增 `.githooks/pre-commit` 和 `.githooks/pre-push`：阻止在 `main` 上直接提交或推送。
+- 新增 `scripts/dev/setup-git-hooks.sh`，每位开发者克隆后执行一次即可启用 hooks。
+- 新增 `scripts/dev/cleanup-merged-branches.sh`，先确认工作区干净，再同步 `main` 并删除已合并的本地分支。
+- 更新 `CONTRIBUTING.md`：分支命名改为 `<type>/<github-id>-<topic>`，明确一分支一任务、单负责人、同步、强推、PR 合并后清理，以及 owner 需要配置的远端保护和自动删除。
+- 更新 `docs/USER_GUIDE.md`：补充 hooks 安装、带用户名的分支命名和合并后清理步骤。
+- 远端检查发现 `main` 当前没有启用分支保护（GitHub API 返回 404），当前账号 `jzy070407` 只有 `push` 权限，没有 `admin` / `maintain`，无法代为配置。
+- 远端两个已合并分支尚未删除；远端删除属于共享引用操作，本轮未擅自执行。
+
+**修改目录：** `.githooks/`、`scripts/dev/`、`CONTRIBUTING.md`、`docs/USER_GUIDE.md`、`docs/DEVELOPMENT_LOG.md`。
+
+**校验：**
+
+- 四个 shell 脚本通过 `sh -n` 语法检查。
+- 已执行 `sh scripts/dev/setup-git-hooks.sh`，`core.hooksPath` 为 `.githooks`。
+- 模拟推送 `refs/heads/main` 时 `pre-push` 返回 1，成功拦截。
+- 在 `main` 上直接运行 `pre-commit` 返回 1，成功拦截。
+- 本轮只改分支管理和文档，未改运行时代码，未重跑 Godot 测试。
+
+**提交：** `chore: enforce branch management workflow`（本条日志随该提交）。
+
+**推送与 PR：** 使用 `git pushpr` 推送并自动创建 PR，同时发送通知栏提醒。
+
+**待确认：** 是否删除远端已合并分支 `chore/pr-automation` 和 `refactor/modular-base`；以及请仓库 owner 在 GitHub 设置中为 `main` 启用分支保护并开启合并后自动删除 head branch。

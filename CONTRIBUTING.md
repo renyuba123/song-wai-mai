@@ -2,12 +2,67 @@
 
 本文件是团队日常开发的约定。改代码之前先确认自己负责的目录和场景文件，避免多人同时改同一个 `.tscn`。各角色从环境准备到交付的具体步骤见 [docs/USER_GUIDE.md](docs/USER_GUIDE.md)。
 
-## 分支
+## 分支管理
 
-- `main` 是集成分支，只接受通过 PR 的改动。
-- 功能开发从最新 `main` 拉短生命周期分支，例如 `feature/worldgen`、`feature/navigation`、`fix/player-collision`。
-- 一个分支只做一件事；完成后尽快提交 PR，不长期挂着。
+### 基本原则
+
+- `main` 是集成分支，只接受通过 PR 的改动；不直接向 `main` 提交或推送。
 - `road` 保留为改造前的路网原型历史分支，不再作为开发主线。
+- 所有开发从最新 `main` 拉短生命周期分支，完成一件事就合并并删除，不长期挂着。
+- 一个分支只做一件事、只有一个负责人；不要往别人的功能分支上追加提交，需要协作时先沟通。
+- 分支名统一为 `<type>/<github-id>-<topic>`，避免多人重名：
+  - `feature/jzy-worldgen-blocks`
+  - `fix/lisi-player-capsule`
+  - `docs/wang-user-guide`
+  - `chore/zhao-ci-cleanup`
+  - `refactor/chen-navigation-api`
+- 类型只使用 `feature`、`fix`、`docs`、`chore`、`refactor`；主题用小写英文和连字符。
+- 开始开发前先同步 `main`，分支落后时及时合并最新 `main`；不要在过期分支上攒大量改动。
+- 只对自己的分支使用 `rebase` / `force-with-lease`；共享分支不要强推。
+- PR 合并后删除对应的本地和远端分支；同一件事不要反复复用已经合并的分支名。
+
+### 本地保护
+
+首次克隆或换电脑后，在仓库根目录执行：
+
+```bash
+sh scripts/dev/setup-git-hooks.sh
+```
+
+它会把 Git hooks 指向 `.githooks/`，阻止直接在 `main` 上提交和推送。hook 只是本地提醒，不能替代 GitHub 的远端保护；确实需要绕过时使用 `--no-verify`，但不要在 `main` 上绕过。
+
+清理已经合并的本地分支：
+
+```bash
+sh scripts/dev/cleanup-merged-branches.sh
+```
+
+脚本会先确认工作区干净，然后同步 `main`、删除已合并到 `main` 的本地分支，并提示远端分支需要单独确认后删除。
+
+### 远端保护（仓库 owner）
+
+GitHub 仓库需要由 owner 配置，普通协作者没有权限修改：
+
+- **Settings → General → Pull Requests**：启用 “Automatically delete head branches”，PR 合并后自动删除远端分支。
+- **Settings → Branches → Branch protection rules**：为 `main` 添加规则：
+  - Require a pull request before merging
+  - Require approvals（至少 1 人）
+  - Require status checks to pass（选择 `integrity`）
+  - Require conversation resolution before merging
+  - Block force pushes
+  - Restrict deletions
+  - 可选：Require linear history
+- 如果团队使用 GitHub Team/Enterprise，可进一步限制谁可以推送到 `main`；免费仓库至少应启用上面的 PR 和状态检查要求。
+
+### 远端分支清理
+
+PR 合并后，由创建者或整合者确认没有未合并提交，再删除远端分支：
+
+```bash
+git push origin --delete <branch-name>
+```
+
+不要删除仍在开发中的分支，也不要删除 `main` 或 `road`。如果 owner 已启用自动删除，PR 合并时 GitHub 会处理，不需要手动执行。
 
 ## 每轮开发日志
 
@@ -60,6 +115,7 @@
 ```powershell
 git lfs install --local
 gdmerge git-install
+sh scripts/dev/setup-git-hooks.sh
 ```
 
 `gdmerge` 版本固定为 0.3.6。没有 Rust 工具链的成员可以使用官方 Release 的 Windows 预编译包，但团队内保持同一版本。
