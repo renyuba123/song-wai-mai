@@ -238,3 +238,35 @@ PASS main scene nodes=153 nav_polygons=624
 **提交：** `d9014a6 feat(world): add spawn and city site contracts`、`715f4d8 feat(orders): add delivery order contract`、`01e697b feat(navigation): add query interface and readiness gate`、`a77ee86 feat(input): add gameplay input actions`、`5b6603b test: cover phase-zero contracts, input, and navigation`、`eac5c91 ci: run Godot 4.7.2 headless tests`；文档与本条日志随 `docs: document phase-zero contracts and ownership` 提交。
 
 **推送与 PR：** 使用 `git pushpr` 推送分支并自动创建 PR，同时发送通知栏提醒；等待 `integrity`（含 Godot 4.7.2 headless 测试）通过后再合并。
+
+## 2026-10-27 19:57 实施阶段一：城市地块、建筑、商家和顾客站点
+
+**本轮需求（原文）：** 开始阶段一
+
+**做了什么：**
+
+- `RoadNetwork` 新增 `SURFACE_Y`、`CARRIAGEWAY_RATIO`、`sidewalk_offset()` 和 `get_entrance_setback()`；入口可选键 `width`、`facing_yaw`、`lot_id` 加入校验。主干路、次干路、支路和困难模式的退让规则集中到同一函数，出生点不再各写一套。
+- `SpawnPoint` 新增 `lateral_offset_m`，用路段左法线计算人行道位置；位置与偏移不一致、横向偏移超出红线时校验失败。出入口退让改用 `network.get_entrance_setback()`，支路出生点不再固定按 30 米处理。
+- 新增 `CityContent` 纯数据契约，统一保存地块、建筑、站点、玩家起点和出入口交叉引用；校验地块重叠、建筑超出地块、入口退让、站点与入口关联、站点/玩家出生点不在建筑内、玩家起点不在道路中心。
+- 新增 `CityGenerator`，从真实路段和轴线生成城市。每条非支路最多一个入口；地块临街宽 18～40 米、进深 18～28 米，全局最多 240 个；商家最多 12、顾客最多 20；同种子逐字段可复现。种子 42、2400 米、密度 0.5 生成 152 个地块、152 栋建筑、40 个出入口、32 个站点（16 商家 + 16 顾客）；1200 米、种子 1、密度 1.0 生成 16 个地块、16 栋建筑、4 个出入口、4 个站点。
+- 新增 `CityBuilder`：绘制人行道、方块建筑和商家/顾客标记；人行道和建筑使用 `WORLD_STATIC` 碰撞，但不加入 `navigation_source`。`world.tscn` 增加 `CityBuilder` 兄弟节点。
+- `RoadBuilder` 把所有可走碰撞体顶面统一到 `RoadNetwork.SURFACE_Y = 0`，视觉网格只抬高几厘米；修掉人行道与车行道之间约 20 厘米、玩家无法自然跨越的台阶。
+- `WorldGenerator` 生成顺序改为路网 → 城市 → 校验 → 道路绘制 → 城市绘制 → 报告 → `world_generated`；新增 `generate_city`、`city` 和 `city_report`，信号签名不变。
+- `main.gd` 在世界生成后把玩家放到 `CityContent.player_start` 的位置和朝向；`city_demo.gd` 增加地块、建筑、站点和出入口数量。
+- 新增 `tests/test_city.gd`，覆盖同种子确定性、不同种子差异、两组地图参数、入口/地块/建筑/站点交叉引用、六类反向数据、主场景城市装配、导航源分组隔离，以及玩家起点到每个站点的 30 帧有界可达性查询。扩展 `test_contracts.gd` 和 `test_main_scene.gd`，CI 测试列表加入 `test_city`。
+
+**共享契约变化：** `RoadNetwork.entrances` 的 `width`、`facing_yaw`、`lot_id` 已成为阶段一城市必要键；`SpawnPoint` 新增 `lateral_offset_m`；新增 `CityContent`。旧的“新生成路网不应已有出入口”测试保留，因为入口只在 `CityGenerator` 中写入。导航源仍只有 `RoadCollision`。
+
+**修改目录：** `scripts/world/`、`scripts/core/`、`scripts/demo/`、`scenes/world/`、`tests/`、`.github/workflows/`、`README.md`、`CONTRIBUTING.md`、`docs/`。
+
+**本地校验：**
+
+- `godot --headless --path . --import` 成功，注册 `CityContent`、`CityGenerator`、`CityBuilder` 并生成 `.uid`。
+- 六个 headless 测试全部 `exit=0`：`test_road_network` 三种子通过；`test_main_scene` 输出 `nodes=153 lots=152 sites=32`；`test_contracts` 通过；`test_input_actions` 通过；`test_navigation_queries` 通过；`test_city` 两组种子通过，主场景全部 32 个站点可达。
+- `git diff --check` 通过，`git lfs fsck --pointers` 输出 `Git LFS fsck OK`。
+- 边界搜索确认 `navigation_source` 仍只用于道路和碰撞层常量；建筑/人行道没有加入导航源；没有 `get_random_spawn_point` 或 `is_physical_key_pressed` 残留。
+- 本轮以 headless 测试验证主场景装配和可达性，未在图形窗口中手动漫游；F5 的视觉效果和“从人行道走上车行道”留给 PR 评审时确认。
+
+**提交：** `369a5cb feat(world): add entrance setback and surface metrics`、`daf5c42 feat(world): add spawn lateral offset and city content contract`、`0cd534c feat(world): generate city lots, buildings, and sites`、`1fe23af feat(world): render sidewalks, buildings, and site markers`、`2a52eb0 feat(core): spawn player at the generated city start`、`bbc9ab1 test: cover stage-one city generation and reachability`；文档与本条日志随 `docs: document stage-one city generation` 提交。
+
+**推送与 PR：** 使用 `D:\Tools\gh\pr-create.sh` 推送当前分支并创建 PR，标题为 `feat: implement stage one city lots and sites`，同时发送通知栏提醒；CI 结果回填到本条日志。

@@ -58,9 +58,10 @@ godot --headless --path . --script res://tests/test_main_scene.gd
 godot --headless --path . --script res://tests/test_contracts.gd
 godot --headless --path . --script res://tests/test_input_actions.gd
 godot --headless --path . --script res://tests/test_navigation_queries.gd
+godot --headless --path . --script res://tests/test_city.gd
 ```
 
-前两条检查路网生成、校验、寻路和主场景启动；后三条分别检查共享数据契约、输入映射与玩家移动、导航查询接口。新增脚本后先执行一次 `godot --headless --path . --import`，让 Godot 注册 `class_name` 并生成 `.gd.uid`。
+前两条检查路网生成、校验、寻路和主场景启动；中间三条分别检查共享数据契约、输入映射与玩家移动、导航查询接口；最后一条检查城市确定性、反向数据、主场景城市装配和站点可达性。新增脚本后先执行一次 `godot --headless --path . --import`，让 Godot 注册 `class_name` 并生成 `.gd.uid`。
 
 ## 2. 所有人：日常操作流程
 
@@ -228,24 +229,37 @@ scenes/traffic/
 - `widths`：三类道路红线宽度
 - `seed_value`、`density`、`map_size`
 - `x_axes`、`y_axes`：道路轴线
-- `entrances`：地块出入口（后续生成）
+- `entrances`：地块出入口；阶段一由 `CityGenerator` 写入 `edge_id`、`offset`、`width`、`facing_yaw`、`lot_id`
+- `SURFACE_Y`：地面、车行道和人行道的统一可走顶面高度（0 米）；视觉网格可以略高，但碰撞体必须齐平
+- `CARRIAGEWAY_RATIO`、`sidewalk_offset(redline)`：车行道占红线比例和人行道中心距
 
-生成、绘制、碰撞和导航都读这一份数据。字段已经冻结，只做新增；修改字段或含义前，先通知玩家/整合和导航负责人，并同步更新测试。
+生成、绘制、碰撞和导航都读这一份数据。字段已经冻结，只做新增；修改字段或含义前，先通知玩家/整合和导航负责人，并同步更新测试。阶段一新增的入口键属于共享契约，修改前要同时通知 B、C。
 
-出生点和站点使用独立的纯数据资源，不保存 `Node` 引用：
+城市内容由 `CityContent` 资源承载，不保存 `Node` 引用：
 
-- `SpawnPoint`：`kind`（玩家起点/商家/顾客）、`site_id`、`position`、`facing_yaw`、`road_edge_id`、`road_offset_m`。
+- `seed_value`：必须与 `RoadNetwork.seed_value` 一致。
+- `lots`：地块字典，包含 `id`、`rect`、`road_edge_id`、`road_offset_m`、临街宽、进深、朝向、临街侧、`entrance_id`、`building_id`、`site_id`。
+- `buildings`：建筑字典，包含 `id`、`lot_id`、`rect`、`height_m`、`kind`、`entrance_id`、`site_id`。
+- `sites`：`CitySite` 数组，商家为 `merchant_000`，顾客为 `customer_000`。
+- `player_start`：安全玩家起点，类型必须是 `PLAYER_START`，且不关联站点。
+
+出生点和站点使用独立的纯数据资源：
+
+- `SpawnPoint`：`kind`（玩家起点/商家/顾客）、`site_id`、`position`、`facing_yaw`、`road_edge_id`、`road_offset_m`、`lateral_offset_m`。
 - `CitySite`：`id`、`kind`（商家/住宅）、`position`、`facing_yaw`、`lot_id`、`road_edge_id`、`spawn_point`。
 
-`position` 是世界坐标，单位米；`facing_yaw` 是弧度，0 朝向 -Z。`CitySite.position` 是建筑锚点，`spawn_point.position` 才是玩家实际可站的位置。商家/顾客出生点必须关联站点编号，并避开交叉口退让区。生成新的出生点后调用 `validate(network)`，不要继续从路网节点随机取出生位置。
+`position` 是世界坐标，单位米；`facing_yaw` 是弧度，0 朝向 -Z。`CitySite.position` 是建筑锚点，`spawn_point.position` 才是玩家实际可站的位置。`lateral_offset_m` 相对路段 `a→b` 的左法线：正数在左侧，负数在右侧；生成的人行道出生点必须非 0。商家/顾客出生点必须关联站点编号，并避开交叉口退让区。生成新的出生点后调用 `validate(network)`，不要继续从路网节点随机取出生位置。
+
+阶段一的 `CityContent` 由 `CityGenerator` 独占生成；地块、建筑、出入口和站点必须来自同一份 `CityContent`，不要在其他模块重新随机。`CityContent.validate(network)` 会检查地块重叠、建筑归属、入口退让、站点与入口交叉引用、出生点是否落在建筑内，以及玩家起点是否在道路中心。
 
 ### 4.2 生成规则
 
-- 使用 `RoadGenerator.generate(...)`，不要在别的模块里复制一套路网生成逻辑。
-- 所有随机都使用 `RandomNumberGenerator` 并显式设置 `seed`，不要用全局 `randi()`。
-- 同一组参数和种子必须生成同一份路网；测试会检查这一点。
-- 新增地块、建筑、商家的生成时，优先扩展 `RoadNetwork` 的数据或新增独立资源，不要把逻辑塞进 `RoadBuilder`。
-- 生成失败、路网为空、路径不存在时要安全返回，不要让整个主场景崩溃。
+- 使用 `RoadGenerator.generate(...)` 生成路网，使用 `CityGenerator.generate(network)` 生成城市内容；不要在别的模块里复制一套生成逻辑。
+- 所有随机都使用 `RandomNumberGenerator` 并显式设置 `seed`，不要用全局 `randi()`。城市生成使用 `network.seed_value ^ CityGenerator.CITY_RNG_SALT`，不修改路网节点、路段或种子。
+- 同一组参数和种子必须生成同一份路网和城市；`tests/test_city.gd` 会逐字段比较。
+- 新增加固生成规则时，优先扩展 `CityContent` 或新增独立资源，不要把逻辑塞进 `RoadBuilder` / `CityBuilder`。
+- 生成失败、路网为空、路径不存在时要安全返回，不要让整个主场景崩溃；入口地块不足或玩家起点不可用时，让城市校验失败并输出明确错误。
+- 阶段一地块只来自非支路路段，每条路段最多一个出入口；地块临街宽 18～40 米、进深 18～28 米，全局最多 240 个。支路只用于路网连通，不生成临街地块。
 
 ### 4.3 交通与行人
 
@@ -258,8 +272,9 @@ scenes/traffic/
 ### 4.4 场景与测试
 
 - 在 `scenes/world/world.tscn` 或 `scenes/traffic/traffic_system.tscn` 内增加子场景，不要往 `main.tscn` 里直接加节点。
-- 新增生成规则时扩展 `tests/test_road_network.gd` 或新增测试，至少覆盖：相同种子可复现、路网连通、路径存在。
+- 新增生成规则时扩展 `tests/test_road_network.gd` 或 `tests/test_city.gd`，至少覆盖：相同种子可复现、路网连通、路径存在、城市数据交叉引用正确。
 - 调试用场景放在 `scenes/dev/<名字>/`，不要提交临时场景。
+- 人行道和建筑碰撞体不加入 `navigation_source`；阶段一导航网格仍只覆盖车行道，人行道/入口导航在阶段三补。
 
 ## 5. 玩家、物理与整合开发者
 
@@ -294,7 +309,7 @@ project.godot
 - 移动、视角、跳跃/重力逻辑放在 `scripts/player/`。
 - 后续步行/骑行状态机也放在这个模块，不要改 `WorldGenerator`。
 - 输入映射由整合者统一维护；正式功能必须通过 `InputMap` 动作读取，不要直接轮询物理按键。
-- 玩家出生点、任务起点由世界或订单模块提供，玩家模块只负责“被放在哪里之后怎么走”。
+- 玩家出生点由 `CityContent.player_start` 提供，`main.gd` 在 `world.regenerate()` 后把玩家放到该位置和朝向；玩家模块只负责“被放在哪里之后怎么走”。不要退回固定节点或原点。
 
 阶段零已经定义的输入动作：
 
@@ -322,11 +337,12 @@ Main
 
 `scripts/core/main.gd` 连接信号：
 
-1. 世界生成完成，发出 `world_generated(network)`。
-2. 导航接收同一份 `RoadNetwork` 并烘焙。
+1. 世界生成路网和 `CityContent`，校验并绘制道路、人行道、建筑和站点标记，然后发出 `world_generated(network)`。
+2. 导航接收同一份 `RoadNetwork` 并烘焙；阶段一只把车行道碰撞体作为导航源。
 3. 交通接收同一份 `RoadNetwork` 并生成车辆/行人。
+4. `main.gd` 在世界生成后把 `$Player` 放到 `world.city.player_start`，并清零速度。
 
-不要把业务逻辑写进 `main.gd`；它只负责接线。新增模块时，先在模块内部提供入口场景和信号，再在 `main.tscn` 里实例化。
+不要把业务逻辑写进 `main.gd`；它只负责接线。新增模块时，先在模块内部提供入口场景和信号，再在 `main.tscn` 里实例化。`World` 场景内 `RoadBuilder` 与 `CityBuilder` 是兄弟节点，`CityBuilder` 只清理自己的子节点，不删除道路。
 
 ### 5.4 整合者职责
 
@@ -371,6 +387,8 @@ static func get_path_length(path: PackedVector3Array) -> float
 ### 6.2 注意事项
 
 - 不要修改 `RoadBuilder` 里的碰撞体结构；需要新增导航源时，把静态碰撞体加入 `navigation_source` 组。
+- 阶段一中只有 `RoadCollision` 在 `navigation_source` 组；`CityBuilder` 的 `SidewalkCollision` 和 `BuildingCollision` 有碰撞但不参与烘焙。阶段三接入人行道导航时再调整，并补可达性测试。
+- 所有可走表面顶面统一为 `RoadNetwork.SURFACE_Y = 0`；新增人行道/道路碰撞体时保持齐平，视觉网格才做几厘米错层。
 - 导航网格依赖世界生成结果，必须在 `world_generated` 之后烘焙。
 - 车辆/行人使用 `NavigationAgent3D` 时，代理半径、高度要与导航网格参数一致。
 - 动态障碍使用 `NavigationObstacle3D`，不要每帧重烘焙整个导航网格。
@@ -429,7 +447,7 @@ git mergetool --tool=gdmerge
 
 ### 8.7 玩家掉出地面
 
-检查地面碰撞体是否生成、玩家 `collision_mask` 是否包含 `WORLD_STATIC`、玩家出生点是否在地面以上。
+检查地面碰撞体是否生成、玩家 `collision_mask` 是否包含 `WORLD_STATIC`、玩家出生点是否在地面以上或与人行道/车行道顶面齐平（`RoadNetwork.SURFACE_Y`）。
 
 ### 8.8 推送被拒绝
 

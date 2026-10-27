@@ -81,7 +81,7 @@ git push origin --delete <branch-name>
 - 每轮工作结束都提交并推送当前分支；提交信息说明“改了什么”，不要只写“更新”。
 - 一个模块或一个完整修复通过校验后，及时创建 PR，不要等所有功能都做完。
 - PR 描述写清楚：改了什么、怎么验证、影响哪些模块、是否改了共享文件。
-- 合并前确认：路网测试通过、主场景能启动、没有调试残留（临时 `print`、临时改数值、`@tool` 调试节点）。
+- 合并前确认：路网和城市测试通过、主场景能启动、没有调试残留（临时 `print`、临时改数值、`@tool` 调试节点）。
 - 不直接往 `main` 推送；紧急修复也走 PR。
 
 ## 远端同步
@@ -105,6 +105,8 @@ git push origin --delete <branch-name>
 共享契约的维护责任：
 
 - `RoadNetwork` 字段和 `SpawnPoint`、`CitySite` 由 A 维护。
+- `CityContent` 及 `CityGenerator` 生成的地块、建筑、站点数据由 A 维护。
+- `RoadNetwork.entrances` 的 `width`、`facing_yaw`、`lot_id` 属于共享契约；修改含义或校验规则前先通知 B、C，并同步更新 `tests/test_contracts.gd` 和 `tests/test_city.gd`。
 - `DeliveryOrder` 由 B 维护。
 - 输入动作和 `project.godot` 由 B 维护。
 - `NavigationService` 查询接口由 C 维护。
