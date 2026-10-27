@@ -16,6 +16,7 @@ func _run() -> void:
 		Vector2(2400.0, 2400.0), 42, 0.5, Vector3(40.0, 30.0, 18.0)
 	)
 	_check_road_network(network)
+	_check_entrance_setbacks(network)
 	_check_spawn_points(network)
 	_check_city_sites(network)
 	_check_delivery_orders(network)
@@ -42,6 +43,29 @@ func _find_edge(network: RoadNetwork, minimum_length: float) -> int:
 		if _edge_length(network, index) >= minimum_length:
 			return index
 	return -1
+
+
+func _find_edge_of_kind(network: RoadNetwork, kind: int) -> int:
+	for index in network.edges.size():
+		if int(network.edges[index].kind) == kind:
+			return index
+	return -1
+
+
+func _spawn_on_edge_lateral(
+	network: RoadNetwork, edge_id: int, kind: SpawnPoint.Kind, site_id: StringName, lateral: float
+) -> SpawnPoint:
+	var spawn := _spawn_on_edge(network, edge_id, kind, site_id)
+	var edge: Dictionary = network.edges[edge_id]
+	var a: Vector2 = network.nodes[edge.a]
+	var b: Vector2 = network.nodes[edge.b]
+	var length := a.distance_to(b)
+	var direction := (b - a) / length
+	var left := Vector2(direction.y, -direction.x)
+	var point := a.lerp(b, spawn.road_offset_m / length) + left * lateral
+	spawn.lateral_offset_m = lateral
+	spawn.position = Vector3(point.x, RoadNetwork.SURFACE_Y, point.y)
+	return spawn
 
 
 func _spawn_on_edge(network: RoadNetwork, edge_id: int, kind: SpawnPoint.Kind, site_id: StringName) -> SpawnPoint:
@@ -87,6 +111,45 @@ func _check_road_network(network: RoadNetwork) -> void:
 	_expect(route.size() >= 2, "路网寻路结果不足两个节点")
 
 
+func _check_entrance_setbacks(network: RoadNetwork) -> void:
+	_expect(is_equal_approx(network.get_entrance_setback(-1), 0.0), "无效路段的退让应为 0")
+	_expect(is_equal_approx(network.get_entrance_setback(9999), 0.0), "越界路段的退让应为 0")
+	var main_id := _find_edge_of_kind(network, RoadNetwork.MAIN)
+	var secondary_id := _find_edge_of_kind(network, RoadNetwork.SECONDARY)
+	var local_id := _find_edge_of_kind(network, RoadNetwork.LOCAL)
+	_expect(main_id >= 0, "找不到主干路")
+	_expect(secondary_id >= 0, "找不到次干路")
+	_expect(local_id >= 0, "找不到支路")
+	if main_id >= 0:
+		_expect(is_equal_approx(network.get_entrance_setback(main_id), 100.0), "主干路退让应为 100 米")
+	if secondary_id >= 0:
+		_expect(is_equal_approx(network.get_entrance_setback(secondary_id), 80.0), "次干路退让应为 80 米")
+	if local_id >= 0:
+		var local_edge: Dictionary = network.edges[local_id]
+		var endpoints := [local_edge.a, local_edge.b]
+		var connects_higher := false
+		for other in network.edges:
+			if int(other.kind) >= RoadNetwork.LOCAL:
+				continue
+			if other.a in endpoints or other.b in endpoints:
+				connects_higher = true
+				break
+		var expected := 50.0 if connects_higher else 30.0
+		_expect(is_equal_approx(network.get_entrance_setback(local_id), expected), "支路退让与连接关系不符")
+
+	var difficult := Generator.generate(
+		Vector2(2400.0, 2400.0), 42, 0.5, Vector3(40.0, 30.0, 18.0), true
+	)
+	var difficult_main := _find_edge_of_kind(difficult, RoadNetwork.MAIN)
+	var difficult_secondary := _find_edge_of_kind(difficult, RoadNetwork.SECONDARY)
+	_expect(difficult_main >= 0, "困难模式找不到主干路")
+	_expect(difficult_secondary >= 0, "困难模式找不到次干路")
+	if difficult_main >= 0:
+		_expect(is_equal_approx(difficult.get_entrance_setback(difficult_main), 80.0), "困难模式主干路退让应为 80 米")
+	if difficult_secondary >= 0:
+		_expect(is_equal_approx(difficult.get_entrance_setback(difficult_secondary), 50.0), "困难模式次干路退让应为 50 米")
+
+
 func _check_spawn_points(network: RoadNetwork) -> void:
 	var edge_id := _find_edge(network, 260.0)
 	_expect(edge_id >= 0, "找不到足够长的测试路段")
@@ -111,6 +174,26 @@ func _check_spawn_points(network: RoadNetwork) -> void:
 
 	var player_start := _spawn_on_edge(network, edge_id, SpawnPoint.Kind.PLAYER_START, &"")
 	_expect(player_start.is_valid(network), "玩家起点可以不关联站点")
+
+	var redline: float = network.widths[int(edge.kind)]
+	var sidewalk_lateral := RoadNetwork.sidewalk_offset(redline)
+	var left_sidewalk := _spawn_on_edge_lateral(
+		network, edge_id, SpawnPoint.Kind.MERCHANT, &"merchant_a", sidewalk_lateral
+	)
+	_expect(left_sidewalk.is_valid(network), "左侧人行道横向偏移应有效")
+	var right_sidewalk := _spawn_on_edge_lateral(
+		network, edge_id, SpawnPoint.Kind.MERCHANT, &"merchant_a", -sidewalk_lateral
+	)
+	_expect(right_sidewalk.is_valid(network), "右侧人行道横向偏移应有效")
+
+	var outside_redline := _spawn_on_edge_lateral(
+		network, edge_id, SpawnPoint.Kind.MERCHANT, &"merchant_a", redline * 0.5
+	)
+	_expect(not outside_redline.is_valid(network), "横向偏移到达红线时应失败")
+
+	var mismatch := _spawn_on_edge(network, edge_id, SpawnPoint.Kind.MERCHANT, &"merchant_a")
+	mismatch.lateral_offset_m = sidewalk_lateral
+	_expect(not mismatch.is_valid(network), "横向偏移与位置不一致时应失败")
 
 
 func _check_city_sites(network: RoadNetwork) -> void:
