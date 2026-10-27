@@ -337,3 +337,24 @@ PASS main scene nodes=153 nav_polygons=624
 **修改：** 本轮只运行验证，不改代码，仅追加本条日志。
 
 **提交：** 本条日志随 `docs: log god view runtime check` 提交并推送。
+
+## 2026-10-27 20:55 同步远端并回归测试
+
+**本轮需求（原文）：** 检查 song-wai-mai 仓库的远端更新：进入 E:/Project/Game Work Team/song-wai-mai，先确认工作区状态，再执行 git fetch origin --prune。如果 origin/main 或 origin/refactor/modular-base 有新提交，按 CONTRIBUTING.md 和每轮工作规则安全整合（有未提交改动时先保留或提交，不覆盖），运行相关 Godot 测试，把本轮同步和测试结果追加到 docs/DEVELOPMENT_LOG.md，提交并推送；若出现冲突或权限问题，停止并向用户说明，不要强推。
+
+**同步结果：**
+
+- 工作区干净，当前 `main` 为 `7b4fd6a`（PR #7 合并提交）。
+- `git fetch origin --prune` 成功，`origin/main` 仍为 `7b4fd6a`，没有新提交。
+- 远端和本地都不存在 `refactor/modular-base` 分支，本轮没有可整合的远端更新。
+- 未发生冲突，未执行强推；没有改动现有代码。
+
+**回归测试：**
+
+- `godot --headless --path . --import` 退出码为 0。
+- 七个 headless 测试全部 `exit=0`：`test_road_network` 三种子通过；`test_main_scene` 输出 `PASS main scene nodes=153 lots=152 sites=32 sky=true`；`test_contracts`、`test_input_actions`、`test_navigation_queries` 通过；`test_city` 通过；`test_god_view` 输出 `PASS god view debug=true`。
+- `git diff --check` 通过，`git lfs fsck --pointers` 输出 `Git LFS fsck OK`。
+
+**修改：** 本轮只追加同步与测试日志，不改代码。
+
+**提交与推送：** 因规则禁止直接向 `main` 提交，本条日志提交到 `docs/jzy070407-sync-20261027` 分支并推送，通过 PR 合并。
