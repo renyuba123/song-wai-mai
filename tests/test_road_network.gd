@@ -1,6 +1,6 @@
 extends SceneTree
 
-const Generator = preload("res://scripts/路网.gd/road_network.gd")
+const Generator = preload("res://scripts/road_network.gd")
 
 func _initialize() -> void:
 	call_deferred("_run")
