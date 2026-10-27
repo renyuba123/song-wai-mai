@@ -31,6 +31,7 @@ git clone https://github.com/renyuba123/song-wai-mai.git
 cd song-wai-mai
 git lfs install --local
 gdmerge git-install
+sh scripts/dev/setup-git-hooks.sh
 ```
 
 检查环境：
@@ -78,10 +79,12 @@ git status
 ```powershell
 git switch main
 git pull --rebase
-git switch -c feature/<模块>-<具体事情>
+git switch -c <type>/<github-id>-<topic>
 ```
 
-示例：`feature/worldgen-block-generation`、`fix/player-capsule`、`feature/navigation-query`。
+类型使用 `feature`、`fix`、`docs`、`chore`、`refactor`，并带上自己的 GitHub 用户名，避免多人分支重名。示例：`feature/jzy-worldgen-blocks`、`fix/lisi-player-capsule`、`feature/wang-navigation-query`。
+
+一个分支只做一件事，且只有一个负责人。不要往别人的功能分支追加提交；需要协作时先沟通。
 
 ### 2.3 修改范围
 
@@ -94,6 +97,7 @@ git switch -c feature/<模块>-<具体事情>
 3. 在 [DEVELOPMENT_LOG.md](DEVELOPMENT_LOG.md) 追加本轮记录。
 4. 提交并推送当前分支。
 5. 一个模块或修复完成后，尽快创建 PR。
+6. PR 合并后删除本地和远端分支；本地可执行 `sh scripts/dev/cleanup-merged-branches.sh`，远端分支确认已合并后再删除。
 
 提交前检查：
 
