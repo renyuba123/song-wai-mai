@@ -75,4 +75,8 @@ godot --headless --path . --script res://tests/test_main_scene.gd
 
 `.tscn` 和 `.tres` 使用 `gdmerge` 处理本地三方合并。每位协作者需在自己的电脑安装并运行一次 `gdmerge git-install`。安装命令：`cargo install gdmerge --version 0.3.6 --locked`。
 
+## Pull Request 检查
+
+`.github/workflows/repository-integrity.yml` 会在 Pull Request 上运行 `git lfs fsck --pointers`，发现损坏的 LFS 指针时让检查失败。它还会读取同一目标分支上的其他开放 Pull Request；如果多个 PR 同时修改同一个 `.tscn`，会在对应文件上给出 GitHub Actions 警告，提醒合并前一起检查场景文件。
+
 团队协作规则、每轮日志和远端同步要求见 [CONTRIBUTING.md](CONTRIBUTING.md)。
