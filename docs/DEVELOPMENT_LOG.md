@@ -105,3 +105,41 @@ PASS main scene nodes=153 nav_polygons=624
 **推送：** 提交后推送到 `origin/refactor/modular-base`。
 
 **PR：** 分支已推送，PR 创建入口见上一轮记录；PR 尚未自动创建。
+
+## 2026-10-27 17:08 配置本机 PR 自动化与通知
+
+**本轮需求（原文）：** 配置本机，实现自动创建PR，注意尽量不要占用C盘空间，同时新增本机规则：在创建PR时使用通知栏进行提醒
+
+**做了什么：**
+
+- 安装 GitHub CLI 2.103.3 到 `D:\Tools\gh\2.103.3`，下载后按官方 `gh_2.103.3_checksums.txt` 校验 SHA-256。
+- 将 GitHub CLI 配置目录设为 `D:\Tools\gh\config`，避免认证和缓存写入 C 盘。
+- 将 D 盘的 `gh.exe` 加入用户 PATH；在 `C:\Users\ASUS\bin` 只放两个很小的转发脚本（共 240 字节），负责设置 `GH_CONFIG_DIR` 后调用 D 盘 CLI，不复制 CLI 主体到 C 盘。
+- 通过 `gh auth login --web` 以 `jzy070407` 登录，token 存入系统凭据库。
+- 新增 `D:\Tools\gh\notify-pr.ps1`：用 Windows 通知栏显示 PR 创建结果；新增 `D:\Tools\gh\pr-create.sh`：先检查当前分支是否已有 PR，没有才创建，并在结束后发送通知。
+- 检查时发现 `refactor/modular-base` 的 PR #1 已由 `jzy070407` 创建并合并到 `main`；本地 `main` 已快进到 `7e2d4d3`。
+- 新增本机规则记忆：创建 PR 时使用通知栏提醒。
+
+**修改目录：** `docs/DEVELOPMENT_LOG.md`。GitHub CLI、通知脚本和定时任务配置在仓库外。
+
+**校验：**
+
+- `gh auth status` 显示已登录 `jzy070407`，token scopes 包含 `repo`、`read:org`、`gist`。
+- 通知栏测试脚本已执行，命令返回 0。
+- `pr-create.sh` 成功识别出 PR #1 已存在，没有重复创建。
+- 从合并后的 `main` 重新运行测试：
+
+```text
+PASS seed=42 nodes=153 edges=220 kinds=[48, 108, 64]
+PASS seed=1 nodes=27 edges=32 kinds=[8, 20, 4]
+PASS seed=73 nodes=307 edges=466 kinds=[110, 196, 160]
+PASS main scene nodes=153 nav_polygons=624
+```
+
+**提交：** `docs: record local PR automation setup`（本条日志）。
+
+**推送：** 推送到 `origin/chore/pr-automation`。
+
+**PR：** 使用 `D:\Tools\gh\pr-create.sh` 自动创建，并在通知栏提醒结果。
+
+**下一步：** 后续从最新 `main` 拉分支，完成模块后推送并运行 `pr-create.sh`；车辆/行人资产、订单和地块生成仍按原计划推进。
