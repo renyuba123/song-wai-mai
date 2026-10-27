@@ -269,4 +269,4 @@ PASS main scene nodes=153 nav_polygons=624
 
 **提交：** `369a5cb feat(world): add entrance setback and surface metrics`、`daf5c42 feat(world): add spawn lateral offset and city content contract`、`0cd534c feat(world): generate city lots, buildings, and sites`、`1fe23af feat(world): render sidewalks, buildings, and site markers`、`2a52eb0 feat(core): spawn player at the generated city start`、`bbc9ab1 test: cover stage-one city generation and reachability`；文档与本条日志随 `docs: document stage-one city generation` 提交。
 
-**推送与 PR：** 使用 `D:\Tools\gh\pr-create.sh` 推送当前分支并创建 PR，标题为 `feat: implement stage one city lots and sites`，同时发送通知栏提醒；CI 结果回填到本条日志。
+**推送与 PR：** 已推送 `feature/jzy070407-stage-one-city`，使用 `D:\Tools\gh\pr-create.sh` 创建 PR [#7](https://github.com/renyuba123/song-wai-mai/pull/7)，标题为 `feat: implement stage one city lots and sites`，同时发送通知栏提醒。GitHub Actions `integrity` 已通过（14 秒，Godot 4.7.2 headless 六个测试全部通过，LFS 与场景检查通过）。按规则不在本轮自行合并，等待负责人评审。
