@@ -43,3 +43,7 @@ godot --headless --path . --script res://tests/test_road_network.gd
 `.gitattributes` 将模型、贴图、音频、字体及 Godot 二进制资源交给 Git LFS；`.gd`、`.tscn`、`.tres`、`.svg` 等文本文件仍由普通 Git 管理。新克隆本仓库的电脑需要安装 Git LFS，并在仓库中执行 `git lfs install --local`。
 
 `.tscn` 和 `.tres` 使用 `gdmerge` 处理本地三方合并。每位协作者需在自己的电脑安装并运行一次 `gdmerge git-install`。安装命令：`cargo install gdmerge --version 0.3.6 --locked`。
+
+## Pull Request 检查
+
+`.github/workflows/repository-integrity.yml` 会在 Pull Request 上运行 `git lfs fsck --pointers`，发现损坏的 LFS 指针时让检查失败。它还会读取同一目标分支上的其他开放 Pull Request；如果多个 PR 同时修改同一个 `.tscn`，会在对应文件上给出 GitHub Actions 警告，提醒合并前一起检查场景文件。
