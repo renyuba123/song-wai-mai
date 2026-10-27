@@ -394,3 +394,19 @@ PASS main scene nodes=153 nav_polygons=624
 **提交：** `99a929c feat(world): add multiple safe player starts`、`5dde243 feat(orders): add deterministic order generation`、`8794580 feat(orders): add delivery session state machine`、`eb6d06c feat(orders): add HUD, target beacon, and order manager`、`2da36d7 feat(core): wire order system into main scene`、`45052ce test: cover stage-two order loop`；文档与本条日志随 `docs: document stage-two delivery loop` 提交。
 
 **推送与 PR：** 分支已推送到 `origin`，创建 PR [#9](https://github.com/renyuba123/song-wai-mai/pull/9)，`integrity` 检查 21 秒通过。等待负责人评审，不自行合并。
+
+## 2026-10-27 21:59 运行阶段二主场景
+
+**本轮需求（原文）：** 运行一下
+
+**运行结果：**
+
+- 使用 Godot 4.7.2 mono 在图形窗口启动 `scenes/main/main.tscn`，运行 600 帧后正常退出，退出码为 0。
+- 使用 D3D12 12_0、Forward+，显卡为 NVIDIA GeForce RTX 5070 Laptop GPU。
+- 路网校验通过（节点 153、路段 220）；城市生成通过（地块 152、建筑 152、站点 32、出入口 40）；交通模块正常接入。
+- 启动和退出日志没有项目脚本错误或资源错误；本次运行没有出现此前的 WASAPI 音频报错。
+- 订单与 HUD 由运行时脚本创建，本轮只做启动和短时间运行检查，未进行人工操作验证。
+
+**修改：** 本轮只运行验证，不改代码，仅追加本条日志。
+
+**提交与推送：** 本条日志随 `docs: log stage-two runtime check` 提交并推送到 `feature/jzy070407-stage-two-delivery-loop`，更新 PR [#9](https://github.com/renyuba123/song-wai-mai/pull/9)。
