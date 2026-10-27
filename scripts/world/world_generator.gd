@@ -40,14 +40,6 @@ func regenerate() -> void:
 	world_generated.emit(network)
 
 
-func get_random_spawn_point(spawn_seed: int = random_seed) -> Vector2:
-	if network == null or network.nodes.is_empty():
-		return Vector2.ZERO
-	var rng := RandomNumberGenerator.new()
-	rng.seed = spawn_seed
-	return network.nodes[rng.randi_range(0, network.nodes.size() - 1)]
-
-
 func _print_report() -> void:
 	print("路网校验：", "通过" if report.valid else "失败", "；节点 ", report.nodes, "；路段 ", report.edges)
 	for message in report.errors:

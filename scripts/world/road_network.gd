@@ -4,6 +4,12 @@ class_name RoadNetwork
 ## 路网数据。生成、道路绘制、碰撞和导航都读取同一份 RoadNetwork，
 ## 避免各模块各自维护一套道路数据。所有距离单位为米，1 个 Godot
 ## 世界单位 = 1 米。
+##
+## 字段冻结（阶段零）：下列字段的含义、单位和坐标约定已确认，只允许新增，
+## 修改或删除前先通知 A、B、C 并补测试。nodes 的 XY 对应世界 XZ，Y 轴向上；
+## edges 使用 {"a": int, "b": int, "kind": int}；entrances 使用
+## {"edge_id": int, "offset": float}；x_axes / y_axes 使用
+## {"kind": int, "pos": float}。
 
 const MAIN := 0
 const SECONDARY := 1
