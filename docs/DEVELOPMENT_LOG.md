@@ -410,3 +410,18 @@ PASS main scene nodes=153 nav_polygons=624
 **修改：** 本轮只运行验证，不改代码，仅追加本条日志。
 
 **提交与推送：** 本条日志随 `docs: log stage-two runtime check` 提交并推送到 `feature/jzy070407-stage-two-delivery-loop`，更新 PR [#9](https://github.com/renyuba123/song-wai-mai/pull/9)。
+
+## 2026-10-27 22:04 运行项目交互窗口
+
+**本轮需求（原文）：** 运行项目
+
+**运行结果：**
+
+- 在图形窗口启动项目主场景，不设置自动退出帧数，运行至手动关闭窗口，退出码为 0。
+- 使用 D3D12 12_0、Forward+，显卡为 NVIDIA GeForce RTX 5070 Laptop GPU。
+- 路网校验通过（节点 153、路段 220）；城市生成通过（地块 152、建筑 152、站点 32、出入口 40）；交通模块正常接入。
+- 完整运行日志没有项目脚本错误、资源错误或音频设备报错。
+
+**修改：** 本轮只启动并运行项目，不改代码，仅追加本条日志。
+
+**提交与推送：** 本条日志提交并推送到 `feature/jzy070407-stage-two-delivery-loop`，更新 PR [#9](https://github.com/renyuba123/song-wai-mai/pull/9)。
