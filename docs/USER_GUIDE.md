@@ -55,9 +55,12 @@ git lfs status
 ```powershell
 godot --headless --path . --script res://tests/test_road_network.gd
 godot --headless --path . --script res://tests/test_main_scene.gd
+godot --headless --path . --script res://tests/test_contracts.gd
+godot --headless --path . --script res://tests/test_input_actions.gd
+godot --headless --path . --script res://tests/test_navigation_queries.gd
 ```
 
-第一条检查路网生成、校验和寻路；第二条实例化主场景，确认世界生成和导航烘焙都完成。
+前两条检查路网生成、校验、寻路和主场景启动；后三条分别检查共享数据契约、输入映射与玩家移动、导航查询接口。新增脚本后先执行一次 `godot --headless --path . --import`，让 Godot 注册 `class_name` 并生成 `.gd.uid`。
 
 ## 2. 所有人：日常操作流程
 
@@ -227,7 +230,14 @@ scenes/traffic/
 - `x_axes`、`y_axes`：道路轴线
 - `entrances`：地块出入口（后续生成）
 
-生成、绘制、碰撞和导航都读这一份数据。修改字段或含义前，先通知玩家/整合和导航负责人，并同步更新测试。
+生成、绘制、碰撞和导航都读这一份数据。字段已经冻结，只做新增；修改字段或含义前，先通知玩家/整合和导航负责人，并同步更新测试。
+
+出生点和站点使用独立的纯数据资源，不保存 `Node` 引用：
+
+- `SpawnPoint`：`kind`（玩家起点/商家/顾客）、`site_id`、`position`、`facing_yaw`、`road_edge_id`、`road_offset_m`。
+- `CitySite`：`id`、`kind`（商家/住宅）、`position`、`facing_yaw`、`lot_id`、`road_edge_id`、`spawn_point`。
+
+`position` 是世界坐标，单位米；`facing_yaw` 是弧度，0 朝向 -Z。`CitySite.position` 是建筑锚点，`spawn_point.position` 才是玩家实际可站的位置。商家/顾客出生点必须关联站点编号，并避开交叉口退让区。生成新的出生点后调用 `validate(network)`，不要继续从路网节点随机取出生位置。
 
 ### 4.2 生成规则
 
@@ -283,8 +293,20 @@ project.godot
 - 玩家是 `CharacterBody3D`，碰撞体和相机在 `scenes/player/player.tscn`。
 - 移动、视角、跳跃/重力逻辑放在 `scripts/player/`。
 - 后续步行/骑行状态机也放在这个模块，不要改 `WorldGenerator`。
-- 输入映射由整合者统一维护；临时调试可以用物理按键，但正式功能要落到输入映射。
+- 输入映射由整合者统一维护；正式功能必须通过 `InputMap` 动作读取，不要直接轮询物理按键。
 - 玩家出生点、任务起点由世界或订单模块提供，玩家模块只负责“被放在哪里之后怎么走”。
+
+阶段零已经定义的输入动作：
+
+| 动作 | 按键 | 用途 |
+|---|---|---|
+| `move_forward` / `move_back` | W / S | 前后移动 |
+| `move_left` / `move_right` | A / D | 左右移动 |
+| `interact` | E | 取餐、送达等交互（阶段二实现） |
+| `pause` | Esc | 暂停（阶段二实现） |
+| `restart` | R | 重开（阶段二实现） |
+
+移动使用 `Input.get_vector("move_left", "move_right", "move_forward", "move_back")`，不要退回 `Input.is_physical_key_pressed`。
 
 ### 5.3 主场景装配
 
@@ -331,7 +353,20 @@ scenes/navigation/
 2. 使用 4 米体素（城市级地图的默认值）。
 3. 只解析 `CollisionLayers.WORLD_STATIC` 的静态碰撞体。
 4. 从 `navigation_source` 组读取道路碰撞体；地面不参与导航。
-5. 同步烘焙并发出 `navigation_baked`。
+5. 同步烘焙、强制更新导航地图，再根据导航网格多边形数量设置就绪状态。
+6. 发出 `navigation_baked`。
+
+其他模块只通过 `NavigationService` 查询，不直接读取 `NavigationRegion3D`：
+
+```gdscript
+func is_ready() -> bool
+func get_closest_point(world_position: Vector3) -> Vector3
+func find_path(from: Vector3, to: Vector3) -> PackedVector3Array
+func is_reachable(from: Vector3, to: Vector3) -> bool
+static func get_path_length(path: PackedVector3Array) -> float
+```
+
+未就绪时 `find_path()` 返回空数组，`is_reachable()` 返回 `false`，`get_closest_point()` 返回 `Vector3.INF`，调用方要先判断 `is_ready()`。查询参数和返回值都是世界坐标，单位米。路径长度按导航路径逐段累加，不额外加站点锚点到导航网格的直线距离。
 
 ### 6.2 注意事项
 
@@ -346,7 +381,7 @@ scenes/navigation/
 
 - 在编辑器里打开导航调试显示，检查道路是否连通、交叉口是否断开。
 - 写一个临时 `scenes/dev/navigation/` 测试场景，放两个标记点，验证 `NavigationAgent3D` 能到达。
-- 测试至少覆盖：主场景能烘焙出多边形、随机两点之间有路径、动态障碍不会让代理卡死。
+- 测试至少覆盖：主场景能烘焙出多边形、随机两点之间有路径、动态障碍不会让代理卡死。`tests/test_navigation_queries.gd` 已经覆盖未就绪行为、主场景路径查询和路径长度计算。
 
 ## 7. 技术美术 / 资源整合
 

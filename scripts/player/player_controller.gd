@@ -27,9 +27,8 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _physics_process(delta: float) -> void:
-	var input := Vector2(
-		float(Input.is_physical_key_pressed(KEY_D)) - float(Input.is_physical_key_pressed(KEY_A)),
-		float(Input.is_physical_key_pressed(KEY_S)) - float(Input.is_physical_key_pressed(KEY_W))
+	var input := Input.get_vector(
+		"move_left", "move_right", "move_forward", "move_back"
 	)
 	var direction := (transform.basis * Vector3(input.x, 0.0, input.y)).normalized()
 	if direction.length_squared() > 0.0:

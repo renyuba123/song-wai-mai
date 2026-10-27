@@ -19,9 +19,10 @@ assets/                 模型、贴图、音频（二进制资源走 Git LFS）
 .githooks/              阻止直接提交/推送 main 的本地 hooks
 scripts/
   core/                 main.gd、碰撞层常量等共享装配
-  world/                RoadNetwork 数据、RoadGenerator、RoadBuilder、WorldGenerator
+  world/                RoadNetwork 数据、出生点/站点契约、生成与绘制
+  orders/               外卖订单数据契约
   player/               第一人称控制
-  navigation/           导航网格烘焙与导航服务
+  navigation/           导航网格烘焙与导航查询服务
   traffic/              车辆/行人入口
   demo/                 路网演示的相机、灯光和调试 UI
   dev/                  分支管理 hooks 安装与本地清理脚本
@@ -33,7 +34,11 @@ scenes/
   traffic/traffic_system.tscn
   demo/city_road_demo.tscn  路网演示，按 F6 单独运行
 tests/
-  test_road_network.gd  路网生成、校验、寻路测试
+  test_road_network.gd      路网生成、校验、寻路测试
+  test_main_scene.gd        主场景启动与导航就绪冒烟测试
+  test_contracts.gd         出生点、站点和订单数据契约测试
+  test_input_actions.gd     输入动作与玩家移动测试
+  test_navigation_queries.gd 导航查询接口测试
 docs/
   ROADMAP.md            已确认的开发路线图
   DEVELOPMENT_LOG.md    每轮开发日志
@@ -46,11 +51,15 @@ docs/
 
 使用 Godot 4.7 打开本目录。按 **F5** 运行 `scenes/main/main.tscn`；按 **F6** 单独运行 `scenes/demo/city_road_demo.tscn` 查看路网演示。
 
-运行路网自动校验：
+运行自动校验：
 
 ```powershell
+godot --headless --path . --import
 godot --headless --path . --script res://tests/test_road_network.gd
 godot --headless --path . --script res://tests/test_main_scene.gd
+godot --headless --path . --script res://tests/test_contracts.gd
+godot --headless --path . --script res://tests/test_input_actions.gd
+godot --headless --path . --script res://tests/test_navigation_queries.gd
 ```
 
 路网、道路绘制、碰撞和导航共用同一份 `RoadNetwork`。所有距离单位为米，**1 个 Godot 世界单位 = 1 米**。相同参数和随机种子生成相同的路网。
@@ -62,6 +71,8 @@ godot --headless --path . --script res://tests/test_main_scene.gd
 - 道路中心线、交叉口和可碰撞几何来自同一份节点与路段数据。
 - `RoadNetwork.find_route(起点节点编号, 终点节点编号)` 返回连通路径。
 - 运行时校验道路宽度、连通性、交叉口连接数与夹角、交叉口间距及几何相交。
+- 阶段零已定义 `SpawnPoint`、`CitySite`、`DeliveryOrder` 数据契约，冻结 `RoadNetwork` 字段，并增加移动、交互、暂停、重开输入动作。
+- `NavigationService` 提供就绪判断、最近可导航点、路径、可达性和路径长度查询，其他模块不直接读取 `NavigationRegion3D`。
 - 玩家第一人称移动、导航网格烘焙、交通模块入口已经接好；车辆/行人资产和订单逻辑尚未实现。
 
 当前尚未生成地块或出入口，所以出入口规则报告为“未适用”。为使支路接入次干路，部分次干路交叉口间距低于建议的 300 米，但仍满足 150 米硬下限。当前城市没有高架、匝道或交通信号。
@@ -83,6 +94,6 @@ godot --headless --path . --script res://tests/test_main_scene.gd
 
 ## Pull Request 检查
 
-`.github/workflows/repository-integrity.yml` 会在 Pull Request 上运行 `git lfs fsck --pointers`，发现损坏的 LFS 指针时让检查失败。它还会读取同一目标分支上的其他开放 Pull Request；如果多个 PR 同时修改同一个 `.tscn`，会在对应文件上给出 GitHub Actions 警告，提醒合并前一起检查场景文件。
+`.github/workflows/repository-integrity.yml` 会在 Pull Request 上运行 `git lfs fsck --pointers`，发现损坏的 LFS 指针时让检查失败。它还会读取同一目标分支上的其他开放 Pull Request；如果多个 PR 同时修改同一个 `.tscn`，会在对应文件上给出 GitHub Actions 警告，提醒合并前一起检查场景文件。同一任务会安装固定版本 Godot 4.7.2，执行 headless 导入并运行全部五个测试脚本，任一测试非零退出都会让检查失败。
 
 团队协作规则、每轮日志和远端同步要求见 [CONTRIBUTING.md](CONTRIBUTING.md)。各角色从环境准备到交付的具体步骤和注意事项见 [docs/USER_GUIDE.md](docs/USER_GUIDE.md)。
