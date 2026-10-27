@@ -16,6 +16,7 @@
 
 ```text
 assets/                 模型、贴图、音频（二进制资源走 Git LFS）
+.githooks/              阻止直接提交/推送 main 的本地 hooks
 scripts/
   core/                 main.gd、碰撞层常量等共享装配
   world/                RoadNetwork 数据、RoadGenerator、RoadBuilder、WorldGenerator
@@ -23,6 +24,7 @@ scripts/
   navigation/           导航网格烘焙与导航服务
   traffic/              车辆/行人入口
   demo/                 路网演示的相机、灯光和调试 UI
+  dev/                  分支管理 hooks 安装与本地清理脚本
 scenes/
   main/main.tscn        主场景，按 F5 运行
   world/world.tscn      可复用的世界生成场景
