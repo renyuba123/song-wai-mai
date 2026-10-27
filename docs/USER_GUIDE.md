@@ -432,6 +432,7 @@ git push
 ## 10. 相关文档
 
 - [README.md](../README.md)：项目目标、目录、运行方式。
+- [ROADMAP.md](ROADMAP.md)：已确认的开发路线图、阶段目标和验收标准。
 - [CONTRIBUTING.md](../CONTRIBUTING.md)：分支、日志、提交、PR、远端同步和文件所有权。
 - [DEVELOPMENT_LOG.md](DEVELOPMENT_LOG.md)：每轮开发记录。
 - [assets/README.md](../assets/README.md)：资源目录说明。
