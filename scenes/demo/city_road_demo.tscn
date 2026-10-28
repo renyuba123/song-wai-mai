@@ -7,4 +7,3 @@
 script = ExtResource("1_demo")
 
 [node name="World" parent="." instance=ExtResource("2_world")]
-generate_on_ready = false

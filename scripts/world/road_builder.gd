@@ -1,3 +1,4 @@
+@tool
 extends Node3D
 class_name RoadBuilder
 
@@ -7,6 +8,7 @@ class_name RoadBuilder
 const ROAD_COLORS := [Color("d66752"), Color("e8b65b"), Color("6bbdb1")]
 const CORRIDOR_COLOR := Color("3c4650")
 const GROUND_COLOR := Color("669473")
+const GENERATED_META := &"world_generator_generated"
 
 var road_body: StaticBody3D
 var ground_body: StaticBody3D
@@ -19,14 +21,14 @@ func build(network: RoadNetwork) -> void:
 	road_body.collision_layer = CollisionLayers.WORLD_STATIC
 	road_body.collision_mask = 0
 	road_body.add_to_group(CollisionLayers.NAVIGATION_SOURCE_GROUP)
-	add_child(road_body)
+	_add_generated_child(road_body)
 
 	# 地面参与玩家碰撞，但不参与导航烘焙；导航网格只覆盖道路。
 	ground_body = StaticBody3D.new()
 	ground_body.name = "GroundCollision"
 	ground_body.collision_layer = CollisionLayers.WORLD_STATIC
 	ground_body.collision_mask = 0
-	add_child(ground_body)
+	_add_generated_child(ground_body)
 
 	var ground := _material(GROUND_COLOR)
 	var corridor := _material(CORRIDOR_COLOR)
@@ -75,8 +77,15 @@ func build(network: RoadNetwork) -> void:
 
 func _clear() -> void:
 	for child in get_children():
-		remove_child(child)
-		child.queue_free()
+		if bool(child.get_meta(GENERATED_META, false)):
+			child.free()
+	road_body = null
+	ground_body = null
+
+
+func _add_generated_child(child: Node) -> void:
+	child.set_meta(GENERATED_META, true)
+	add_child(child)
 
 
 func _visual_box(size: Vector3, position: Vector3, material: Material) -> void:
@@ -86,7 +95,7 @@ func _visual_box(size: Vector3, position: Vector3, material: Material) -> void:
 	instance.mesh = mesh
 	instance.material_override = material
 	instance.position = position
-	add_child(instance)
+	_add_generated_child(instance)
 
 
 func _collision_box(size: Vector3, position: Vector3, body: StaticBody3D) -> void:

@@ -358,3 +358,99 @@ PASS main scene nodes=153 nav_polygons=624
 **修改：** 本轮只追加同步与测试日志，不改代码。
 
 **提交与推送：** 因规则禁止直接向 `main` 提交，本条日志提交到 `docs/jzy070407-sync-20261027` 分支并推送，通过 PR 合并。
+
+
+## 2026-10-27 21:20 实现阶段二配送闭环
+
+**本轮需求（原文）：** 开始阶段二的开发
+
+本轮确认了两个玩法选择：
+
+- **每单随机起点**：每张新订单从城市的多个安全人行道起点中随机选择一个，并传送玩家过去。
+- **R 键上下文切换**：配送中按 R 重开同一单；结算后按 R 生成下一单。沿用现有 `restart` 输入动作，不新增按键。
+
+**同步与分支：**
+
+- 从 `origin/main` 的 `d717775`（同步日志 PR #8 合并提交）创建 `feature/jzy070407-stage-two-delivery-loop`，没有从已合并的旧分支继续。
+- 本轮未发生冲突，未强推，也未直接修改 `main`。
+
+**实现内容：**
+
+- 城市内容新增 `player_starts`，默认地图生成 12 个安全起点，保留 `player_start` 作为兼容字段并要求它与数组首项一致；额外起点使用独立盐 `0x57A275`，不改变阶段一城市生成的主随机流。
+- 新增 `OrderGenerator`：订单种子与城市种子分离，用确定性洗牌选择起点、商家和顾客，并检查取餐、送达两段路径都可达且长度大于 0。
+- 新增 `OrderSession`：实现前往商家、前往顾客、已送达、失败四个状态的状态机；E 只在目标点 4 米内生效，倒计时跨两段共享，超时只结算一次。
+- 新增 `OrderHUD` 和 `OrderManager`：显示目标、距离、倒计时、种子、8 向箭头、E 提示和结算面板；用无碰撞圆柱信标标出当前目标，取餐为暖色、送达为青色。
+- 主场景接入 `OrderSystem`；玩家新增 `reset_to()`，新订单、重开和初始落位统一走同一套传送逻辑。
+- 上帝视角期间冻结订单倒计时，并忽略 E/R，避免测试相机干扰配送。
+- 本轮没有新增输入动作，也没有改动导航源；阶段二仍然只依赖车行道导航。
+
+**测试与校验：**
+
+- 新增 `tests/test_orders.gd`，覆盖起点数量与合法性、订单确定性、种子 1～8 的起点变化、两段可达性、导航未就绪、状态转换、超时、HUD 方向、经理 E/R 流程、重开同一单和不残留旧状态。
+- `test_city.gd` 改为比较完整起点签名，并增加重复起点、横向偏移为 0、`player_start` 不是首项等反向用例；主场景测试改为等待首单并对照 `order.start`。
+- 八个 headless 测试全部 `exit=0`，其中 `test_orders` 输出 `PASS orders starts=12`，`test_main_scene` 输出 `PASS main scene nodes=153 lots=152 sites=32 starts=12 order_seed=1 sky=true`。
+- `git diff --check` 通过，`git lfs fsck --pointers` 输出 `Git LFS fsck OK`。
+- 图形窗口启动主场景并运行 120 帧后正常退出，没有项目脚本错误；日志中的 WASAPI `GetBufferSize`、`Start failed` 等音频报错来自本机音频设备，不影响本轮逻辑。
+
+**提交：** `99a929c feat(world): add multiple safe player starts`、`5dde243 feat(orders): add deterministic order generation`、`8794580 feat(orders): add delivery session state machine`、`eb6d06c feat(orders): add HUD, target beacon, and order manager`、`2da36d7 feat(core): wire order system into main scene`、`45052ce test: cover stage-two order loop`；文档与本条日志随 `docs: document stage-two delivery loop` 提交。
+
+**推送与 PR：** 分支已推送到 `origin`，创建 PR [#9](https://github.com/renyuba123/song-wai-mai/pull/9)，`integrity` 检查 21 秒通过。等待负责人评审，不自行合并。
+
+## 2026-10-27 21:59 运行阶段二主场景
+
+**本轮需求（原文）：** 运行一下
+
+**运行结果：**
+
+- 使用 Godot 4.7.2 mono 在图形窗口启动 `scenes/main/main.tscn`，运行 600 帧后正常退出，退出码为 0。
+- 使用 D3D12 12_0、Forward+，显卡为 NVIDIA GeForce RTX 5070 Laptop GPU。
+- 路网校验通过（节点 153、路段 220）；城市生成通过（地块 152、建筑 152、站点 32、出入口 40）；交通模块正常接入。
+- 启动和退出日志没有项目脚本错误或资源错误；本次运行没有出现此前的 WASAPI 音频报错。
+- 订单与 HUD 由运行时脚本创建，本轮只做启动和短时间运行检查，未进行人工操作验证。
+
+**修改：** 本轮只运行验证，不改代码，仅追加本条日志。
+
+**提交与推送：** 本条日志随 `docs: log stage-two runtime check` 提交并推送到 `feature/jzy070407-stage-two-delivery-loop`，更新 PR [#9](https://github.com/renyuba123/song-wai-mai/pull/9)。
+
+## 2026-10-27 22:04 运行项目交互窗口
+
+**本轮需求（原文）：** 运行项目
+
+**运行结果：**
+
+- 在图形窗口启动项目主场景，不设置自动退出帧数，运行至手动关闭窗口，退出码为 0。
+- 使用 D3D12 12_0、Forward+，显卡为 NVIDIA GeForce RTX 5070 Laptop GPU。
+- 路网校验通过（节点 153、路段 220）；城市生成通过（地块 152、建筑 152、站点 32、出入口 40）；交通模块正常接入。
+- 完整运行日志没有项目脚本错误、资源错误或音频设备报错。
+
+**修改：** 本轮只启动并运行项目，不改代码，仅追加本条日志。
+
+**提交与推送：** 本条日志提交并推送到 `feature/jzy070407-stage-two-delivery-loop`，更新 PR [#9](https://github.com/renyuba123/song-wai-mai/pull/9)。
+
+## 2026-10-27 22:26 实现 Seed 编辑器实时预览
+
+**用户需求（原文摘要）：** 实现类似 Houdini 的 Seed 编辑器实时预览：城市生成逻辑可在 Godot 编辑器中运行；Inspector 只暴露一个 `seed: int`；修改 Seed 后 3D 视口立即重新生成；同 Seed 稳定复现；重建时清理旧预览且不删除手工节点；复用现有逻辑、场景和资源，不增加 Bake、额外参数或 UI。修改前先检查并解决 Git 冲突，完成后按项目文档记录进度并安全上传。
+
+**做了什么：**
+
+- 在旧 `road` 工作区先检查并解决 `README.md` 与 `.github/workflows/repository-integrity.yml` 的合并冲突；没有从历史 `road` 分支直接上传。同步远端后，基于已合并阶段二的最新 `origin/main`（`91ca87e`，PR #9）复用干净 worktree，创建 `feature/jzy070407-seed-editor-preview` 分支，只移植本轮相关改动。
+- 为 `WorldGenerator` 增加 `@tool`，把自定义 Inspector 属性收敛为唯一的 `@export var seed: int`。Seed setter 在编辑器中延迟触发 `regenerate()`，场景载入时也自动生成预览；地图尺寸、密度和道路宽度等现有值保留为内部变量。
+- 继续复用 `RoadGenerator`、`CityGenerator`、`RoadBuilder` 与 `CityBuilder`。现有 `RandomNumberGenerator` 仍以城市 Seed 设置状态，因此同 Seed 的道路、地块、建筑、站点与阶段二订单输入保持可复现。
+- 为 `RoadBuilder` 和 `CityBuilder` 增加 `@tool`，给程序生成的直接子节点写入 `world_generator_generated` 元数据。重建时只释放带该标记的节点，既不会累积上一轮道路和建筑，也不会删除设计人员手工创建的子节点。
+- 主场景继续使用 `seed = 118`，保留阶段二 `OrderSystem` 及原有 F5 装配流程；演示场景继续由原入口调用 `regenerate()`，覆盖层改读 `world.seed`。没有带入测试过程中产生的 Seed 137/183、场景 UID、天空环境格式变化或其他无关改动。
+
+**修改文件：** `scripts/world/world_generator.gd`、`scripts/world/road_builder.gd`、`scripts/world/city_builder.gd`、`scripts/demo/city_demo.gd`、`scenes/main/main.tscn`、`scenes/demo/city_road_demo.tscn`、`docs/DEVELOPMENT_LOG.md`。
+
+**验证：**
+
+- Godot 4.7.2 执行 `--headless --path . --import` 成功，`WorldGenerator`、`RoadBuilder`、`CityBuilder` 的 `@tool` 脚本完成注册并在编辑器加载阶段生成城市预览。
+- 最新 CI 清单中的八个 headless 测试全部 `exit=0`：`test_road_network`、`test_main_scene`、`test_contracts`、`test_input_actions`、`test_navigation_queries`、`test_city`、`test_god_view`、`test_orders`。其中主场景输出 `nodes=150 lots=152 sites=32 starts=12 order_seed=2 sky=true`，阶段二订单测试输出 `PASS orders starts=12`。
+- 仓库外临时专项脚本在 `--editor` 环境验证通过：脚本导出属性只有 `seed`；把 Seed 改为 43 后自动生成不同城市；同 Seed 再生成时道路节点、路段和建筑数据完全一致；生成节点数量不累积；分别放入两个 Builder 的手工节点均保留。
+- `git diff --check` 通过；功能分支只包含上述目标文件，没有合并冲突或无关场景资源改动。Headless 环境的 Windows 根证书、`user://logs` 与编辑器退出 RID 提示不影响测试结果，所有相关进程均 `exit=0`。
+
+**提交：** `feat(world): add live seed editor preview`，本条日志与功能代码同一提交。
+
+**推送与 PR：** 推送 `feature/jzy070407-seed-editor-preview`，以最新 `main` 为目标创建 PR；PR 链接记录在本轮最终交付中。
+
+## 2026-10-27 22:26 实现 Seed 编辑器实时预览
+可以在编辑器视角下浏览地图，有seed可以改变地图种子
