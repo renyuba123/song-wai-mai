@@ -7,14 +7,12 @@ extends Node3D
 @onready var navigation: NavigationService = $NavigationSystem
 @onready var traffic: TrafficSpawner = $TrafficSystem
 @onready var player: PlayerController = $Player
-@onready var orders: OrderManager = $OrderSystem
 
 
 func _ready() -> void:
 	world.world_generated.connect(_on_world_generated)
 	world.regenerate()
 	_place_player()
-	orders.setup(world, navigation, player)
 	_setup_test_god_view()
 
 
@@ -26,7 +24,10 @@ func _on_world_generated(network: RoadNetwork) -> void:
 func _place_player() -> void:
 	if world.city == null or world.city.player_start == null:
 		return
-	player.reset_to(world.city.player_start)
+	var start := world.city.player_start
+	player.global_position = start.position
+	player.rotation.y = start.facing_yaw
+	player.velocity = Vector3.ZERO
 
 
 func _setup_test_god_view() -> void:
