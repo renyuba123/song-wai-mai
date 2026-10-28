@@ -17,6 +17,7 @@ const GENERATED_META := &"world_generator_generated"
 var _sidewalk_body: StaticBody3D = null
 var _building_body: StaticBody3D = null
 var _materials := {}
+var _populated_ids := PackedInt32Array()
 
 
 func build(network: RoadNetwork, city: CityContent) -> void:
@@ -31,6 +32,15 @@ func build(network: RoadNetwork, city: CityContent) -> void:
 		"merchant_marker": _marker_material(MERCHANT_MARKER_COLOR),
 		"customer_marker": _marker_material(CUSTOMER_MARKER_COLOR),
 	}
+	_populated_ids = PackedInt32Array()
+	var population := get_parent().get_node_or_null("CityPopulation")
+	if population != null:
+		var matches: bool = int(population.get_meta("city_seed", -1)) == city.seed_value
+		population.visible = matches
+		for body in population.find_children("*", "StaticBody3D", true, false):
+			body.collision_layer = CollisionLayers.WORLD_STATIC if matches else 0
+		if matches:
+			_populated_ids = population.get_meta("building_ids", PackedInt32Array())
 	_build_sidewalks(network)
 	_build_buildings(city)
 	_build_markers(city)
@@ -107,6 +117,8 @@ func _build_buildings(city: CityContent) -> void:
 	_add_generated_child(_building_body)
 
 	for building in city.buildings:
+		if int(building.id) in _populated_ids:
+			continue
 		var rect: Rect2 = building.rect
 		var height := float(building.height_m)
 		var point := rect.get_center()

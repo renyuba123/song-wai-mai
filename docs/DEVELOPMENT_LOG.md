@@ -707,3 +707,11 @@ PASS main scene nodes=153 nav_polygons=624
 - 密度预览用临时脚本和截图已删除，未提交；没有恢复或提交任何手机新订单提示的临时设计，也没有修改同事正在开发的手机 UI。
 
 **提交与推送：** `ee6ba2f feat(world): raise urban density with infill buildings and more cars`，本条日志单独提交；推送到 `feature/jzy070407-traffic-cars` 并更新 PR [#15](https://github.com/renyuba123/song-wai-mai/pull/15)。没有强推，也没有直接推送 `main`。
+
+## 2026-10-29 01:30（Asia/Shanghai）城市建筑与场景装饰布置
+
+需求：在保留现有外卖配送功能的前提下，实际布置建筑和环境，优先保证 P0 配送地点和 P1 主要路线，可直接在编辑器展示。
+
+在独立分支 feature/city-population 实施。新增 scenes/city 的持久场景及站点映射、可复用烘焙脚本和空间回归测试；主场景挂载布局，CityBuilder 避免重复占位并隔离不同 Seed。覆盖 12 个商家、20 个送餐点、208 栋其他建筑和 174 处树木绿化，增加任务点入口铺装与标识。精细模型优先围绕实际首单导航路线。未修改订单、玩家、交通或导航实现。
+
+原有九组测试通过；空间回归检查重叠、道路占用、任务入口、运行时保留与 Seed 切换。最终布局调整后复验相关套件。未进行 GPU 视口验收，真实门向、材质和帧率仍需人工检查，详见 CITY_POPULATION.md。提交：本条日志随 feature/city-population 的城市布置提交一并保存。

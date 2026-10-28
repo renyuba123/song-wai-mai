@@ -1,0 +1,322 @@
+[
+	{
+		"building_id": 36,
+		"model": "res://assets/models/收外卖可用模型/hotel.glb",
+		"site": "customer_014",
+		"trigger": [
+			459.876892089844,
+			0,
+			715.5
+		]
+	},
+	{
+		"building_id": 54,
+		"model": "res://assets/models/收外卖可用模型/school.glb",
+		"site": "customer_001",
+		"trigger": [
+			-240.233139038086,
+			0,
+			715.5
+		]
+	},
+	{
+		"building_id": 92,
+		"model": "res://assets/models/取外卖可用模型/Resturant.glb",
+		"site": "merchant_003",
+		"trigger": [
+			423.035034179688,
+			0,
+			168.024993896484
+		]
+	},
+	{
+		"building_id": 100,
+		"model": "res://assets/models/收外卖可用模型/gym.glb",
+		"site": "customer_018",
+		"trigger": [
+			-715.5,
+			0,
+			-171.848052978516
+		]
+	},
+	{
+		"building_id": 119,
+		"model": "res://assets/models/收外卖可用模型/bank.glb",
+		"site": "customer_016",
+		"trigger": [
+			-881.974975585938,
+			0,
+			-455.963562011719
+		]
+	},
+	{
+		"building_id": 121,
+		"model": "res://assets/models/收外卖可用模型/bank.glb",
+		"site": "customer_009",
+		"trigger": [
+			-456.250396728516,
+			0,
+			-531.974975585938
+		]
+	},
+	{
+		"building_id": 149,
+		"model": "res://assets/models/收外卖可用模型/book_shop.glb",
+		"site": "customer_017",
+		"trigger": [
+			280.295074462891,
+			0,
+			531.974975585938
+		]
+	},
+	{
+		"building_id": 154,
+		"model": "res://assets/models/收外卖可用模型/cinema.glb",
+		"site": "customer_012",
+		"trigger": [
+			868.025024414062,
+			0,
+			-423.253601074219
+		]
+	},
+	{
+		"building_id": 174,
+		"model": "res://assets/models/取外卖可用模型/Pizza.glb",
+		"site": "merchant_008",
+		"trigger": [
+			531.974975585938,
+			0,
+			-967.504699707031
+		]
+	},
+	{
+		"building_id": 177,
+		"model": "res://assets/models/收外卖可用模型/book_shop.glb",
+		"site": "customer_003",
+		"trigger": [
+			936.318542480469,
+			0,
+			-868.025024414062
+		]
+	},
+	{
+		"building_id": 181,
+		"model": "res://assets/models/收外卖可用模型/hotel.glb",
+		"site": "customer_007",
+		"trigger": [
+			938.532836914062,
+			0,
+			531.974975585938
+		]
+	},
+	{
+		"building_id": 198,
+		"model": "res://assets/models/取外卖可用模型/Pizza.glb",
+		"site": "merchant_002",
+		"trigger": [
+			15.5,
+			0,
+			149.699295043945
+		]
+	},
+	{
+		"building_id": 205,
+		"model": "res://assets/models/取外卖可用模型/bakery.glb",
+		"site": "merchant_000",
+		"trigger": [
+			868.025024414062,
+			0,
+			-942.173889160156
+		]
+	},
+	{
+		"building_id": 211,
+		"model": "res://assets/models/取外卖可用模型/Resturant.glb",
+		"site": "merchant_009",
+		"trigger": [
+			15.5,
+			0,
+			-869.419494628906
+		]
+	},
+	{
+		"building_id": 219,
+		"model": "res://assets/models/收外卖可用模型/school.glb",
+		"site": "customer_015",
+		"trigger": [
+			235.771514892578,
+			0,
+			181.975006103516
+		]
+	},
+	{
+		"building_id": 250,
+		"model": "res://assets/models/取外卖可用模型/coffee.glb",
+		"site": "merchant_001",
+		"trigger": [
+			-933.846740722656,
+			0,
+			-684.5
+		]
+	},
+	{
+		"building_id": 278,
+		"model": "res://assets/models/收外卖可用模型/cinema.glb",
+		"site": "customer_005",
+		"trigger": [
+			531.974975585938,
+			0,
+			-236.844024658203
+		]
+	},
+	{
+		"building_id": 281,
+		"model": "res://assets/models/收外卖可用模型/cinema.glb",
+		"site": "customer_019",
+		"trigger": [
+			-168.024993896484,
+			0,
+			269.861785888672
+		]
+	},
+	{
+		"building_id": 294,
+		"model": "res://assets/models/取外卖可用模型/mini_market.glb",
+		"site": "merchant_004",
+		"trigger": [
+			715.5,
+			0,
+			-590.7880859375
+		]
+	},
+	{
+		"building_id": 319,
+		"model": "res://assets/models/收外卖可用模型/bar.glb",
+		"site": "customer_006",
+		"trigger": [
+			-684.5,
+			0,
+			585.376831054688
+		]
+	},
+	{
+		"building_id": 332,
+		"model": "res://assets/models/取外卖可用模型/confectionery.glb",
+		"site": "merchant_011",
+		"trigger": [
+			932.784240722656,
+			0,
+			-684.5
+		]
+	},
+	{
+		"building_id": 335,
+		"model": "res://assets/models/收外卖可用模型/bank.glb",
+		"site": "customer_002",
+		"trigger": [
+			990.893981933594,
+			0,
+			868.025024414062
+		]
+	},
+	{
+		"building_id": 348,
+		"model": "res://assets/models/取外卖可用模型/coffee.glb",
+		"site": "merchant_007",
+		"trigger": [
+			286.689514160156,
+			0,
+			-518.025024414062
+		]
+	},
+	{
+		"building_id": 391,
+		"model": "res://assets/models/收外卖可用模型/gym.glb",
+		"site": "customer_011",
+		"trigger": [
+			234.808792114258,
+			0,
+			-684.5
+		]
+	},
+	{
+		"building_id": 409,
+		"model": "res://assets/models/取外卖可用模型/bakery.glb",
+		"site": "merchant_006",
+		"trigger": [
+			243.674819946289,
+			0,
+			-168.024993896484
+		]
+	},
+	{
+		"building_id": 427,
+		"model": "res://assets/models/取外卖可用模型/confectionery.glb",
+		"site": "merchant_005",
+		"trigger": [
+			-286.550048828125,
+			0,
+			868.025024414062
+		]
+	},
+	{
+		"building_id": 431,
+		"model": "res://assets/models/取外卖可用模型/mini_market.glb",
+		"site": "merchant_010",
+		"trigger": [
+			-518.025024414062,
+			0,
+			423.308837890625
+		]
+	},
+	{
+		"building_id": 458,
+		"model": "res://assets/models/收外卖可用模型/gym.glb",
+		"site": "customer_004",
+		"trigger": [
+			-974.851196289062,
+			0,
+			531.974975585938
+		]
+	},
+	{
+		"building_id": 512,
+		"model": "res://assets/models/收外卖可用模型/hotel.glb",
+		"site": "customer_000",
+		"trigger": [
+			-269.316253662109,
+			0,
+			181.975006103516
+		]
+	},
+	{
+		"building_id": 521,
+		"model": "res://assets/models/收外卖可用模型/book_shop.glb",
+		"site": "customer_010",
+		"trigger": [
+			518.025024414062,
+			0,
+			-465.699432373047
+		]
+	},
+	{
+		"building_id": 528,
+		"model": "res://assets/models/收外卖可用模型/bar.glb",
+		"site": "customer_013",
+		"trigger": [
+			846.285827636719,
+			0,
+			684.5
+		]
+	},
+	{
+		"building_id": 588,
+		"model": "res://assets/models/收外卖可用模型/school.glb",
+		"site": "customer_008",
+		"trigger": [
+			-191.909408569336,
+			0,
+			-1038.375
+		]
+	}
+]
