@@ -12,6 +12,7 @@ extends Node3D
 
 func _ready() -> void:
 	world.world_generated.connect(_on_world_generated)
+	traffic.player_hit.connect(_on_traffic_player_hit)
 	world.regenerate()
 	_place_player()
 	orders.setup(world, navigation, player)
@@ -20,7 +21,11 @@ func _ready() -> void:
 
 func _on_world_generated(network: RoadNetwork) -> void:
 	navigation.build(network)
-	traffic.build(network)
+	traffic.build(network, world.city)
+
+
+func _on_traffic_player_hit(_car: TrafficCar, position: Vector3) -> void:
+	orders.notify_player_hit(position)
 
 
 func _place_player() -> void:
