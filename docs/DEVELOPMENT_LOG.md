@@ -492,3 +492,23 @@ PASS main scene nodes=153 nav_polygons=624
 **推送与 PR：** 已推送 `fix/jzy070407-restore-city-contracts`，创建 PR [#11](https://github.com/renyuba123/song-wai-mai/pull/11)，`integrity` 检查通过，等待负责人评审，不自行合并。
 
 **交接包：** 本轮收到 `E:/Project/Game Work Team/交接包接收/`，内含取外卖商铺 7 个 FBX、收外卖设施 7 个 FBX、卡通城市建筑设施 34 MB FBX，以及 4 份 DeepSeek 3D 预览 HTML。仓库中已有对应的 14 个 `.glb`，本轮只把它们规范到 Git LFS，没有新增或替换模型。同事说明“导入进 Godot 之前还得先把模型分开，可以先行处理其他工作，导入完再通知”，因此本轮不拆分、不转换、不接入场景，交接包保持原样，等同事完成拆分和导入后再合并。
+
+## 2026-10-28 19:50 留存本地修复成果与恢复流程
+
+**本轮需求（原文）：** 对本地开发后的成果进行留存，一遍后续遇到同样问题时能进行针对性的修复
+
+**留存内容：**
+
+- 在仓库外创建 `E:/Project/Game Work Team/backups/`：`song-wai-mai-20261028.bundle` 保存完整 Git 历史（1.4 MB），`song-wai-mai-20261028-lfs-objects/` 保存 15 个模型的 LFS 对象（6.3 MB），`README.md` 写明恢复命令。
+- 创建本地标签 `known-good-20261028`，指向 `bf5bc7e`；标签只保存在本地和 bundle 中，未推送远端。
+- 新增 `docs/TROUBLESHOOTING.md`，记录本次回归的症状、定位命令、恢复步骤（城市契约、主场景订单接线、玩家胶囊高度、CI、LFS）和防复发措施。
+
+**校验：**
+
+- `git bundle verify` 输出 `The bundle records a complete history.`
+- 备份的 LFS 目录包含 15 个对象、6.3 MB，与仓库内 `.git/lfs/objects` 一致。
+- 本次只新增文档和仓库外备份，代码未变；PR #11 的 `integrity` 继续通过。
+
+**修改文件：** `docs/TROUBLESHOOTING.md`、`docs/DEVELOPMENT_LOG.md`；仓库外新增 `backups/`。
+
+**提交与推送：** 本条文档随 `docs: preserve recovery procedure and backup` 提交并推送到 `fix/jzy070407-restore-city-contracts`，更新 PR [#11](https://github.com/renyuba123/song-wai-mai/pull/11)。
