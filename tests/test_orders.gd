@@ -58,11 +58,25 @@ func _setup_main() -> void:
 	var ready := false
 	for _frame in 120:
 		ready = _navigation.is_ready()
-		if ready and _orders.get_current_order() != null:
+		if ready:
 			break
 		await physics_frame
 	_expect(ready, "导航在 120 个物理帧内未就绪")
+	_expect(_orders.is_start_screen_visible(), "启动时应显示开始界面")
+	_expect(_orders.get_current_order() == null, "开始界面前不应生成订单")
+	_expect(not _player.controls_enabled, "菜单期间应关闭玩家控制")
+	_expect(_orders.start_game(), "开始按钮应启动游戏")
+	for _frame in 120:
+		if _orders.get_current_order() != null and _orders.is_offer_visible():
+			break
+		await physics_frame
 	_expect(_orders.get_current_order() != null, "订单系统在 120 个物理帧内没有生成首单")
+	_expect(_orders.is_offer_visible(), "生成首单后应显示接单界面")
+	_expect(_orders.get_session() == null, "接单前不应开始倒计时")
+	_expect(_orders.get_offer_text().contains("限时"), "接单界面应显示时限")
+	_expect(_orders.accept_order(), "接单按钮应开始订单")
+	_expect(_orders.get_session() != null and _orders.get_session().is_active(), "接单后订单应进入活动状态")
+	_expect(_player.controls_enabled, "接单后应恢复玩家控制")
 	_expect(_world.city != null and _world.city.is_valid(_world.network), "主场景城市校验失败")
 
 
@@ -181,6 +195,13 @@ func _check_session(order: DeliveryOrder) -> void:
 	session.finished.connect(func(success: bool) -> void: finished_events.append(success))
 	_expect(session.state == OrderSession.State.TO_MERCHANT, "新会话应处于取餐阶段")
 	_expect(session.time_limit >= OrderSession.MIN_TIME_LIMIT_S, "订单时限过短")
+	_expect(
+		is_equal_approx(
+			session.time_limit,
+			OrderSession.calculate_time_limit(order, _player.move_speed)
+		),
+		"接单界面与会话的时限公式不一致"
+	)
 	_expect(session.is_active(), "新会话应处于活动状态")
 	_expect(
 		not session.try_interact(Vector3(100000.0, 0.0, 100000.0)),
@@ -246,6 +267,14 @@ func _check_hud_direction() -> void:
 		OrderHUD.direction_arrow(Vector3.ZERO, 0.0, Vector3(0.0, 0.0, 10.0)) == "↓",
 		"朝向南侧的方向箭头错误"
 	)
+	var merchant := CitySite.new()
+	merchant.id = &"merchant_007"
+	merchant.kind = CitySite.Kind.MERCHANT
+	_expect(OrderHUD.site_label(merchant) == "商家 #007", "商家站点显示名称错误")
+	var customer := CitySite.new()
+	customer.id = &"customer_012"
+	customer.kind = CitySite.Kind.RESIDENTIAL
+	_expect(OrderHUD.site_label(customer) == "顾客 #012", "顾客站点显示名称错误")
 
 
 func _check_manager() -> void:
@@ -299,6 +328,10 @@ func _check_manager() -> void:
 		"下一单不应与上一单完全相同"
 	)
 	_expect(not hud.is_result_visible(), "新订单未隐藏结算面板")
+	_expect(_orders.is_offer_visible(), "下一单应先显示接单界面")
+	_expect(_orders.get_session() == null, "接单前不应开始倒计时")
+	_expect(not _player.controls_enabled, "接单界面应关闭玩家控制")
+	_expect(_orders.accept_order(), "下一单接单按钮应开始订单")
 	_expect(
 		_orders.get_session().state == OrderSession.State.TO_MERCHANT,
 		"新订单状态未重置"
@@ -333,13 +366,26 @@ func _check_manager() -> void:
 	)
 	_expect(hud.is_result_visible(), "超时后结算面板未显示")
 	_expect(hud.get_result_title() == "订单失败", "失败结算标题错误")
+	_expect(not _player.controls_enabled, "结算界面应关闭玩家控制")
 	_expect(_orders.handle_restart(), "失败后 R 应生成下一单")
 	_expect(_orders.get_order_seed() > timeout_seed, "失败后订单种子没有递增")
+	_expect(_orders.is_offer_visible(), "失败后下一单应先显示接单界面")
+	_expect(_orders.accept_order(), "失败后下一单应能接单")
 	_expect(
 		_orders.get_session() != null and _orders.get_session().state == OrderSession.State.TO_MERCHANT,
 		"失败后新订单状态未重置"
 	)
 	_expect(not hud.is_result_visible(), "失败后新订单未隐藏结算面板")
+
+	_expect(_orders.return_to_start_menu(), "结算后应能返回主菜单")
+	_expect(hud.is_start_menu_visible(), "返回主菜单后应显示开始界面")
+	_expect(_orders.get_current_order() == null, "返回主菜单后不应保留当前订单")
+	_expect(_orders.get_session() == null, "返回主菜单后不应保留会话")
+	_expect(not _player.controls_enabled, "主菜单应关闭玩家控制")
+	_expect(_orders.start_game(), "返回主菜单后应能重新开始")
+	_expect(_orders.is_offer_visible(), "重新开始后应生成待接订单")
+	_expect(_orders.accept_order(), "重新开始后应能接单")
+	_expect(_orders.get_session().is_active(), "重新开始后订单应处于活动状态")
 
 
 func _point_in_building(point: Vector3, city: CityContent) -> bool:

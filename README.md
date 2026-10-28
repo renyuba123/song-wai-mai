@@ -2,7 +2,7 @@
 
 一款计划以第一人称游玩的 3D 外卖配送游戏。玩家在程序化生成的城市里扮演外卖员：从随机位置出发，前往商家取餐，再把餐送到随机生成的目的地。每次生成的路网和订单路线都可以不同；路上的车辆、行人和其他障碍让配送过程需要观察、绕行与选择路线。
 
-> **当前状态：阶段一城市内容。** 路网数据、生成、绘制、玩家、导航和交通已经拆成独立模块；城市现在会生成人行道、地块、建筑和商家/顾客站点，并把玩家放在安全的人行道起点。外卖订单、交互、车辆与行人的具体玩法仍在开发中。详细里程碑见 [docs/ROADMAP.md](docs/ROADMAP.md)。
+> **当前状态：阶段二可玩闭环 + 游戏 UI 流程。** 路网数据、生成、绘制、玩家、导航和交通已经拆成独立模块；城市会生成人行道、地块、建筑、商家/顾客站点和随机订单。启动后先进入开始界面，接单后开始计时，完成或超时进入结算界面，可以继续下一单或返回主菜单。车辆与行人的具体玩法仍在开发中。详细里程碑见 [docs/ROADMAP.md](docs/ROADMAP.md)。
 
 ## 计划中的玩法
 
@@ -42,6 +42,7 @@ tests/
   test_navigation_queries.gd 导航查询接口测试
   test_city.gd              城市地块、建筑、站点与可达性测试
   test_god_view.gd          测试用上帝视角开关与状态恢复测试
+  test_orders.gd            订单生成、状态机、开始/接单/结算界面测试
 docs/
   ROADMAP.md            已确认的开发路线图
   DEVELOPMENT_LOG.md    每轮开发日志
@@ -65,6 +66,7 @@ godot --headless --path . --script res://tests/test_input_actions.gd
 godot --headless --path . --script res://tests/test_navigation_queries.gd
 godot --headless --path . --script res://tests/test_city.gd
 godot --headless --path . --script res://tests/test_god_view.gd
+godot --headless --path . --script res://tests/test_orders.gd
 ```
 
 路网、道路绘制、碰撞和导航共用同一份 `RoadNetwork`。所有距离单位为米，**1 个 Godot 世界单位 = 1 米**。相同参数和随机种子生成相同的路网。
@@ -83,7 +85,9 @@ godot --headless --path . --script res://tests/test_god_view.gd
 - `CityBuilder` 绘制人行道、方块建筑和站点标记；人行道与建筑有碰撞，但阶段一不加入导航源，导航网格仍只覆盖车行道。
 - `World` 场景包含 `WorldEnvironment`，引用 `sky_environment.tres` 的程序化天空，提供可见天空、环境光和反射；主场景和路网演示共用。
 - 调试/测试构建中按 **F3** 打开测试用上帝视角：正交俯视、WASD 平移、滚轮缩放，再按 F3 返回玩家。正式导出不会创建该节点，也不注册额外输入动作。
-- 玩家第一人称移动、导航网格烘焙、交通模块入口已经接好；车辆/行人资产和订单逻辑尚未实现。
+- 阶段二订单闭环已经可用：随机起点、商家和顾客，接单后从起点出发，靠近商家按 **E** 取餐，靠近顾客按 **E** 送达，超时失败；相同城市/订单种子结果一致。
+- 游戏 UI 全部由 `scripts/orders/order_hud.gd` 代码创建：开始界面、待接订单信息（商家、顾客、路程、限时）、活动目标与倒计时、成功/失败结算，以及“下一单”“返回主菜单”按钮。菜单和结算期间关闭玩家移动并释放鼠标。
+- 玩家第一人称移动、导航网格烘焙、交通模块入口已经接好；车辆/行人资产和具体交通玩法尚未实现。
 
 当前主场景示例输出约为 152 个地块、152 栋建筑、40 个出入口和 32 个站点（2400 米地图、种子 42、密度 0.5）。所有可走表面统一在 `RoadNetwork.SURFACE_Y = 0`，视觉网格只做几厘米的错层以避免闪烁。为使支路接入次干路，部分次干路交叉口间距低于建议的 300 米，但仍满足 150 米硬下限。当前城市没有高架、匝道或交通信号，建筑内部和人行道导航留给后续阶段。
 
@@ -91,9 +95,9 @@ godot --headless --path . --script res://tests/test_god_view.gd
 
 详细到阶段目标、负责人和验收标准的版本见 [docs/ROADMAP.md](docs/ROADMAP.md)。下面是高层顺序：
 
-- 在阶段一城市内容之上加入随机订单、取餐与送达交互，以及可复现的起点和终点选择。
 - 完善第一人称步行/骑行、相机和路线指引。
-- 加入车辆、行人、交通规则及动态障碍，再完成任务计时和结算。
+- 加入车辆、行人、交通规则及动态障碍。
+- 把交接包中的城市模型拆分、导入并替换占位建筑。
 
 ## Git 与资源文件
 
@@ -103,6 +107,6 @@ godot --headless --path . --script res://tests/test_god_view.gd
 
 ## Pull Request 检查
 
-`.github/workflows/repository-integrity.yml` 会在 Pull Request 上运行 `git lfs fsck --pointers`，发现损坏的 LFS 指针时让检查失败。它还会读取同一目标分支上的其他开放 Pull Request；如果多个 PR 同时修改同一个 `.tscn`，会在对应文件上给出 GitHub Actions 警告，提醒合并前一起检查场景文件。同一任务会安装固定版本 Godot 4.7.2，执行 headless 导入并运行全部七个测试脚本，任一测试非零退出都会让检查失败。
+`.github/workflows/repository-integrity.yml` 会在 Pull Request 上运行 `git lfs fsck --pointers`，发现损坏的 LFS 指针时让检查失败。它还会读取同一目标分支上的其他开放 Pull Request；如果多个 PR 同时修改同一个 `.tscn`，会在对应文件上给出 GitHub Actions 警告，提醒合并前一起检查场景文件。同一任务会安装固定版本 Godot 4.7.2，执行 headless 导入并运行全部八个测试脚本，任一测试非零退出都会让检查失败。
 
 团队协作规则、每轮日志和远端同步要求见 [CONTRIBUTING.md](CONTRIBUTING.md)。各角色从环境准备到交付的具体步骤和注意事项见 [docs/USER_GUIDE.md](docs/USER_GUIDE.md)。

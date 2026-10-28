@@ -36,10 +36,21 @@ func _run() -> void:
 	)
 	if ok:
 		for _frame in 120:
-			if navigation.is_ready() and orders.get_current_order() != null:
+			if navigation.is_ready():
 				break
 			await physics_frame
-		ok = navigation.is_ready() and orders.get_current_order() != null
+		ok = navigation.is_ready() and orders.is_start_screen_visible()
+	if ok:
+		ok = orders.start_game()
+	if ok:
+		for _frame in 120:
+			if orders.is_offer_visible():
+				break
+			await physics_frame
+		ok = orders.is_offer_visible() and orders.get_session() == null
+	if ok:
+		ok = orders.accept_order()
+		await physics_frame
 	if ok:
 		var start := orders.get_current_order().start.position
 		var player_xz := Vector2(player.global_position.x, player.global_position.z)
@@ -60,6 +71,8 @@ func _run() -> void:
 			" player=", player != null,
 			" orders=", orders != null,
 			" order=", orders != null and orders.get_current_order() != null,
+			" start_screen=", orders != null and orders.is_start_screen_visible(),
+			" offer=", orders != null and orders.is_offer_visible(),
 			" city_builder=", city_builder != null and city_builder.get_child_count() > 0,
 			" sky=", sky_ready,
 			" navigation_ready=", navigation != null and navigation.is_ready())
