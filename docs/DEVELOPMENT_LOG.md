@@ -538,3 +538,28 @@ PASS main scene nodes=153 nav_polygons=624
 **提交：** `255c696 feat(ui): add start, order offer and result screens`；本条日志单独提交。
 
 **分支与 PR：** 从 `fix/jzy070407-restore-city-contracts` 建立 `feature/jzy070407-game-ui`，推送后创建 PR；因基于修复分支，PR 合并顺序在 PR #11 之后。
+
+## 2026-10-28 21:23 同步远端合并结果并回归测试
+
+**本轮需求（原文）：** “检查 song-wai-mai 仓库的远端更新：进入 E:/Project/Game Work Team/song-wai-mai，先确认工作区状态，再执行 git fetch origin --prune。如果 origin/main 或 origin/refactor/modular-base 有新提交，按 CONTRIBUTING.md 和每轮工作规则安全整合（有未提交改动时先保留或提交，不覆盖），运行相关 Godot 测试，把本轮同步和测试结果追加到 docs/DEVELOPMENT_LOG.md，提交并推送；若出现冲突或权限问题，停止并向用户说明，不要强推。”
+
+**同步检查：**
+
+- 进入时工作区干净，位于 `feature/jzy070407-game-ui`（`aef4c19`），本地 `main` 停在 `df16f97`。
+- `git fetch origin --prune` 成功：`origin/main` 从 `df16f97` 前进到 `1adbb33`（合并 PR [#11](https://github.com/renyuba123/song-wai-mai/pull/11)）；`origin/fix/jzy070407-restore-city-contracts` 从 `87a781c` 前进到 `ef39a38`（合并 PR #12 的游戏 UI）；远端不存在 `origin/refactor/modular-base`。
+- 当前分支先快进到 `origin/fix/jzy070407-restore-city-contracts`（`ef39a38`），再合并 `origin/main`，没有冲突，生成合并提交 `7b85018`。
+- 本地 `main` 已快进到 `origin/main` 的 `1adbb33`。
+
+**发现：** PR #12 的目标分支是 `fix/jzy070407-restore-city-contracts`，合并后游戏 UI 只进入 fix 分支，`main` 仍缺少这部分内容。当前分支已包含 UI 和两个远端合并结果，下一步向 `main` 提交 PR，不自行合并。
+
+**测试与校验：**
+
+- Godot 4.7.2 `--headless --path . --import` 退出码为 0，路网校验通过（节点 150、路段 214），城市生成通过（地块 152、建筑 152、站点 32、出入口 40）。
+- 八个 headless 测试全部 `exit=0`：`test_road_network`、`test_main_scene`、`test_contracts`、`test_input_actions`、`test_navigation_queries`、`test_city`、`test_god_view`、`test_orders` 均输出 PASS；`test_orders` 输出 `PASS orders starts=12`。
+- `git merge` 无冲突，合并后工作区只新增本条日志。
+
+**修改文件：** `docs/DEVELOPMENT_LOG.md`；合并提交 `7b85018`。
+
+**提交与推送：** 合并提交 `7b85018 Merge remote-tracking branch 'origin/main' into feature/jzy070407-game-ui`；本条日志单独提交后推送到当前分支，并向 `main` 创建 PR。
+
+**遗留：** 交接包归档分支 `chore/jzy070407-handoff-archive` 已在本地提交（`7b8fcaf`、`cc760ab`），但 34 MB 城市组合模型的 LFS 上传多次超时、远端尚未收到该分支；不影响本次 `main` 同步，稍后单独重试并说明。
