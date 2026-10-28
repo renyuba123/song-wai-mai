@@ -512,3 +512,54 @@ PASS main scene nodes=153 nav_polygons=624
 **修改文件：** `docs/TROUBLESHOOTING.md`、`docs/DEVELOPMENT_LOG.md`；仓库外新增 `backups/`。
 
 **提交与推送：** 本条文档随 `docs: preserve recovery procedure and backup` 提交并推送到 `fix/jzy070407-restore-city-contracts`，更新 PR [#11](https://github.com/renyuba123/song-wai-mai/pull/11)。
+
+## 2026-10-28 21:05 开始、接单与结算界面
+
+**本轮需求（原文）：** “拉取远端项目，合并交接包文件，继续开发。” 交接包已在 `chore/jzy070407-handoff-archive` 分支归档；本轮继续“目前在干嘛”里的 UI 待办：接单、游戏开始和结束界面。
+
+**实现内容：**
+
+- `OrderManager` 增加开始界面、待接订单和活动订单三种阶段：启动后先停在主菜单，点“开始游戏”或按 E 才生成订单；生成成功后先展示商家、顾客、两段路程和限时，点“接单”或按 E 才传送玩家并开始倒计时。
+- `OrderHUD` 新增开始界面、接单界面和结算按钮，全部用代码创建，保持不把 UI 节点写进 `main.tscn`。开始界面显示标题、操作说明和城市种子；接单界面显示双方站点、路程、时限和订单种子；结算界面增加“下一单（R）”和“返回主菜单”按钮。
+- `OrderSession` 抽出静态 `calculate_time_limit()`，接单界面展示的时限和实际倒计时共用同一公式，避免显示值与会话值不一致。
+- `PlayerController` 增加 `controls_enabled` 和 `set_controls_enabled()`：菜单、接单和结算期间关闭移动与视角并释放鼠标，接单或重开时恢复；上帝视角退出时也按该状态恢复鼠标。
+- 结算后按 R 或点“下一单”会生成下一单并再次进入接单界面；返回主菜单会清空当前订单和会话，并把订单种子加一，下一次开始不会重复上一单。
+- 更新 `README.md` 当前状态、测试列表和实现范围，更新 `docs/USER_GUIDE.md` 的输入动作和菜单期间控制约定。
+
+**修改文件：** `scripts/orders/order_manager.gd`、`scripts/orders/order_hud.gd`、`scripts/orders/order_session.gd`、`scripts/player/player_controller.gd`、`scripts/dev/test_god_view.gd`、`tests/test_orders.gd`、`tests/test_main_scene.gd`、`tests/test_city.gd`、`README.md`、`docs/USER_GUIDE.md`、`docs/DEVELOPMENT_LOG.md`。
+
+**测试与校验：**
+
+- Godot 4.7.2 `--headless --path . --import` 退出码为 0，路网校验通过（节点 150、路段 214），城市生成通过（地块 152、建筑 152、站点 32、出入口 40）。
+- 八个 headless 测试全部 `exit=0`：`test_orders` 输出 `PASS orders starts=12`，`test_main_scene` 输出 `PASS main scene nodes=150 lots=152 sites=32 starts=12 order_seed=1 sky=true`，`test_city`、`test_god_view`、`test_contracts`、`test_input_actions`、`test_navigation_queries`、`test_road_network` 均通过。
+- 新增断言覆盖：开始界面前不生成订单、接单前不开始倒计时、接单后恢复玩家控制、结算界面关闭控制、下一单先进入接单界面、返回主菜单清空状态、接单界面时限与会话时限一致。
+- `--headless --path . --quit-after 60` 启动主场景无脚本错误，退出码 0；`git diff --check` 通过。
+
+**提交：** `255c696 feat(ui): add start, order offer and result screens`；本条日志单独提交。
+
+**分支与 PR：** 从 `fix/jzy070407-restore-city-contracts` 建立 `feature/jzy070407-game-ui`，推送后创建 PR；因基于修复分支，PR 合并顺序在 PR #11 之后。
+
+## 2026-10-28 21:23 同步远端合并结果并回归测试
+
+**本轮需求（原文）：** “检查 song-wai-mai 仓库的远端更新：进入 E:/Project/Game Work Team/song-wai-mai，先确认工作区状态，再执行 git fetch origin --prune。如果 origin/main 或 origin/refactor/modular-base 有新提交，按 CONTRIBUTING.md 和每轮工作规则安全整合（有未提交改动时先保留或提交，不覆盖），运行相关 Godot 测试，把本轮同步和测试结果追加到 docs/DEVELOPMENT_LOG.md，提交并推送；若出现冲突或权限问题，停止并向用户说明，不要强推。”
+
+**同步检查：**
+
+- 进入时工作区干净，位于 `feature/jzy070407-game-ui`（`aef4c19`），本地 `main` 停在 `df16f97`。
+- `git fetch origin --prune` 成功：`origin/main` 从 `df16f97` 前进到 `1adbb33`（合并 PR [#11](https://github.com/renyuba123/song-wai-mai/pull/11)）；`origin/fix/jzy070407-restore-city-contracts` 从 `87a781c` 前进到 `ef39a38`（合并 PR #12 的游戏 UI）；远端不存在 `origin/refactor/modular-base`。
+- 当前分支先快进到 `origin/fix/jzy070407-restore-city-contracts`（`ef39a38`），再合并 `origin/main`，没有冲突，生成合并提交 `7b85018`。
+- 本地 `main` 已快进到 `origin/main` 的 `1adbb33`。
+
+**发现：** PR #12 的目标分支是 `fix/jzy070407-restore-city-contracts`，合并后游戏 UI 只进入 fix 分支，`main` 仍缺少这部分内容。当前分支已包含 UI 和两个远端合并结果，下一步向 `main` 提交 PR，不自行合并。
+
+**测试与校验：**
+
+- Godot 4.7.2 `--headless --path . --import` 退出码为 0，路网校验通过（节点 150、路段 214），城市生成通过（地块 152、建筑 152、站点 32、出入口 40）。
+- 八个 headless 测试全部 `exit=0`：`test_road_network`、`test_main_scene`、`test_contracts`、`test_input_actions`、`test_navigation_queries`、`test_city`、`test_god_view`、`test_orders` 均输出 PASS；`test_orders` 输出 `PASS orders starts=12`。
+- `git merge` 无冲突，合并后工作区只新增本条日志。
+
+**修改文件：** `docs/DEVELOPMENT_LOG.md`；合并提交 `7b85018`。
+
+**提交与推送：** 合并提交 `7b85018 Merge remote-tracking branch 'origin/main' into feature/jzy070407-game-ui`；本条日志单独提交后推送到当前分支，并向 `main` 创建 PR。
+
+**遗留：** 交接包归档分支 `chore/jzy070407-handoff-archive` 已在本地提交（`7b8fcaf`、`cc760ab`），但 34 MB 城市组合模型的 LFS 上传多次超时、远端尚未收到该分支；不影响本次 `main` 同步，稍后单独重试并说明。

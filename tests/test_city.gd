@@ -260,12 +260,20 @@ func _check_main_scene() -> void:
 	var current_order: DeliveryOrder = null
 	for _frame in 120:
 		ready = navigation.is_ready()
-		current_order = orders.get_current_order()
-		if ready and current_order != null:
+		if ready:
 			break
 		await physics_frame
 	_expect(ready, "导航在 120 个物理帧内未就绪")
+	_expect(orders.is_start_screen_visible(), "启动时应显示开始界面")
+	_expect(orders.start_game(), "开始按钮应启动游戏")
+	for _frame in 120:
+		current_order = orders.get_current_order()
+		if current_order != null and orders.is_offer_visible():
+			break
+		await physics_frame
 	_expect(current_order != null, "订单系统在 120 个物理帧内没有生成首单")
+	_expect(orders.accept_order(), "接单按钮应开始订单")
+	await physics_frame
 	if ready and current_order != null:
 		var start_xz := Vector2(current_order.start.position.x, current_order.start.position.z)
 		var player_xz := Vector2(player.global_position.x, player.global_position.z)
