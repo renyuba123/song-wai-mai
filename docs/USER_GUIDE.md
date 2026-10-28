@@ -311,7 +311,8 @@ project.godot
 - 移动、视角、跳跃/重力逻辑放在 `scripts/player/`。
 - 后续步行/骑行状态机也放在这个模块，不要改 `WorldGenerator`。
 - 输入映射由整合者统一维护；正式功能必须通过 `InputMap` 动作读取，不要直接轮询物理按键。
-- 玩家出生点由 `CityContent.player_start` 提供，`main.gd` 在 `world.regenerate()` 后把玩家放到该位置和朝向；玩家模块只负责“被放在哪里之后怎么走”。不要退回固定节点或原点。
+- 玩家出生点由 `CityContent.player_start` 提供，`main.gd` 在 `world.regenerate()` 后把玩家放到该位置和朝向；订单开始后 `OrderManager` 再把玩家放到订单起点。玩家模块只负责“被放在哪里之后怎么走”，不要退回固定节点或原点。
+- 开始界面、待接订单和结算界面显示期间，`OrderManager` 调用 `PlayerController.set_controls_enabled(false)` 关闭移动和视角并释放鼠标；接单或重开时再恢复。新增菜单时沿用这个开关，不要在各处直接改鼠标模式。
 
 阶段零已经定义的输入动作：
 
@@ -319,9 +320,9 @@ project.godot
 |---|---|---|
 | `move_forward` / `move_back` | W / S | 前后移动 |
 | `move_left` / `move_right` | A / D | 左右移动 |
-| `interact` | E | 取餐、送达等交互（阶段二实现） |
-| `pause` | Esc | 暂停（阶段二实现） |
-| `restart` | R | 重开（阶段二实现） |
+| `interact` | E | 开始游戏、接单、取餐、送达 |
+| `pause` | Esc | 暂停（尚未实现） |
+| `restart` | R | 开始游戏、接单、重开本单或生成下一单 |
 
 移动使用 `Input.get_vector("move_left", "move_right", "move_forward", "move_back")`，不要退回 `Input.is_physical_key_pressed`。
 

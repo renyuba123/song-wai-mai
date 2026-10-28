@@ -22,10 +22,19 @@ var time_remaining: float = 0.0
 
 func _init(source_order: DeliveryOrder, player_speed_mps: float) -> void:
 	order = source_order
-	var total := order.get_total_path_length_m() if order != null else -1.0
-	var speed := maxf(player_speed_mps, 0.1)
-	time_limit = maxf(MIN_TIME_LIMIT_S, total / speed * TIME_FACTOR + TIME_BUFFER_S)
+	time_limit = calculate_time_limit(source_order, player_speed_mps)
 	time_remaining = time_limit
+
+
+static func calculate_time_limit(
+	source_order: DeliveryOrder, player_speed_mps: float
+) -> float:
+	## 接单界面和实际会话共用同一套时限公式，避免展示值与倒计时不一致。
+	var total := (
+		source_order.get_total_path_length_m() if source_order != null else -1.0
+	)
+	var speed := maxf(player_speed_mps, 0.1)
+	return maxf(MIN_TIME_LIMIT_S, total / speed * TIME_FACTOR + TIME_BUFFER_S)
 
 
 func advance(delta: float) -> void:

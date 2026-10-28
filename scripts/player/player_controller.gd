@@ -27,6 +27,9 @@ class_name PlayerController
 
 @onready var camera: Camera3D = $Camera3D
 
+## 菜单、接单和结算期间关闭移动与视角，避免鼠标操作界面时角色跟着转。
+var controls_enabled := true
+
 var _pitch := 0.0
 var _steer_target := 0.0
 var _steer_base_y := 0.0
@@ -36,7 +39,8 @@ func _ready() -> void:
 	collision_layer = CollisionLayers.PLAYER
 	collision_mask = CollisionLayers.PLAYER_MASK
 
-	Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
+	if controls_enabled:
+		Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
 
 	if steering_pivot:
 		_steer_base_y = steering_pivot.rotation.y
@@ -44,7 +48,18 @@ func _ready() -> void:
 		push_warning("未指定 Steering Pivot！")
 
 
+func set_controls_enabled(enabled: bool) -> void:
+	controls_enabled = enabled
+	if enabled:
+		Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
+	else:
+		Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
+		_steer_target = 0.0
+
+
 func _unhandled_input(event: InputEvent) -> void:
+	if not controls_enabled:
+		return
 	if event is InputEventMouseMotion \
 	and Input.get_mouse_mode() == Input.MOUSE_MODE_CAPTURED:
 
@@ -98,12 +113,14 @@ func _process(delta: float) -> void:
 
 
 func _physics_process(delta: float) -> void:
-	var input := Input.get_vector(
-		"move_left",
-		"move_right",
-		"move_forward",
-        "move_back"
-	)
+	var input := Vector2.ZERO
+	if controls_enabled:
+		input = Input.get_vector(
+			"move_left",
+			"move_right",
+			"move_forward",
+			"move_back"
+		)
 
 	var direction := (
 		transform.basis * Vector3(

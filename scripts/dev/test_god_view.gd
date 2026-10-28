@@ -124,7 +124,11 @@ func _exit() -> void:
 		_player.set_physics_process(true)
 		if _player.camera != null:
 			_player.camera.current = true
-	Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
+	Input.set_mouse_mode(
+		Input.MOUSE_MODE_CAPTURED
+		if _player == null or _player.controls_enabled
+		else Input.MOUSE_MODE_VISIBLE
+	)
 	if _hint != null:
 		_hint.visible = false
 
