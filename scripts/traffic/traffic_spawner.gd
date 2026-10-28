@@ -20,7 +20,7 @@ const COLORS := [
 	Color("555e66"),
 ]
 
-@export var max_vehicles := 16
+@export var max_vehicles := 256
 @export var max_pedestrians := 0
 
 var network: RoadNetwork = null

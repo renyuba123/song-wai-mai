@@ -30,7 +30,7 @@ func _run() -> void:
 	var ok := (
 		world != null and world.network != null and world.city != null
 		and navigation != null and player != null and orders != null
-		and traffic != null and traffic.get_vehicle_count() > 0
+		and traffic != null and traffic.get_vehicle_count() >= 100
 		and city_builder != null and city_builder.get_child_count() > 0
 		and sky_ready
 		and bool(world.city_report.get("valid", false))

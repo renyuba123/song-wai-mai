@@ -262,13 +262,13 @@ scenes/traffic/
 - 同一组参数和种子必须生成同一份路网和城市；`tests/test_city.gd` 会逐字段比较。
 - 新增加固生成规则时，优先扩展 `CityContent` 或新增独立资源，不要把逻辑塞进 `RoadBuilder` / `CityBuilder`。
 - 生成失败、路网为空、路径不存在时要安全返回，不要让整个主场景崩溃；入口地块不足或玩家起点不可用时，让城市校验失败并输出明确错误。
-- 阶段一地块只来自非支路路段，每条路段最多一个出入口；地块临街宽 18～40 米、进深 18～28 米，全局最多 240 个。支路只用于路网连通，不生成临街地块。
+- 地块沿所有路段（含支路）两侧生成临街地块，每条路段最多一个出入口；地块临街宽 18～40 米、进深 18～28 米。每个临街地块背后再补两排无出入口的街区内部建筑，与已有地块相交时跳过；临街地块上限 640、总地块上限 1800，建筑与地块一一对应。
 
 ### 4.3 交通与行人
 
 当前已实现第一版背景车流，行人仍待人物模型：
 
-- `TrafficSpawner.build(network, city)` 从同一份 `RoadNetwork` 生成 16 辆方块占位汽车；同一城市种子结果一致（`network.seed_value ^ RNG_SALT`，只用局部 `RandomNumberGenerator`）。
+- `TrafficSpawner.build(network, city)` 从同一份 `RoadNetwork` 生成方块占位汽车，`max_vehicles` 默认上限 256；每个路段一辆，当前 2400 米地图的 214 条路段都会出车。同一城市种子结果一致（`network.seed_value ^ RNG_SALT`，只用局部 `RandomNumberGenerator`）。
 - 每个路段最多一辆车，距路口至少 20 米，距玩家起点和所有站点出生点至少 15 米；车辆沿右侧车道行驶，速度按道路等级区分。
 - `TrafficRoute` 负责车道偏移、邻接表和路口转向；车在路口不会原地掉头，没有直行候选时才掉头。
 - `TrafficCar` 是 `AnimatableBody3D`：车身/车厢/轮子全部用 `BoxMesh` 代码生成，碰撞层 `VEHICLE`、掩码 `PLAYER`；子节点 `Area3D` 掩码 `PLAYER` 负责命中玩家，通过 `player_entered` → `TrafficSpawner.player_hit` 上报。
@@ -360,7 +360,7 @@ Main
 
 1. 世界生成路网和 `CityContent`，校验并绘制道路、人行道、建筑和站点标记，然后发出 `world_generated(network)`。
 2. 导航接收同一份 `RoadNetwork` 并烘焙；阶段一只把车行道碰撞体作为导航源。
-3. 交通接收同一份 `RoadNetwork` 和 `CityContent`，生成 16 辆方块汽车；车辆只走车道，不加入导航源。
+3. 交通接收同一份 `RoadNetwork` 和 `CityContent`，按每路段一辆生成方块汽车（默认上限 256，当前地图 214 辆）；车辆只走车道，不加入导航源。
 4. `main.gd` 在世界生成后把 `$Player` 放到 `world.city.player_start`，并清零速度。
 5. `main.gd` 把 `traffic.player_hit` 接到 `orders.notify_player_hit()`，撞车失败仍由订单系统统一结算。
 
