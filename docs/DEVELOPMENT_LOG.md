@@ -628,3 +628,31 @@ PASS main scene nodes=153 nav_polygons=624
 **提交与推送：** 合并提交和本条日志推送到 `chore/jzy070407-handoff-archive`，并向 `main` 创建 PR [#14](https://github.com/renyuba123/song-wai-mai/pull/14)。
 
 **说明：** 归档内容保持交接包原样（14 个商家/设施 FBX、34 MB 城市组合模型、4 份预览 HTML），`assets/handoff/.gdignore` 阻止 Godot 导入；未拆分、转换或接入场景。
+
+## 2026-10-28 22:41 来往汽车与撞车失败
+
+**本轮需求（原文）：** “哦哦我这边在做ui，你可以做那个来往汽车的，当时讨论的是碰到往来汽车会被撞死-游戏失败，还有行人左右过马路（这部分又要人的模型现在还没有，可以把车的先做了）汽车模型现在还在分开，你可以先用box替代或者其他的，”
+
+**实现内容：**
+
+- `TrafficRoute` 负责右侧车道偏移、方向/偏航角、路段邻接表和路口选路。车道中心用 `红线宽度 × CARRIAGEWAY_RATIO × 0.25`，主干路、次干路、支路分别为 5.5、4.125、2.475 米；路口优先直行，其次随机转弯，没有其它路时才掉头。
+- `TrafficCar` 是 `AnimatableBody3D`，车身、车厢、四个轮子和前后灯全部用 `BoxMesh` 在代码里生成，颜色从 5 色确定性调色板选择；正式汽车模型拆分完成后只需替换 `_build_visuals()`。
+- 车辆沿车道折线按弧长行驶，`_physics_process` 每帧推进，跨过路段后继续生成下一段。车辆不加入 `navigation_source`，也不使用 `WORLD_STATIC`；车辆之间、车辆与建筑之间不做碰撞，避免车流卡死。
+- 车身碰撞层为 `VEHICLE`、掩码为 `PLAYER`，玩家会被车身挡住；子节点 `Area3D` 使用 `PLAYER` 掩码检测命中，`player_entered` → `TrafficSpawner.player_hit` → `main.gd` → `OrderManager.notify_player_hit()`。
+- `TrafficSpawner.build(network, city)` 用 `network.seed_value ^ 0x7A4FF1C` 的局部 RNG 做 Fisher–Yates 洗牌，每个路段最多一辆车，生成 16 辆汽车；出生点距路口至少 20 米、距玩家起点和所有站点出生点至少 15 米，速度按道路等级取 13/10/7 m/s 并乘 0.9–1.1。
+- `OrderSession` 增加 `FailureReason { NONE, TIMEOUT, HIT_BY_CAR }` 和公开 `fail(reason)`；撞车失败保留剩余时间和真实用时，只有超时才把剩余时间归零。`OrderManager.notify_player_hit()` 只在活动订单且玩家处于物理处理时结算，菜单、接单、结算和上帝视角都会忽略。
+- `OrderHUD` 的失败正文改为按原因显示，撞车时显示“被来往汽车撞倒，配送失败”；新增 `get_result_body()` 供测试。改动保持最小，没有触碰手机订单 UI。
+
+**修改文件：** 新增 `scripts/traffic/traffic_route.gd`、`scripts/traffic/traffic_car.gd`、`tests/test_traffic.gd`；修改 `scripts/traffic/traffic_spawner.gd`、`scripts/orders/order_session.gd`、`scripts/orders/order_manager.gd`、`scripts/orders/order_hud.gd`、`scripts/core/main.gd`、`tests/test_orders.gd`、`tests/test_main_scene.gd`、`.github/workflows/repository-integrity.yml`、`README.md`、`docs/ROADMAP.md`、`docs/USER_GUIDE.md`。
+
+**测试与校验：**
+
+- Godot 4.7.2 `--headless --path . --import` 退出码为 0。
+- 九个 headless 测试全部 `exit=0`：`test_road_network`、`test_main_scene`（`vehicles=16`）、`test_contracts`、`test_input_actions`、`test_navigation_queries`、`test_city`、`test_god_view`、`test_orders`（`starts=12`）、`test_traffic` 均输出 PASS。
+- `test_traffic` 覆盖车道偏移与方向、相同种子车辆签名一致、每个路段至多一辆车、出生安全距离、碰撞层/掩码/导航隔离、BoxShape3D 与方块车身、真实 PhysicsBody3D 进入命中 Area3D、固定步长移动与大位移、数量/空路网/重复构建边界，以及主场景“撞车 → 订单失败 → 只能结算一次 → R 继续下一单”的信号链。
+- 窗口化实机预览（1280×720）确认道路上可见灰蓝色方块汽车、红色尾灯和车轮；接单后把玩家放入车辆命中区域，会话进入 `FAILED`（`reason=2`），结算标题“订单失败”，正文“被来往汽车撞倒，配送失败”，用时保留。预览用临时脚本和截图已删除，未提交。
+- `git diff --check` 通过。
+
+**提交：** `2917c6d feat(traffic): add deterministic box cars and car-hit failure`；本条日志单独提交。
+
+**分支与 PR：** 从 `main`（`f89b3e8`）建立 `feature/jzy070407-traffic-cars`，推送后向 `main` 创建 PR；不直接推送 `main`，不强推。本轮没有提交、恢复或修改任何手机新订单提示的临时设计，也没有改动同事正在开发的手机 UI。
