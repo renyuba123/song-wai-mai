@@ -485,8 +485,10 @@ PASS main scene nodes=153 nav_polygons=624
 - Godot 4.7.2 `--headless --path . --import` 退出码为 0，路网校验通过（节点 150、路段 214），城市生成通过（地块 152、建筑 152、站点 32、出入口 40）。
 - 八个 headless 测试全部 `exit=0`：`test_main_scene` 输出 `PASS main scene nodes=150 lots=152 sites=32 starts=12 order_seed=1 sky=true`，`test_god_view` 输出 `PASS god view debug=true`，`test_orders` 输出 `PASS orders starts=12`；其余路网、契约、输入、导航和城市测试均通过。
 - `git diff --cached --check` 通过。
-- `main` 中新增的 15 个 `.glb` 仍是普通 blob，不是 LFS 指针，切换分支时 Git LFS 会提示“should have been pointers”；本轮未改动这些二进制，留待单独处理。
+- `main` 中新增的 15 个 `.glb` 是普通 blob，不是 LFS 指针，首次 CI 在 `git lfs fsck --pointers` 步骤失败。已用 `git add --renormalize` 按 `.gitattributes` 重新暂存为 LFS 指针，并用 `git lfs push` 上传 6.5 MB 对象；文件内容不变。重新运行 CI 后 `integrity` 通过（28 秒）。
 
-**提交：** `44f7bc5 fix: restore stage-two city contracts and order loop`；本条日志随 `docs: log remote sync and contract restoration` 提交。
+**提交：** `44f7bc5 fix: restore stage-two city contracts and order loop`、`40ab707 chore(assets): track building and scooter models with Git LFS`；本条日志随 `docs: log remote sync and contract restoration` 提交。
 
-**推送与 PR：** 已推送 `fix/jzy070407-restore-city-contracts`，创建 PR [#11](https://github.com/renyuba123/song-wai-mai/pull/11)，等待负责人评审，不自行合并。
+**推送与 PR：** 已推送 `fix/jzy070407-restore-city-contracts`，创建 PR [#11](https://github.com/renyuba123/song-wai-mai/pull/11)，`integrity` 检查通过，等待负责人评审，不自行合并。
+
+**交接包：** 本轮收到 `E:/Project/Game Work Team/交接包接收/`，内含取外卖商铺 7 个 FBX、收外卖设施 7 个 FBX、卡通城市建筑设施 34 MB FBX，以及 4 份 DeepSeek 3D 预览 HTML。仓库中已有对应的 14 个 `.glb`，本轮只把它们规范到 Git LFS，没有新增或替换模型。同事说明“导入进 Godot 之前还得先把模型分开，可以先行处理其他工作，导入完再通知”，因此本轮不拆分、不转换、不接入场景，交接包保持原样，等同事完成拆分和导入后再合并。
