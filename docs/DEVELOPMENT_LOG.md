@@ -681,3 +681,29 @@ PASS main scene nodes=153 nav_polygons=624
 - `git diff --check` 通过。
 
 **提交与推送：** 合并提交 `8d9c6fe`、导入设置 `d96f8d8`，本条日志单独提交；推送到 `feature/jzy070407-traffic-cars`，PR [#15](https://github.com/renyuba123/song-wai-mai/pull/15) 会随分支更新。没有强推，也没有直接推送 `main`。
+
+## 2026-10-28 23:31 提高车辆与建筑密度
+
+**本轮需求（原文）：** “车辆和建筑建模密度过低”
+
+**实现内容：**
+
+- 城市地块不再只沿主次干路生成，支路两侧也生成完整临街地块；玩家起点仍只用主次干路，避免落在支路较窄的人行道上。`CityGenerator._start_edge_ids()` 单独筛掉 `RoadNetwork.LOCAL`，与地块生成范围分开。
+- 临街地块上限从 240 提高到 640，每条路段每侧从 2 个提高到 5 个；新增 `_add_infill_lots()`，沿每个临街地块继续向街区内部补两排建筑，沿用原来的临街宽度、道路偏移、朝向和临街侧。补排建筑没有出入口、不参与站点选择，与已有地块相交时跳过；总地块上限提高到 1800，建筑仍与地块一一对应。
+- `TrafficSpawner.max_vehicles` 从 16 提高到 256。当前 2400 米地图有 214 条路段，仍按每路段最多一辆车生成，因此主场景实际生成 214 辆方块汽车；上限提高是为了让更大路网也能按路段铺满，而不是在同一路段叠车。
+- `tests/test_city.gd` 增加大地图密度下限：2400 米地图至少 1200 个地块；`tests/test_main_scene.gd` 把车辆断言从“大于 0”提高到“至少 100 辆”。`README.md`、`docs/USER_GUIDE.md`、`docs/ROADMAP.md` 同步更新数量、上限和补排规则。
+
+**生成结果：**
+
+- 主场景（2400 米、种子 118、密度 0.5）：1637 个地块、1637 栋建筑、98 个出入口、32 个站点、214 辆汽车；玩家起点 12 个。
+- 测试地图（2400 米、种子 42、密度 0.5）：1699 个地块、1699 栋建筑、104 个出入口、32 个站点；小地图（1200 米、种子 1、密度 1.0）保持 135 个地块。
+- 窗口化预览（1280×720）中主场景约 8327 个节点、1220 次绘制调用，实测约 66 FPS；街区内部由原来的单圈临街建筑变为临街加内部两排，俯视和街面视角的空旷感明显减少。
+
+**测试与校验：**
+
+- `git diff --check` 通过。
+- Godot 4.7.2 `--headless --path . --import` 退出码为 0；城市生成输出“地块 1637；建筑 1637；站点 32；出入口 98”。
+- 九个 headless 测试全部 `exit=0`：`test_road_network`、`test_main_scene`（`lots=1637 vehicles=214`）、`test_contracts`、`test_input_actions`、`test_navigation_queries`、`test_city`（种子 42 `lots=1699`、种子 1 `lots=135`）、`test_god_view`、`test_orders`、`test_traffic` 均输出 PASS。
+- 密度预览用临时脚本和截图已删除，未提交；没有恢复或提交任何手机新订单提示的临时设计，也没有修改同事正在开发的手机 UI。
+
+**提交与推送：** `ee6ba2f feat(world): raise urban density with infill buildings and more cars`，本条日志单独提交；推送到 `feature/jzy070407-traffic-cars` 并更新 PR [#15](https://github.com/renyuba123/song-wai-mai/pull/15)。没有强推，也没有直接推送 `main`。
