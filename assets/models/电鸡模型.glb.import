@@ -4,12 +4,12 @@ importer="scene"
 importer_version=1
 type="PackedScene"
 uid="uid://c5udir2xpgxqv"
-path="res://.godot/imported/电鸡模型.glb-744ab2d150a7802bfdb266f0d0b9705e.scn"
+path="res://.godot/imported/电鸡模型.glb-cda2de912e38ad771d83f3f3bb6ec291.scn"
 
 [deps]
 
-source_file="res://assets/models/收外卖可用模型/电鸡模型.glb"
-dest_files=["res://.godot/imported/电鸡模型.glb-744ab2d150a7802bfdb266f0d0b9705e.scn"]
+source_file="res://assets/models/电鸡模型.glb"
+dest_files=["res://.godot/imported/电鸡模型.glb-cda2de912e38ad771d83f3f3bb6ec291.scn"]
 
 [params]
 

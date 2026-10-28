@@ -458,3 +458,57 @@ PASS main scene nodes=153 nav_polygons=624
 
 ##10.28 18.49
 加入第一人称视角车及车头随视角转动动画
+
+## 2026-10-28 19:39 同步远端并修复 main 上的阶段二城市契约回归
+
+**本轮需求（原文）：** 检查 song-wai-mai 仓库的远端更新：进入 E:/Project/Game Work Team/song-wai-mai，先确认工作区状态，再执行 git fetch origin --prune。如果 origin/main 或 origin/refactor/modular-base 有新提交，按 CONTRIBUTING.md 和每轮工作规则安全整合（有未提交改动时先保留或提交，不覆盖），运行相关 Godot 测试，把本轮同步和测试结果追加到 docs/DEVELOPMENT_LOG.md，提交并推送；若出现冲突或权限问题，停止并向用户说明，不要强推。
+
+**同步检查：**
+
+- 进入时工作区干净，位于 `feature/jzy070407-stage-two-delivery-loop`（`96522dc`）；该分支已通过 PR #9 合入 `main`，没有独有提交。
+- `git fetch origin --prune` 成功：`origin/main` 从 `d717775` 前进到 `df16f97`，共 12 个新提交；远端新增 `feature/jzy070407-seed-editor-preview`，已通过 PR #10 合入 `main`；`origin/refactor/modular-base` 在远端不存在。
+- 在 `origin/main` 上运行测试发现回归：`b3c3174`（Upload song-wai-mai-main project）上传了旧版项目快照，删除 `CityContent.player_starts`、`CityGenerator.MAX_PLAYER_STARTS` 和多起点生成逻辑，削弱 `test_city`，并把 `test_orders` 移出 CI。`test_orders` 因契约缺失无法解析，`test_god_view` 因玩家下沉失败。
+- 按要求先停下来向用户说明，没有直接合并、提交或推送；用户确认后，从 `origin/main` 建立 `fix/jzy070407-restore-city-contracts` 修复。
+
+**修复内容：**
+
+- 从已合并的 `96522dc` 恢复 `scripts/world/city_content.gd`、`scripts/world/city_generator.gd`、`tests/test_city.gd`、`tests/test_main_scene.gd`。
+- 恢复 `scenes/main/main.tscn` 的 `OrderSystem` 节点和 `scripts/core/main.gd` 的 `orders.setup()`；玩家落位改回 `player.reset_to()`，与订单起点保持一致。
+- 玩家胶囊中心从 1.3682455 米调整为 0.9 米，使胶囊底部与地面齐平，避免落地后低于 `RoadNetwork.SURFACE_Y`。
+- CI 测试列表恢复 `test_orders`；修正 `电鸡模型.glb.import` 中指向不存在旧目录的 `source_file`。
+- 保留 PR #10 的 seed 编辑器、`@tool` 生成节点标记、电鸡模型和车头转向功能。
+
+**修改文件：** `.github/workflows/repository-integrity.yml`、`assets/models/电鸡模型.glb.import`、`scenes/main/main.tscn`、`scenes/player/player.tscn`、`scripts/core/main.gd`、`scripts/world/city_content.gd`、`scripts/world/city_generator.gd`、`tests/test_city.gd`、`tests/test_main_scene.gd`、`docs/DEVELOPMENT_LOG.md`。
+
+**测试与校验：**
+
+- Godot 4.7.2 `--headless --path . --import` 退出码为 0，路网校验通过（节点 150、路段 214），城市生成通过（地块 152、建筑 152、站点 32、出入口 40）。
+- 八个 headless 测试全部 `exit=0`：`test_main_scene` 输出 `PASS main scene nodes=150 lots=152 sites=32 starts=12 order_seed=1 sky=true`，`test_god_view` 输出 `PASS god view debug=true`，`test_orders` 输出 `PASS orders starts=12`；其余路网、契约、输入、导航和城市测试均通过。
+- `git diff --cached --check` 通过。
+- `main` 中新增的 15 个 `.glb` 是普通 blob，不是 LFS 指针，首次 CI 在 `git lfs fsck --pointers` 步骤失败。已用 `git add --renormalize` 按 `.gitattributes` 重新暂存为 LFS 指针，并用 `git lfs push` 上传 6.5 MB 对象；文件内容不变。重新运行 CI 后 `integrity` 通过（28 秒）。
+
+**提交：** `44f7bc5 fix: restore stage-two city contracts and order loop`、`40ab707 chore(assets): track building and scooter models with Git LFS`；本条日志随 `docs: log remote sync and contract restoration` 提交。
+
+**推送与 PR：** 已推送 `fix/jzy070407-restore-city-contracts`，创建 PR [#11](https://github.com/renyuba123/song-wai-mai/pull/11)，`integrity` 检查通过，等待负责人评审，不自行合并。
+
+**交接包：** 本轮收到 `E:/Project/Game Work Team/交接包接收/`，内含取外卖商铺 7 个 FBX、收外卖设施 7 个 FBX、卡通城市建筑设施 34 MB FBX，以及 4 份 DeepSeek 3D 预览 HTML。仓库中已有对应的 14 个 `.glb`，本轮只把它们规范到 Git LFS，没有新增或替换模型。同事说明“导入进 Godot 之前还得先把模型分开，可以先行处理其他工作，导入完再通知”，因此本轮不拆分、不转换、不接入场景，交接包保持原样，等同事完成拆分和导入后再合并。
+
+## 2026-10-28 19:50 留存本地修复成果与恢复流程
+
+**本轮需求（原文）：** 对本地开发后的成果进行留存，一遍后续遇到同样问题时能进行针对性的修复
+
+**留存内容：**
+
+- 在仓库外创建 `E:/Project/Game Work Team/backups/`：`song-wai-mai-20261028.bundle` 保存完整 Git 历史（1.4 MB），`song-wai-mai-20261028-lfs-objects/` 保存 15 个模型的 LFS 对象（6.3 MB），`README.md` 写明恢复命令。
+- 创建本地标签 `known-good-20261028`，指向 `bf5bc7e`；标签只保存在本地和 bundle 中，未推送远端。
+- 新增 `docs/TROUBLESHOOTING.md`，记录本次回归的症状、定位命令、恢复步骤（城市契约、主场景订单接线、玩家胶囊高度、CI、LFS）和防复发措施。
+
+**校验：**
+
+- `git bundle verify` 输出 `The bundle records a complete history.`
+- 备份的 LFS 目录包含 15 个对象、6.3 MB，与仓库内 `.git/lfs/objects` 一致。
+- 本次只新增文档和仓库外备份，代码未变；PR #11 的 `integrity` 继续通过。
+
+**修改文件：** `docs/TROUBLESHOOTING.md`、`docs/DEVELOPMENT_LOG.md`；仓库外新增 `backups/`。
+
+**提交与推送：** 本条文档随 `docs: preserve recovery procedure and backup` 提交并推送到 `fix/jzy070407-restore-city-contracts`，更新 PR [#11](https://github.com/renyuba123/song-wai-mai/pull/11)。
