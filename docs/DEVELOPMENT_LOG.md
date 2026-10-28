@@ -542,3 +542,18 @@ PASS main scene nodes=153 nav_polygons=624
 **提交：** `7b8fcaf chore(assets): archive handoff models and previews`；本条日志单独提交。
 
 **分支与 PR：** 从 `fix/jzy070407-restore-city-contracts` 建立 `chore/jzy070407-handoff-archive`，推送后创建 PR；因基于修复分支，PR 合并顺序应在 PR #11 之后。
+
+## 2026-10-28 21:59 推送交接包归档分支
+
+**本轮需求（原文）：** “再次尝试推送”
+
+**结果：** `chore/jzy070407-handoff-archive` 已推送到远端，远端分支指向本次提交前的 `cc760ab`。
+
+**过程：**
+
+- 首次重试仍走默认代理（`127.0.0.1:7897`）和 schannel，大文件 PUT 约 22 秒后被断开；改用 `-c http.sslBackend=openssl` 后连接稳定。
+- 代理上传速率只有约 30–35 KB/s，34 MB 城市模型上传约 17 分钟后被 S3 判定客户端错误，Git LFS 从头重传，无法完成。
+- 最终只对 S3 域名绕过代理，GitHub API 仍走代理：`git -c http.sslBackend=openssl -c "http.https://github-cloud.s3.amazonaws.com.proxy=" lfs push --all origin chore/jzy070407-handoff-archive`。上传 30 个对象、45 MB，速率约 1.6 MB/s，全部校验通过。
+- `git lfs fsck --pointers` 输出 `Git LFS fsck OK`；`git push` 退出码为 0，远端新分支创建成功。
+
+**结论：** 当前网络下，GitHub API 走代理、S3 大文件直连是可行组合。以后再次遇到 LFS 大文件上传超时，可复用上面的命令，只对 `github-cloud.s3.amazonaws.com` 关闭代理。
