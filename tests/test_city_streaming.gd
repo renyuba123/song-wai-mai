@@ -80,15 +80,20 @@ func run() -> void:
 			continue
 		var session := OrderSession.new(order, 5)
 		var before := stream.layout.signature()
+		# Start the reference visit from an empty high-detail cache, as on the return visit.
+		stream.update_focus(Vector3(10000,0,10000))
 		stream.update_focus(order.merchant.spawn_point.position)
 		await drain(stream)
 		var initial_count := stream.instance_count()
+
 		var merchant_item: Dictionary = stream.layout.buildings[world.city.lots[order.merchant.lot_id].building_id]
 		check(stream.loaded_chunks.has(merchant_item.chunk), "merchant chunk missing")
 		var first_transform: Transform3D = stream.loaded_chunks[merchant_item.chunk].get_node(merchant_item.id).transform
 		check(session.try_interact(order.merchant.spawn_point.position), "pickup")
+		var released_chunk: WeakRef = weakref(stream.loaded_chunks.values()[0])
 		stream.update_focus(Vector3(10000,0,10000))
 		await process_frame
+		check(released_chunk.get_ref() == null, "unloaded chunk still retained")
 		check(stream.instance_count() == 0 and stream.loaded_chunks.is_empty(), "far chunks retained")
 		check(session.state == OrderSession.State.TO_CUSTOMER, "unload corrupted order")
 		stream.update_focus(order.customer.spawn_point.position)
@@ -100,6 +105,11 @@ func run() -> void:
 		stream.pending.reverse() # Deliberately change load order on revisit.
 		await drain(stream)
 		check(stream.instance_count() == initial_count, "resident count grows after revisit")
+		for chunk in stream.loaded_chunks.values():
+			var ids := {}
+			for child in chunk.get_children():
+				check(not ids.has(child.name), "duplicate instance in chunk")
+				ids[child.name] = true
 		check(stream.loaded_chunks[merchant_item.chunk].get_node(merchant_item.id).transform == first_transform, "revisit changed transform")
 		check(stream.layout.signature() == before, "streaming changed layout")
 		# Boundary hysteresis: already loaded chunks remain until beyond the outer radius.

@@ -55,7 +55,7 @@ func unload_chunk(key: Vector2i) -> void:
 		if is_instance_valid(_builder) and id >= 0:
 			_builder.set_detail_visible(id, false)
 	remove_child(chunk)
-	chunk.queue_free()
+	chunk.free()
 	loaded_chunks.erase(key)
 
 func _process(delta: float) -> void:
@@ -126,13 +126,16 @@ func process_pending() -> void:
 			else:
 				pending.append(index)
 				continue
+		var destination: Node3D = loaded_chunks.get(item.chunk)
+		if destination == null or destination.has_node(item.id):
+			continue
 		var holder := Node3D.new()
 		holder.name = item.id
 		holder.transform = item.transform
 		holder.set_meta("building_id", item.building_id)
 		var model: Node3D = resources[path].instantiate()
 		holder.add_child(model)
-		loaded_chunks[item.chunk].add_child(holder)
+		destination.add_child(holder)
 		if item.building_id >= 0:
 			_builder.set_detail_visible(item.building_id, true)
 		count += 1
