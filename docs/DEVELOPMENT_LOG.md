@@ -512,3 +512,33 @@ PASS main scene nodes=153 nav_polygons=624
 **修改文件：** `docs/TROUBLESHOOTING.md`、`docs/DEVELOPMENT_LOG.md`；仓库外新增 `backups/`。
 
 **提交与推送：** 本条文档随 `docs: preserve recovery procedure and backup` 提交并推送到 `fix/jzy070407-restore-city-contracts`，更新 PR [#11](https://github.com/renyuba123/song-wai-mai/pull/11)。
+
+## 2026-10-28 20:49 归档交接包原始模型与预览
+
+**本轮需求（原文）：** “拉取远端项目，合并交接包文件，继续开发。”
+
+**同步检查：**
+
+- 进入时工作区干净，位于 `fix/jzy070407-restore-city-contracts`（`87a781c`），与 `origin` 一致。
+- `git fetch origin --prune` 确认远端没有新提交；`origin/main` 仍为 `df16f97`，PR [#11](https://github.com/renyuba123/song-wai-mai/pull/11) 保持打开，`integrity` 已通过。
+- 本地 `main` 原先停在 `d717775`，已快进到 `origin/main` 的 `df16f97`。
+
+**归档内容：**
+
+- 在 `assets/handoff/` 原样保存 2026-10-28 交接包：`取外卖可用模型/` 7 个商家 FBX、`收外卖可用模型/` 7 个设施 FBX、`城市/卡通城市建筑设施.fbx`（34 MB 组合模型）和 `previews/` 4 份 DeepSeek 3D 预览 HTML。
+- 新增 `assets/handoff/.gdignore`，Godot 扫描时跳过整个目录；FBX 由 `.gitattributes` 已有的 `*.fbx` 规则进入 Git LFS，本目录不生成 `.import` 或 `.uid`。
+- 新增 `assets/handoff/README.md`，说明文件来源、对应仓库内 `.glb`、拆分前不接入场景的约定，并在 `assets/README.md` 增加入口。
+- 交接包来源目录 `E:/Project/Game Work Team/交接包接收/` 保持原样，没有拆分、转换或替换任何模型。
+
+**校验：**
+
+- `git lfs fsck --pointers` 输出 `Git LFS fsck OK`；15 个 FBX 均以 LFS 指针入库。
+- Godot 4.7.2 `--headless --path . --import` 退出码为 0，路网校验通过（节点 150、路段 214），城市生成通过（地块 152、建筑 152、站点 32、出入口 40）。
+- 导入后 `assets/handoff/` 下没有生成 `.import` 或 `.uid`，确认 `.gdignore` 生效。
+- `git diff --cached --check` 通过。
+
+**修改文件：** `assets/handoff/`（新增归档与说明）、`assets/README.md`、`docs/DEVELOPMENT_LOG.md`。
+
+**提交：** `7b8fcaf chore(assets): archive handoff models and previews`；本条日志单独提交。
+
+**分支与 PR：** 从 `fix/jzy070407-restore-city-contracts` 建立 `chore/jzy070407-handoff-archive`，推送后创建 PR；因基于修复分支，PR 合并顺序应在 PR #11 之后。
