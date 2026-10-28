@@ -1,5 +1,7 @@
 # 城市建筑布置（Seed 118）
 
+> 历史静态样例保留。当前主场景已升级为任意 Seed 与区块加载，操作方法见 [CITY_STREAMING.md](CITY_STREAMING.md)。下文记录静态布置阶段的实现。
+
 这是已接入 `scenes/main/main.tscn` 的实际布置，资源位于 `assets/models/`，不是 `assets/model/`。直接打开主场景即可看到编辑器生成的道路及保存的模型；无需先运行生成工具。
 
 ## 查看与编辑
