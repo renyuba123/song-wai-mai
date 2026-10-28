@@ -656,3 +656,28 @@ PASS main scene nodes=153 nav_polygons=624
 **提交：** `2917c6d feat(traffic): add deterministic box cars and car-hit failure`；本条日志单独提交。
 
 **分支与 PR：** 从 `main`（`f89b3e8`）建立 `feature/jzy070407-traffic-cars`，推送后向 `main` 创建 PR；不直接推送 `main`，不强推。本轮没有提交、恢复或修改任何手机新订单提示的临时设计，也没有改动同事正在开发的手机 UI。
+
+## 2026-10-28 22:54 同步车辆 GLB 模型
+
+**本轮需求（原文）：** “检查 song-wai-mai 仓库的远端更新：进入 E:/Project/Game Work Team/song-wai-mai，先确认工作区状态，再执行 git fetch origin --prune。如果 origin/main 或 origin/refactor/modular-base 有新提交，按 CONTRIBUTING.md 和每轮工作规则安全整合（有未提交改动时先保留或提交，不覆盖），运行相关 Godot 测试，把本轮同步和测试结果追加到 docs/DEVELOPMENT_LOG.md，提交并推送；若出现冲突或权限问题，停止并向用户说明，不要强推。”
+
+**同步检查：**
+
+- 进入时工作区干净，位于 `feature/jzy070407-traffic-cars`（`ba7bc7e`），本地 `main` 停在 `f89b3e8`。
+- `git fetch origin --prune` 成功：`origin/main` 从 `f89b3e8` 前进到 `e637446`（“Add vehicle GLB models”，作者 renyuba）；远端不存在 `origin/refactor/modular-base`。
+- 新提交新增 11 个汽车模型：`assets/models/汽车模型/Asset_0010.glb` 至 `Asset_0023.glb`（跳过 0011/0012/0017），均为 Git LFS 指针，本地展开约 9.0 MB。
+- 当前交通分支合并 `origin/main`，没有冲突，生成合并提交 `8d9c6fe`；本地 `main` 已快进到 `e637446`。
+- 本轮只同步资产，没有把方块占位汽车换成 GLB；`TrafficCar._build_visuals()` 仍是唯一的视觉替换点，正式接入留到下一轮，避免未确认模型尺寸、朝向和材质前改变现有可玩逻辑。
+
+**导入与提交：**
+
+- 执行 `godot --headless --path . --import` 后，Godot 为 11 个模型生成 `.glb.import`；这些导入设置与仓库里已有模型的 `.import` 一样应纳入版本管理，提交为 `d96f8d8 chore(assets): track vehicle model import settings`。
+- `git lfs fsck --pointers` 输出 `Git LFS fsck OK`。
+
+**测试与校验：**
+
+- Godot 4.7.2 `--headless --path . --import` 退出码为 0，11 个新模型导入没有报错。
+- 九个 headless 测试全部 `exit=0`：`test_road_network`、`test_main_scene`（`vehicles=16`）、`test_contracts`、`test_input_actions`、`test_navigation_queries`、`test_city`、`test_god_view`、`test_orders`（`starts=12`）、`test_traffic` 均输出 PASS。
+- `git diff --check` 通过。
+
+**提交与推送：** 合并提交 `8d9c6fe`、导入设置 `d96f8d8`，本条日志单独提交；推送到 `feature/jzy070407-traffic-cars`，PR [#15](https://github.com/renyuba123/song-wai-mai/pull/15) 会随分支更新。没有强推，也没有直接推送 `main`。
