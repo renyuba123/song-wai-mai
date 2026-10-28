@@ -60,9 +60,11 @@ godot --headless --path . --script res://tests/test_input_actions.gd
 godot --headless --path . --script res://tests/test_navigation_queries.gd
 godot --headless --path . --script res://tests/test_city.gd
 godot --headless --path . --script res://tests/test_god_view.gd
+godot --headless --path . --script res://tests/test_orders.gd
+godot --headless --path . --script res://tests/test_traffic.gd
 ```
 
-前两条检查路网生成、校验、寻路和主场景启动；中间三条分别检查共享数据契约、输入映射与玩家移动、导航查询接口；`test_city` 检查城市确定性、反向数据、主场景城市装配和站点可达性；`test_god_view` 检查测试用上帝视角只在调试构建创建、开关时相机和玩家状态正确切换并恢复。新增脚本后先执行一次 `godot --headless --path . --import`，让 Godot 注册 `class_name` 并生成 `.gd.uid`。
+前两条检查路网生成、校验、寻路和主场景启动；中间三条分别检查共享数据契约、输入映射与玩家移动、导航查询接口；`test_city` 检查城市确定性、反向数据、主场景城市装配和站点可达性；`test_god_view` 检查测试用上帝视角只在调试构建创建、开关时相机和玩家状态正确切换并恢复；`test_orders` 检查订单生成、状态机、开始/接单/结算界面和撞车失败语义；`test_traffic` 检查车道数学、确定性车流、出生安全、命中 Area3D 和主场景撞车信号链。新增脚本后先执行一次 `godot --headless --path . --import`，让 Godot 注册 `class_name` 并生成 `.gd.uid`。
 
 ## 2. 所有人：日常操作流程
 
@@ -260,15 +262,21 @@ scenes/traffic/
 - 同一组参数和种子必须生成同一份路网和城市；`tests/test_city.gd` 会逐字段比较。
 - 新增加固生成规则时，优先扩展 `CityContent` 或新增独立资源，不要把逻辑塞进 `RoadBuilder` / `CityBuilder`。
 - 生成失败、路网为空、路径不存在时要安全返回，不要让整个主场景崩溃；入口地块不足或玩家起点不可用时，让城市校验失败并输出明确错误。
-- 阶段一地块只来自非支路路段，每条路段最多一个出入口；地块临街宽 18～40 米、进深 18～28 米，全局最多 240 个。支路只用于路网连通，不生成临街地块。
+- 地块沿所有路段（含支路）两侧生成临街地块，每条路段最多一个出入口；地块临街宽 18～40 米、进深 18～28 米。每个临街地块背后再补两排无出入口的街区内部建筑，与已有地块相交时跳过；临街地块上限 640、总地块上限 1800，建筑与地块一一对应。
 
 ### 4.3 交通与行人
 
-- 车辆/行人从 `RoadNetwork` 的节点、路段和出生点生成，不要自己再随机一套地图。
-- 动态对象使用 `CollisionLayers.VEHICLE` / `PEDESTRIAN` 和对应掩码。
-- 寻路使用 `NavigationService` 提供的导航区域或查询接口，不要自己写一套 A* 绕过导航模块。
-- 大量行人优先用 `MultiMesh` 或实例化池，避免每帧创建节点。
-- 车辆、行人的 `.tscn` 由本模块负责；不要修改 `player.tscn` 或 `navigation_system.tscn`。
+当前已实现第一版背景车流，行人仍待人物模型：
+
+- `TrafficSpawner.build(network, city)` 从同一份 `RoadNetwork` 生成方块占位汽车，`max_vehicles` 默认上限 256；每个路段一辆，当前 2400 米地图的 214 条路段都会出车。同一城市种子结果一致（`network.seed_value ^ RNG_SALT`，只用局部 `RandomNumberGenerator`）。
+- 每个路段最多一辆车，距路口至少 20 米，距玩家起点和所有站点出生点至少 15 米；车辆沿右侧车道行驶，速度按道路等级区分。
+- `TrafficRoute` 负责车道偏移、邻接表和路口转向；车在路口不会原地掉头，没有直行候选时才掉头。
+- `TrafficCar` 是 `AnimatableBody3D`：车身/车厢/轮子全部用 `BoxMesh` 代码生成，碰撞层 `VEHICLE`、掩码 `PLAYER`；子节点 `Area3D` 掩码 `PLAYER` 负责命中玩家，通过 `player_entered` → `TrafficSpawner.player_hit` 上报。
+- 车辆不加入 `navigation_source`，也不使用 `WORLD_STATIC`；交通在世界和导航烘焙完成后才生成。
+- 车辆之间、车辆与建筑之间不做碰撞，避免车流卡死；路口外形重叠、无交通灯和避让属于当前已知限制。
+- 当前不做行人；`max_pedestrians` 保留。行人接入前仍应优先使用 `MultiMesh` 或实例化池。
+- 命中信号链：`TrafficCar.player_entered` → `TrafficSpawner.player_hit` → `main.gd` → `OrderManager.notify_player_hit()`。只有活动订单会失败，菜单、接单、结算和上帝视角下忽略。
+- 换成正式汽车模型时替换 `TrafficCar._build_visuals()`，保留路线、碰撞和命中逻辑；不要修改 `player.tscn` 或 `navigation_system.tscn`。
 
 ### 4.4 场景与测试
 
@@ -313,6 +321,7 @@ project.godot
 - 输入映射由整合者统一维护；正式功能必须通过 `InputMap` 动作读取，不要直接轮询物理按键。
 - 玩家出生点由 `CityContent.player_start` 提供，`main.gd` 在 `world.regenerate()` 后把玩家放到该位置和朝向；订单开始后 `OrderManager` 再把玩家放到订单起点。玩家模块只负责“被放在哪里之后怎么走”，不要退回固定节点或原点。
 - 开始界面、待接订单和结算界面显示期间，`OrderManager` 调用 `PlayerController.set_controls_enabled(false)` 关闭移动和视角并释放鼠标；接单或重开时再恢复。新增菜单时沿用这个开关，不要在各处直接改鼠标模式。
+- 交通撞到玩家时，`main.gd` 把 `traffic.player_hit` 转给 `OrderManager.notify_player_hit()`。只有当前订单处于活动状态且玩家在物理处理时才会调用 `OrderSession.fail(HIT_BY_CAR)`；撞车失败保留剩余时间和真实用时，结算正文显示“被来往汽车撞倒，配送失败”。玩家被撞后表现为控制冻结并进入失败结算，按 R 继续下一单。
 
 阶段零已经定义的输入动作：
 
@@ -351,8 +360,9 @@ Main
 
 1. 世界生成路网和 `CityContent`，校验并绘制道路、人行道、建筑和站点标记，然后发出 `world_generated(network)`。
 2. 导航接收同一份 `RoadNetwork` 并烘焙；阶段一只把车行道碰撞体作为导航源。
-3. 交通接收同一份 `RoadNetwork` 并生成车辆/行人。
+3. 交通接收同一份 `RoadNetwork` 和 `CityContent`，按每路段一辆生成方块汽车（默认上限 256，当前地图 214 辆）；车辆只走车道，不加入导航源。
 4. `main.gd` 在世界生成后把 `$Player` 放到 `world.city.player_start`，并清零速度。
+5. `main.gd` 把 `traffic.player_hit` 接到 `orders.notify_player_hit()`，撞车失败仍由订单系统统一结算。
 
 不要把业务逻辑写进 `main.gd`；它只负责接线。新增模块时，先在模块内部提供入口场景和信号，再在 `main.tscn` 里实例化。`World` 场景内 `RoadBuilder` 与 `CityBuilder` 是兄弟节点，`CityBuilder` 只清理自己的子节点，不删除道路。
 

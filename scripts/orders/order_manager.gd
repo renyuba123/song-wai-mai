@@ -138,6 +138,16 @@ func try_interact(player_position: Vector3) -> bool:
 	return changed
 
 
+func notify_player_hit(_position: Vector3 = Vector3.ZERO) -> bool:
+	## 交通模块只报告“碰到玩家”，是否构成失败由订单系统判断。
+	## 菜单、接单界面、结算界面和上帝视角都不会有活动会话，直接忽略。
+	if not _configured or _session == null or not _session.is_active():
+		return false
+	if _player == null or not _player.is_physics_processing():
+		return false
+	return _session.fail(OrderSession.FailureReason.HIT_BY_CAR)
+
+
 func handle_restart() -> bool:
 	if not _configured:
 		return false

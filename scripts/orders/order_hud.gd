@@ -168,7 +168,7 @@ func show_result(order: DeliveryOrder, session: OrderSession) -> void:
 	if session.is_success():
 		lines.append("剩余时间 %s" % format_time(session.time_remaining))
 	else:
-		lines.append("倒计时已结束")
+		lines.append(session.get_failure_text())
 	_result_body.text = "\n".join(lines)
 	_result_hint.text = "按 R 开始下一单"
 	_result_next_button.text = "下一单（R）"
@@ -242,6 +242,10 @@ func is_result_visible() -> bool:
 
 func get_result_title() -> String:
 	return _result_title.text
+
+
+func get_result_body() -> String:
+	return _result_body.text
 
 
 static func site_label(site: CitySite) -> String:

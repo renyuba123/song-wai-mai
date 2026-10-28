@@ -5,6 +5,7 @@ class_name OrderSession
 ## 不依赖场景树，订单管理器只负责节点、输入、传送和界面。
 
 enum State { TO_MERCHANT, TO_CUSTOMER, DELIVERED, FAILED }
+enum FailureReason { NONE, TIMEOUT, HIT_BY_CAR }
 
 const INTERACT_RADIUS_M := 4.0
 const TIME_FACTOR := 1.6
@@ -16,6 +17,7 @@ signal finished(success: bool)
 
 var order: DeliveryOrder = null
 var state: int = State.TO_MERCHANT
+var failure_reason: int = FailureReason.NONE
 var time_limit: float = 0.0
 var time_remaining: float = 0.0
 
@@ -42,7 +44,16 @@ func advance(delta: float) -> void:
 		return
 	time_remaining = maxf(0.0, time_remaining - delta)
 	if time_remaining <= 0.0:
-		_finish(false)
+		_finish(false, FailureReason.TIMEOUT)
+
+
+func fail(reason: int) -> bool:
+	## 外部失败（如被车撞到）。与超时共用一次性结算，但不重置剩余时间，
+	## 这样结算面板里的“用时”仍然是真实配送时长。
+	if not is_active() or reason == FailureReason.NONE:
+		return false
+	_finish(false, reason)
+	return true
 
 
 func try_interact(player_position: Vector3) -> bool:
@@ -109,6 +120,19 @@ func get_interact_prompt() -> String:
 	return ""
 
 
+func get_failure_reason() -> int:
+	return failure_reason
+
+
+func get_failure_text() -> String:
+	match failure_reason:
+		FailureReason.TIMEOUT:
+			return "倒计时已结束"
+		FailureReason.HIT_BY_CAR:
+			return "被来往汽车撞倒，配送失败"
+	return "订单失败"
+
+
 func get_elapsed_s() -> float:
 	return maxf(0.0, time_limit - time_remaining)
 
@@ -125,11 +149,13 @@ func is_success() -> bool:
 	return state == State.DELIVERED
 
 
-func _finish(success: bool) -> void:
+func _finish(success: bool, reason: int = FailureReason.NONE) -> void:
 	if not is_active():
 		return
 	state = State.DELIVERED if success else State.FAILED
 	if not success:
-		time_remaining = 0.0
+		failure_reason = reason
+		if reason == FailureReason.TIMEOUT:
+			time_remaining = 0.0
 	state_changed.emit(state)
 	finished.emit(success)

@@ -628,3 +628,82 @@ PASS main scene nodes=153 nav_polygons=624
 **提交与推送：** 合并提交和本条日志推送到 `chore/jzy070407-handoff-archive`，并向 `main` 创建 PR [#14](https://github.com/renyuba123/song-wai-mai/pull/14)。
 
 **说明：** 归档内容保持交接包原样（14 个商家/设施 FBX、34 MB 城市组合模型、4 份预览 HTML），`assets/handoff/.gdignore` 阻止 Godot 导入；未拆分、转换或接入场景。
+
+## 2026-10-28 22:41 来往汽车与撞车失败
+
+**本轮需求（原文）：** “哦哦我这边在做ui，你可以做那个来往汽车的，当时讨论的是碰到往来汽车会被撞死-游戏失败，还有行人左右过马路（这部分又要人的模型现在还没有，可以把车的先做了）汽车模型现在还在分开，你可以先用box替代或者其他的，”
+
+**实现内容：**
+
+- `TrafficRoute` 负责右侧车道偏移、方向/偏航角、路段邻接表和路口选路。车道中心用 `红线宽度 × CARRIAGEWAY_RATIO × 0.25`，主干路、次干路、支路分别为 5.5、4.125、2.475 米；路口优先直行，其次随机转弯，没有其它路时才掉头。
+- `TrafficCar` 是 `AnimatableBody3D`，车身、车厢、四个轮子和前后灯全部用 `BoxMesh` 在代码里生成，颜色从 5 色确定性调色板选择；正式汽车模型拆分完成后只需替换 `_build_visuals()`。
+- 车辆沿车道折线按弧长行驶，`_physics_process` 每帧推进，跨过路段后继续生成下一段。车辆不加入 `navigation_source`，也不使用 `WORLD_STATIC`；车辆之间、车辆与建筑之间不做碰撞，避免车流卡死。
+- 车身碰撞层为 `VEHICLE`、掩码为 `PLAYER`，玩家会被车身挡住；子节点 `Area3D` 使用 `PLAYER` 掩码检测命中，`player_entered` → `TrafficSpawner.player_hit` → `main.gd` → `OrderManager.notify_player_hit()`。
+- `TrafficSpawner.build(network, city)` 用 `network.seed_value ^ 0x7A4FF1C` 的局部 RNG 做 Fisher–Yates 洗牌，每个路段最多一辆车，生成 16 辆汽车；出生点距路口至少 20 米、距玩家起点和所有站点出生点至少 15 米，速度按道路等级取 13/10/7 m/s 并乘 0.9–1.1。
+- `OrderSession` 增加 `FailureReason { NONE, TIMEOUT, HIT_BY_CAR }` 和公开 `fail(reason)`；撞车失败保留剩余时间和真实用时，只有超时才把剩余时间归零。`OrderManager.notify_player_hit()` 只在活动订单且玩家处于物理处理时结算，菜单、接单、结算和上帝视角都会忽略。
+- `OrderHUD` 的失败正文改为按原因显示，撞车时显示“被来往汽车撞倒，配送失败”；新增 `get_result_body()` 供测试。改动保持最小，没有触碰手机订单 UI。
+
+**修改文件：** 新增 `scripts/traffic/traffic_route.gd`、`scripts/traffic/traffic_car.gd`、`tests/test_traffic.gd`；修改 `scripts/traffic/traffic_spawner.gd`、`scripts/orders/order_session.gd`、`scripts/orders/order_manager.gd`、`scripts/orders/order_hud.gd`、`scripts/core/main.gd`、`tests/test_orders.gd`、`tests/test_main_scene.gd`、`.github/workflows/repository-integrity.yml`、`README.md`、`docs/ROADMAP.md`、`docs/USER_GUIDE.md`。
+
+**测试与校验：**
+
+- Godot 4.7.2 `--headless --path . --import` 退出码为 0。
+- 九个 headless 测试全部 `exit=0`：`test_road_network`、`test_main_scene`（`vehicles=16`）、`test_contracts`、`test_input_actions`、`test_navigation_queries`、`test_city`、`test_god_view`、`test_orders`（`starts=12`）、`test_traffic` 均输出 PASS。
+- `test_traffic` 覆盖车道偏移与方向、相同种子车辆签名一致、每个路段至多一辆车、出生安全距离、碰撞层/掩码/导航隔离、BoxShape3D 与方块车身、真实 PhysicsBody3D 进入命中 Area3D、固定步长移动与大位移、数量/空路网/重复构建边界，以及主场景“撞车 → 订单失败 → 只能结算一次 → R 继续下一单”的信号链。
+- 窗口化实机预览（1280×720）确认道路上可见灰蓝色方块汽车、红色尾灯和车轮；接单后把玩家放入车辆命中区域，会话进入 `FAILED`（`reason=2`），结算标题“订单失败”，正文“被来往汽车撞倒，配送失败”，用时保留。预览用临时脚本和截图已删除，未提交。
+- `git diff --check` 通过。
+
+**提交：** `2917c6d feat(traffic): add deterministic box cars and car-hit failure`；本条日志单独提交。
+
+**分支与 PR：** 从 `main`（`f89b3e8`）建立 `feature/jzy070407-traffic-cars`，推送后向 `main` 创建 PR；不直接推送 `main`，不强推。本轮没有提交、恢复或修改任何手机新订单提示的临时设计，也没有改动同事正在开发的手机 UI。
+
+## 2026-10-28 22:54 同步车辆 GLB 模型
+
+**本轮需求（原文）：** “检查 song-wai-mai 仓库的远端更新：进入 E:/Project/Game Work Team/song-wai-mai，先确认工作区状态，再执行 git fetch origin --prune。如果 origin/main 或 origin/refactor/modular-base 有新提交，按 CONTRIBUTING.md 和每轮工作规则安全整合（有未提交改动时先保留或提交，不覆盖），运行相关 Godot 测试，把本轮同步和测试结果追加到 docs/DEVELOPMENT_LOG.md，提交并推送；若出现冲突或权限问题，停止并向用户说明，不要强推。”
+
+**同步检查：**
+
+- 进入时工作区干净，位于 `feature/jzy070407-traffic-cars`（`ba7bc7e`），本地 `main` 停在 `f89b3e8`。
+- `git fetch origin --prune` 成功：`origin/main` 从 `f89b3e8` 前进到 `e637446`（“Add vehicle GLB models”，作者 renyuba）；远端不存在 `origin/refactor/modular-base`。
+- 新提交新增 11 个汽车模型：`assets/models/汽车模型/Asset_0010.glb` 至 `Asset_0023.glb`（跳过 0011/0012/0017），均为 Git LFS 指针，本地展开约 9.0 MB。
+- 当前交通分支合并 `origin/main`，没有冲突，生成合并提交 `8d9c6fe`；本地 `main` 已快进到 `e637446`。
+- 本轮只同步资产，没有把方块占位汽车换成 GLB；`TrafficCar._build_visuals()` 仍是唯一的视觉替换点，正式接入留到下一轮，避免未确认模型尺寸、朝向和材质前改变现有可玩逻辑。
+
+**导入与提交：**
+
+- 执行 `godot --headless --path . --import` 后，Godot 为 11 个模型生成 `.glb.import`；这些导入设置与仓库里已有模型的 `.import` 一样应纳入版本管理，提交为 `d96f8d8 chore(assets): track vehicle model import settings`。
+- `git lfs fsck --pointers` 输出 `Git LFS fsck OK`。
+
+**测试与校验：**
+
+- Godot 4.7.2 `--headless --path . --import` 退出码为 0，11 个新模型导入没有报错。
+- 九个 headless 测试全部 `exit=0`：`test_road_network`、`test_main_scene`（`vehicles=16`）、`test_contracts`、`test_input_actions`、`test_navigation_queries`、`test_city`、`test_god_view`、`test_orders`（`starts=12`）、`test_traffic` 均输出 PASS。
+- `git diff --check` 通过。
+
+**提交与推送：** 合并提交 `8d9c6fe`、导入设置 `d96f8d8`，本条日志单独提交；推送到 `feature/jzy070407-traffic-cars`，PR [#15](https://github.com/renyuba123/song-wai-mai/pull/15) 会随分支更新。没有强推，也没有直接推送 `main`。
+
+## 2026-10-28 23:31 提高车辆与建筑密度
+
+**本轮需求（原文）：** “车辆和建筑建模密度过低”
+
+**实现内容：**
+
+- 城市地块不再只沿主次干路生成，支路两侧也生成完整临街地块；玩家起点仍只用主次干路，避免落在支路较窄的人行道上。`CityGenerator._start_edge_ids()` 单独筛掉 `RoadNetwork.LOCAL`，与地块生成范围分开。
+- 临街地块上限从 240 提高到 640，每条路段每侧从 2 个提高到 5 个；新增 `_add_infill_lots()`，沿每个临街地块继续向街区内部补两排建筑，沿用原来的临街宽度、道路偏移、朝向和临街侧。补排建筑没有出入口、不参与站点选择，与已有地块相交时跳过；总地块上限提高到 1800，建筑仍与地块一一对应。
+- `TrafficSpawner.max_vehicles` 从 16 提高到 256。当前 2400 米地图有 214 条路段，仍按每路段最多一辆车生成，因此主场景实际生成 214 辆方块汽车；上限提高是为了让更大路网也能按路段铺满，而不是在同一路段叠车。
+- `tests/test_city.gd` 增加大地图密度下限：2400 米地图至少 1200 个地块；`tests/test_main_scene.gd` 把车辆断言从“大于 0”提高到“至少 100 辆”。`README.md`、`docs/USER_GUIDE.md`、`docs/ROADMAP.md` 同步更新数量、上限和补排规则。
+
+**生成结果：**
+
+- 主场景（2400 米、种子 118、密度 0.5）：1637 个地块、1637 栋建筑、98 个出入口、32 个站点、214 辆汽车；玩家起点 12 个。
+- 测试地图（2400 米、种子 42、密度 0.5）：1699 个地块、1699 栋建筑、104 个出入口、32 个站点；小地图（1200 米、种子 1、密度 1.0）保持 135 个地块。
+- 窗口化预览（1280×720）中主场景约 8327 个节点、1220 次绘制调用，实测约 66 FPS；街区内部由原来的单圈临街建筑变为临街加内部两排，俯视和街面视角的空旷感明显减少。
+
+**测试与校验：**
+
+- `git diff --check` 通过。
+- Godot 4.7.2 `--headless --path . --import` 退出码为 0；城市生成输出“地块 1637；建筑 1637；站点 32；出入口 98”。
+- 九个 headless 测试全部 `exit=0`：`test_road_network`、`test_main_scene`（`lots=1637 vehicles=214`）、`test_contracts`、`test_input_actions`、`test_navigation_queries`、`test_city`（种子 42 `lots=1699`、种子 1 `lots=135`）、`test_god_view`、`test_orders`、`test_traffic` 均输出 PASS。
+- 密度预览用临时脚本和截图已删除，未提交；没有恢复或提交任何手机新订单提示的临时设计，也没有修改同事正在开发的手机 UI。
+
+**提交与推送：** `ee6ba2f feat(world): raise urban density with infill buildings and more cars`，本条日志单独提交；推送到 `feature/jzy070407-traffic-cars` 并更新 PR [#15](https://github.com/renyuba123/song-wai-mai/pull/15)。没有强推，也没有直接推送 `main`。

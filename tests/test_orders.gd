@@ -250,8 +250,65 @@ func _check_session(order: DeliveryOrder) -> void:
 	_expect(failed.state == OrderSession.State.FAILED, "超时应进入失败状态")
 	_expect(fail_events == [false], "超时应只触发一次 finished(false)")
 	_expect(is_zero_approx(failed.time_remaining), "失败后剩余时间应为 0")
+	_expect(
+		failed.get_failure_reason() == OrderSession.FailureReason.TIMEOUT,
+		"超时失败原因错误"
+	)
+	_expect(failed.get_failure_text() == "倒计时已结束", "超时失败文本错误")
+	_expect(
+		not failed.fail(OrderSession.FailureReason.HIT_BY_CAR),
+		"已结束的订单不应再次失败"
+	)
 	failed.advance(10.0)
 	_expect(fail_events.size() == 1, "失败后不应重复结算")
+
+	var car_order := OrderGenerator.generate(
+		_world.city, _world.network, _navigation, 3
+	)
+	if car_order == null:
+		_expect(false, "无法生成撞车测试订单")
+		return
+	var car_failed := OrderSession.new(car_order, _player.move_speed)
+	var car_events: Array = []
+	car_failed.finished.connect(func(success: bool) -> void: car_events.append(success))
+	car_failed.advance(5.0)
+	var car_remaining := car_failed.time_remaining
+	var car_elapsed := car_failed.get_elapsed_s()
+	_expect(
+		not car_failed.fail(OrderSession.FailureReason.NONE),
+		"失败原因为空时不应结束订单"
+	)
+	_expect(
+		car_failed.fail(OrderSession.FailureReason.HIT_BY_CAR),
+		"活动订单应能被标记为撞车失败"
+	)
+	_expect(
+		car_failed.state == OrderSession.State.FAILED,
+		"撞车后应进入失败状态"
+	)
+	_expect(
+		car_failed.get_failure_reason() == OrderSession.FailureReason.HIT_BY_CAR,
+		"撞车失败原因错误"
+	)
+	_expect(
+		is_equal_approx(car_failed.time_remaining, car_remaining),
+		"撞车失败不应清空剩余时间"
+	)
+	_expect(
+		is_equal_approx(car_failed.get_elapsed_s(), car_elapsed),
+		"撞车失败不应改变已用时间"
+	)
+	_expect(car_failed.get_failure_text().contains("撞"), "撞车失败文本未说明原因")
+	_expect(car_events == [false], "撞车应只触发一次 finished(false)")
+	_expect(
+		not car_failed.fail(OrderSession.FailureReason.HIT_BY_CAR),
+		"撞车失败后不应重复结算"
+	)
+	_expect(car_events.size() == 1, "撞车失败后不应重复触发 finished")
+	_expect(
+		not session.fail(OrderSession.FailureReason.HIT_BY_CAR),
+		"已成功送达的订单不应被撞车失败覆盖"
+	)
 
 
 func _check_hud_direction() -> void:
@@ -366,6 +423,10 @@ func _check_manager() -> void:
 	)
 	_expect(hud.is_result_visible(), "超时后结算面板未显示")
 	_expect(hud.get_result_title() == "订单失败", "失败结算标题错误")
+	_expect(
+		hud.get_result_body().contains("倒计时已结束"),
+		"超时结算正文应说明倒计时结束"
+	)
 	_expect(not _player.controls_enabled, "结算界面应关闭玩家控制")
 	_expect(_orders.handle_restart(), "失败后 R 应生成下一单")
 	_expect(_orders.get_order_seed() > timeout_seed, "失败后订单种子没有递增")

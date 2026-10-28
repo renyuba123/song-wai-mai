@@ -8,8 +8,10 @@ class_name CityGenerator
 const CITY_RNG_SALT := 0x5EEDC17
 const EXTRA_START_RNG_SALT := 0x57A275
 const MAX_PLAYER_STARTS := 12
-const MAX_LOTS := 240
-const MAX_LOTS_PER_SIDE := 2
+const MAX_FRONTAGE_LOTS := 640
+const MAX_LOTS := 1800
+const MAX_LOTS_PER_SIDE := 5
+const INFILL_ROWS := 2
 const MIN_FRONTAGE := 18.0
 const MAX_FRONTAGE := 40.0
 const MIN_DEPTH := 18.0
@@ -36,12 +38,12 @@ static func generate(network: RoadNetwork) -> CityContent:
 	var used_edges := {}
 	var entrance_sides := {}
 	for edge_id in edge_ids:
-		if city.lots.size() >= MAX_LOTS:
+		if city.lots.size() >= MAX_FRONTAGE_LOTS:
 			break
 		var edge_lots := _lots_for_edge(network, edge_id, rng)
 		if edge_lots.is_empty():
 			continue
-		var remaining := MAX_LOTS - city.lots.size()
+		var remaining := MAX_FRONTAGE_LOTS - city.lots.size()
 		if edge_lots.size() > remaining:
 			edge_lots.resize(remaining)
 		for lot in edge_lots:
@@ -65,6 +67,8 @@ static func generate(network: RoadNetwork) -> CityContent:
 			building.id = building_id
 			lot.building_id = building_id
 			city.buildings.append(building)
+
+	_add_infill_lots(network, city, rng)
 
 	var entrance_lots := city.get_entrance_lots()
 	if entrance_lots.size() < 2:
@@ -101,12 +105,13 @@ static func generate(network: RoadNetwork) -> CityContent:
 		else:
 			customer_index += 1
 
-	city.player_start = _make_player_start(network, edge_ids, used_edges, entrance_sides, rng)
+	var start_edge_ids := _start_edge_ids(network)
+	city.player_start = _make_player_start(network, start_edge_ids, used_edges, entrance_sides, rng)
 	if city.player_start == null:
 		push_error("城市没有可用的玩家出生点")
 		return city
 	city.player_starts = _make_player_starts(
-		network, edge_ids, used_edges, entrance_sides, city.player_start, city.buildings
+		network, start_edge_ids, used_edges, entrance_sides, city.player_start, city.buildings
 	)
 	if city.player_starts.size() < 2:
 		push_error("城市可用的玩家出生点不足：%d" % city.player_starts.size())
@@ -114,6 +119,15 @@ static func generate(network: RoadNetwork) -> CityContent:
 
 
 static func _eligible_edge_ids(network: RoadNetwork) -> Array:
+	## 所有路段两侧都可以生成地块，包括支路；支路两侧也有完整人行道。
+	var result := []
+	for edge_id in network.edges.size():
+		result.append(edge_id)
+	return result
+
+
+static func _start_edge_ids(network: RoadNetwork) -> Array:
+	## 玩家起点仍只放在主干路和次干路，避开支路的窄人行道。
 	var result := []
 	for edge_id in network.edges.size():
 		if int(network.edges[edge_id].kind) != RoadNetwork.LOCAL:
@@ -171,6 +185,77 @@ static func _lots_for_edge(network: RoadNetwork, edge_id: int, rng: RandomNumber
 			cursor += width + rng.randf_range(MIN_GAP, MAX_GAP)
 			count += 1
 	return lots
+
+
+static func _add_infill_lots(
+	network: RoadNetwork,
+	city: CityContent,
+	rng: RandomNumberGenerator
+) -> void:
+	## 沿临街地块再向街区内补两排建筑，避免只有一圈“贴街皮”和空荡的街区。
+	## 补排地块没有出入口，也不参与站点选择；与已有地块相交时跳过。
+	var frontage_count := city.lots.size()
+	var occupied: Array = []
+	for lot in city.lots:
+		occupied.append(lot.rect)
+	for index in frontage_count:
+		if city.lots.size() >= MAX_LOTS:
+			return
+		var source: Dictionary = city.lots[index]
+		var edge_id := int(source.road_edge_id)
+		if edge_id < 0 or edge_id >= network.edges.size():
+			continue
+		var edge: Dictionary = network.edges[edge_id]
+		var kind := int(edge.kind)
+		if kind < RoadNetwork.MAIN or kind > RoadNetwork.LOCAL:
+			continue
+		var a: Vector2 = network.nodes[edge.a]
+		var b: Vector2 = network.nodes[edge.b]
+		var length := a.distance_to(b)
+		if length <= RoadNetwork.EPS:
+			continue
+		var direction := (b - a) / length
+		var left := Vector2(direction.y, -direction.x)
+		var base_front := network.widths[kind] * 0.5 + LOT_SETBACK
+		var front := base_front + float(source.depth_m) + rng.randf_range(MIN_GAP, MAX_GAP)
+		for _row in INFILL_ROWS:
+			if city.lots.size() >= MAX_LOTS:
+				return
+			var depth := rng.randf_range(MIN_DEPTH, MAX_DEPTH)
+			var gap := rng.randf_range(MIN_GAP, MAX_GAP)
+			var rect := _lot_rect(
+				a, b, length, float(source.road_offset_m),
+				float(source.frontage_width_m), depth, front,
+				int(source.side), left
+			)
+			if not _overlaps_existing(rect, occupied):
+				var lot := {
+					"id": city.lots.size(),
+					"rect": rect,
+					"road_edge_id": edge_id,
+					"road_offset_m": float(source.road_offset_m),
+					"frontage_width_m": float(source.frontage_width_m),
+					"depth_m": depth,
+					"facing_yaw": float(source.facing_yaw),
+					"side": int(source.side),
+					"entrance_id": -1,
+					"building_id": -1,
+					"site_id": &"",
+				}
+				city.lots.append(lot)
+				occupied.append(rect)
+				var building := _make_building(lot, rng)
+				building.id = city.buildings.size()
+				lot.building_id = int(building.id)
+				city.buildings.append(building)
+			front += depth + gap
+
+
+static func _overlaps_existing(rect: Rect2, occupied: Array) -> bool:
+	for other in occupied:
+		if rect.intersects(other):
+			return true
+	return false
 
 
 static func _lot_rect(

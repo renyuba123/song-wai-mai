@@ -19,6 +19,7 @@ func _run() -> void:
 	var navigation := main.get_node_or_null("NavigationSystem") as NavigationService
 	var player := main.get_node_or_null("Player") as PlayerController
 	var orders := main.get_node_or_null("OrderSystem") as OrderManager
+	var traffic := main.get_node_or_null("TrafficSystem") as TrafficSpawner
 	var city_builder := main.get_node_or_null("World/CityBuilder")
 	var world_environment := main.get_node_or_null("World/WorldEnvironment") as WorldEnvironment
 	var sky_ready := (
@@ -29,6 +30,7 @@ func _run() -> void:
 	var ok := (
 		world != null and world.network != null and world.city != null
 		and navigation != null and player != null and orders != null
+		and traffic != null and traffic.get_vehicle_count() >= 100
 		and city_builder != null and city_builder.get_child_count() > 0
 		and sky_ready
 		and bool(world.city_report.get("valid", false))
@@ -61,6 +63,7 @@ func _run() -> void:
 			" lots=", world.city.lots.size(),
 			" sites=", world.city.sites.size(),
 			" starts=", world.city.player_starts.size(),
+			" vehicles=", traffic.get_vehicle_count(),
 			" order_seed=", orders.get_order_seed(),
 			" sky=", sky_ready
 		)
@@ -70,6 +73,8 @@ func _run() -> void:
 			" city_valid=", world != null and not world.city_report.is_empty() and world.city_report.valid,
 			" player=", player != null,
 			" orders=", orders != null,
+			" traffic=", traffic != null,
+			" vehicles=", traffic != null and traffic.get_vehicle_count(),
 			" order=", orders != null and orders.get_current_order() != null,
 			" start_screen=", orders != null and orders.is_start_screen_visible(),
 			" offer=", orders != null and orders.is_offer_visible(),
