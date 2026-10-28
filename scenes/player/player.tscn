@@ -1,18 +1,27 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene format=3 uid="uid://bhtnsn6bhwr5h"]
 
-[ext_resource type="Script" path="res://scripts/player/player_controller.gd" id="1_player"]
+[ext_resource type="Script" uid="uid://dl4qjpdgp2ukb" path="res://scripts/player/player_controller.gd" id="1_player"]
+[ext_resource type="PackedScene" uid="uid://c5udir2xpgxqv" path="res://assets/models/电鸡模型.glb" id="2_dovo2"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_player"]
 radius = 0.35
 height = 1.8
 
-[node name="Player" type="CharacterBody3D"]
+[node name="Player" type="CharacterBody3D" unique_id=805032846 node_paths=PackedStringArray("steering_pivot")]
 script = ExtResource("1_player")
+steering_pivot = NodePath("电鸡模型/Empty")
+max_steer_angle = 30.0
+steer_response = 1.0
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
+[node name="电鸡模型" parent="." unique_id=690155907 instance=ExtResource("2_dovo2")]
+transform = Transform3D(-1, 0, 8.742278e-08, 0, 1, 0, -8.742278e-08, 0, -1, 0, 0.8, 0)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=847726229]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.3682455, 0)
 shape = SubResource("CapsuleShape3D_player")
 
-[node name="Camera3D" type="Camera3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.6, 0)
+[node name="Camera3D" type="Camera3D" parent="." unique_id=191232166]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.0682454, 0)
 current = true
+
+[editable path="电鸡模型"]
