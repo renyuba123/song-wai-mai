@@ -607,3 +607,24 @@ PASS main scene nodes=153 nav_polygons=624
 - `git lfs fsck --pointers` 输出 `Git LFS fsck OK`；`git push` 退出码为 0，远端新分支创建成功。
 
 **结论：** 当前网络下，GitHub API 走代理、S3 大文件直连是可行组合。以后再次遇到 LFS 大文件上传超时，可复用上面的命令，只对 `github-cloud.s3.amazonaws.com` 关闭代理。
+
+## 2026-10-28 22:08 合并 main 并准备归档 PR
+
+**本轮需求（原文）：** “13已经合并，新增14”“新增pr14”
+
+**同步与整合：**
+
+- PR [#13](https://github.com/renyuba123/song-wai-mai/pull/13) 已合并到 `main`（`cbdf04a`），本地 `main` 已快进。
+- 归档分支原基于 `87a781c`，先合并 `origin/main`。只有 `docs/DEVELOPMENT_LOG.md` 冲突，已按时间顺序合并四条记录（20:49 归档、21:05 UI、21:23 同步、21:59 归档推送），合并提交 `0e9407a`。
+- 合并后归档分支包含最新 UI 代码，工作区干净。
+
+**测试与校验：**
+
+- Godot 4.7.2 `--headless --path . --import` 退出码为 0；路网校验通过（节点 150、路段 214），城市生成通过（地块 152、建筑 152、站点 32、出入口 40）。
+- 八个 headless 测试全部 `exit=0`：`test_road_network`、`test_main_scene`、`test_contracts`、`test_input_actions`、`test_navigation_queries`、`test_city`、`test_god_view`、`test_orders` 均输出 PASS；`test_orders` 输出 `PASS orders starts=12`。
+
+**修改文件：** `docs/DEVELOPMENT_LOG.md`；合并提交 `0e9407a`。
+
+**提交与推送：** 合并提交和本条日志推送到 `chore/jzy070407-handoff-archive`，并向 `main` 创建 PR [#14](https://github.com/renyuba123/song-wai-mai/pull/14)。
+
+**说明：** 归档内容保持交接包原样（14 个商家/设施 FBX、34 MB 城市组合模型、4 份预览 HTML），`assets/handoff/.gdignore` 阻止 Godot 导入；未拆分、转换或接入场景。
