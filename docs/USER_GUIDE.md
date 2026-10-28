@@ -60,10 +60,9 @@ godot --headless --path . --script res://tests/test_input_actions.gd
 godot --headless --path . --script res://tests/test_navigation_queries.gd
 godot --headless --path . --script res://tests/test_city.gd
 godot --headless --path . --script res://tests/test_god_view.gd
-godot --headless --path . --script res://tests/test_orders.gd
 ```
 
-前两条检查路网生成、校验、寻路和主场景启动；中间三条分别检查共享数据契约、输入映射与玩家移动、导航查询接口；`test_city` 检查城市确定性、反向数据、多起点、主场景城市装配和可达性；`test_god_view` 检查测试用上帝视角只在调试构建创建、开关时相机和玩家状态正确切换并恢复；`test_orders` 检查订单确定性、随机起点、状态转换、HUD、重开和超时。新增脚本后先执行一次 `godot --headless --path . --import`，让 Godot 注册 `class_name` 并生成 `.gd.uid`。
+前两条检查路网生成、校验、寻路和主场景启动；中间三条分别检查共享数据契约、输入映射与玩家移动、导航查询接口；`test_city` 检查城市确定性、反向数据、主场景城市装配和站点可达性；`test_god_view` 检查测试用上帝视角只在调试构建创建、开关时相机和玩家状态正确切换并恢复。新增脚本后先执行一次 `godot --headless --path . --import`，让 Godot 注册 `class_name` 并生成 `.gd.uid`。
 
 ## 2. 所有人：日常操作流程
 
@@ -243,8 +242,7 @@ scenes/traffic/
 - `lots`：地块字典，包含 `id`、`rect`、`road_edge_id`、`road_offset_m`、临街宽、进深、朝向、临街侧、`entrance_id`、`building_id`、`site_id`。
 - `buildings`：建筑字典，包含 `id`、`lot_id`、`rect`、`height_m`、`kind`、`entrance_id`、`site_id`。
 - `sites`：`CitySite` 数组，商家为 `merchant_000`，顾客为 `customer_000`。
-- `player_start`：兼容字段，必须与 `player_starts[0]` 等价；类型必须是 `PLAYER_START`，且不关联站点。
-- `player_starts`：多个安全玩家起点；订单系统从有效起点中选一个作为每单起点。旧资源可以只保留 `player_start`，`get_available_player_starts()` 会回退到它。
+- `player_start`：安全玩家起点，类型必须是 `PLAYER_START`，且不关联站点。
 
 出生点和站点使用独立的纯数据资源：
 
@@ -253,15 +251,15 @@ scenes/traffic/
 
 `position` 是世界坐标，单位米；`facing_yaw` 是弧度，0 朝向 -Z。`CitySite.position` 是建筑锚点，`spawn_point.position` 才是玩家实际可站的位置。`lateral_offset_m` 相对路段 `a→b` 的左法线：正数在左侧，负数在右侧；生成的人行道出生点必须非 0。商家/顾客出生点必须关联站点编号，并避开交叉口退让区。生成新的出生点后调用 `validate(network)`，不要继续从路网节点随机取出生位置。
 
-阶段一的 `CityContent` 由 `CityGenerator` 独占生成；地块、建筑、出入口、站点和玩家起点必须来自同一份 `CityContent`，不要在其他模块重新随机。`CityContent.validate(network)` 会检查地块重叠、建筑归属、入口退让、站点与入口交叉引用、出生点是否落在建筑内，以及玩家起点是否在道路中心或重复。
+阶段一的 `CityContent` 由 `CityGenerator` 独占生成；地块、建筑、出入口和站点必须来自同一份 `CityContent`，不要在其他模块重新随机。`CityContent.validate(network)` 会检查地块重叠、建筑归属、入口退让、站点与入口交叉引用、出生点是否落在建筑内，以及玩家起点是否在道路中心。
 
 ### 4.2 生成规则
 
 - 使用 `RoadGenerator.generate(...)` 生成路网，使用 `CityGenerator.generate(network)` 生成城市内容；不要在别的模块里复制一套生成逻辑。
-- 所有随机都使用 `RandomNumberGenerator` 并显式设置 `seed`，不要用全局 `randi()`。城市生成使用 `network.seed_value ^ CityGenerator.CITY_RNG_SALT`；额外玩家起点使用独立的 `EXTRA_START_RNG_SALT`，订单生成使用 `ORDER_RNG_SALT`，不修改路网节点、路段或种子。
+- 所有随机都使用 `RandomNumberGenerator` 并显式设置 `seed`，不要用全局 `randi()`。城市生成使用 `network.seed_value ^ CityGenerator.CITY_RNG_SALT`，不修改路网节点、路段或种子。
 - 同一组参数和种子必须生成同一份路网和城市；`tests/test_city.gd` 会逐字段比较。
 - 新增加固生成规则时，优先扩展 `CityContent` 或新增独立资源，不要把逻辑塞进 `RoadBuilder` / `CityBuilder`。
-- 生成失败、路网为空、路径不存在时要安全返回，不要让整个主场景崩溃；入口地块不足、玩家起点不足或起点不可用时，让城市校验失败并输出明确错误。
+- 生成失败、路网为空、路径不存在时要安全返回，不要让整个主场景崩溃；入口地块不足或玩家起点不可用时，让城市校验失败并输出明确错误。
 - 阶段一地块只来自非支路路段，每条路段最多一个出入口；地块临街宽 18～40 米、进深 18～28 米，全局最多 240 个。支路只用于路网连通，不生成临街地块。
 
 ### 4.3 交通与行人
@@ -313,7 +311,7 @@ project.godot
 - 移动、视角、跳跃/重力逻辑放在 `scripts/player/`。
 - 后续步行/骑行状态机也放在这个模块，不要改 `WorldGenerator`。
 - 输入映射由整合者统一维护；正式功能必须通过 `InputMap` 动作读取，不要直接轮询物理按键。
-- 玩家初始位置由 `CityContent.player_start` 提供，`main.gd` 在 `world.regenerate()` 后调用 `player.reset_to()`；订单系统随后从 `CityContent.player_starts` 中选一个本单起点并再次传送。玩家模块只负责“被放在哪里之后怎么走”，不要退回固定节点或原点。
+- 玩家出生点由 `CityContent.player_start` 提供，`main.gd` 在 `world.regenerate()` 后把玩家放到该位置和朝向；玩家模块只负责“被放在哪里之后怎么走”。不要退回固定节点或原点。
 
 阶段零已经定义的输入动作：
 
@@ -321,24 +319,13 @@ project.godot
 |---|---|---|
 | `move_forward` / `move_back` | W / S | 前后移动 |
 | `move_left` / `move_right` | A / D | 左右移动 |
-| `interact` | E | 靠近当前目标时取餐或送达 |
-| `pause` | Esc | 暂停（后续阶段实现） |
-| `restart` | R | 配送中重开同一单；结算后生成下一单 |
+| `interact` | E | 取餐、送达等交互（阶段二实现） |
+| `pause` | Esc | 暂停（阶段二实现） |
+| `restart` | R | 重开（阶段二实现） |
 
 移动使用 `Input.get_vector("move_left", "move_right", "move_forward", "move_back")`，不要退回 `Input.is_physical_key_pressed`。
 
-### 5.3 订单最小闭环
-
-阶段二新增 `scripts/orders/` 下的四个运行模块和测试：
-
-- `OrderGenerator`：使用城市种子、订单种子和独立 RNG 盐选起点/商家/顾客；两段路径都必须可达且长度大于 0。同一城市种子和订单种子得到同一订单。
-- `OrderSession`：纯 `RefCounted` 状态机，状态为 `TO_MERCHANT`、`TO_CUSTOMER`、`DELIVERED`、`FAILED`；共享一个倒计时，超时只结算一次。
-- `OrderManager`：等待导航就绪后生成首单，传送玩家，维护目标信标和 HUD；E 取餐/送达，配送中 R 重开同一单，结算后 R 订单种子 +1 生成下一单。上帝视角暂停玩家物理时不推进倒计时，也不响应 E/R。
-- `OrderHUD`：代码创建的目标、距离、倒计时、城市/订单种子、8 向箭头、E 提示和结算面板；不新增 UI 场景或输入动作。
-
-订单只读取 `CityContent`、`RoadNetwork` 和 `NavigationService`，不修改城市或导航源。新增订单规则时同步更新 `tests/test_orders.gd`；如果改变 `CityContent.player_starts` 的契约，先通知 A。
-
-### 5.4 测试用上帝视角
+### 5.3 测试用上帝视角
 
 `scripts/dev/test_god_view.gd` 提供只在调试/测试构建启用的俯视相机，用来快速检查地块、建筑和站点分布：
 
@@ -347,7 +334,7 @@ project.godot
 - 入口是 `TestGodView.is_test_only_enabled()`（当前基于 `OS.is_debug_build()`），`main.gd` 只在返回 `true` 时动态创建节点。正式导出不创建该节点，也不往 `project.godot` 增加 F3 输入动作。
 - 相机和提示 UI 都由脚本创建，不改 `main.tscn`；测试见 `tests/test_god_view.gd`。不要把调试功能改成正式快捷键，也不要绕过 `is_test_only_enabled()` 在发布场景里直接实例化。
 
-### 5.5 主场景装配
+### 5.4 主场景装配
 
 `scenes/main/main.tscn` 只做装配：
 
@@ -356,7 +343,6 @@ Main
   Player
   NavigationSystem
   TrafficSystem
-  OrderSystem（OrderManager + 运行时 HUD/信标）
   World
 ```
 
@@ -365,12 +351,11 @@ Main
 1. 世界生成路网和 `CityContent`，校验并绘制道路、人行道、建筑和站点标记，然后发出 `world_generated(network)`。
 2. 导航接收同一份 `RoadNetwork` 并烘焙；阶段一只把车行道碰撞体作为导航源。
 3. 交通接收同一份 `RoadNetwork` 并生成车辆/行人。
-4. `main.gd` 在世界生成后调用 `player.reset_to(world.city.player_start)`，清零速度并重置视角。
-5. `main.gd` 随后调用 `orders.setup(world, navigation, player)`；订单系统等待导航就绪，生成首单并传送到随机安全起点。
+4. `main.gd` 在世界生成后把 `$Player` 放到 `world.city.player_start`，并清零速度。
 
 不要把业务逻辑写进 `main.gd`；它只负责接线。新增模块时，先在模块内部提供入口场景和信号，再在 `main.tscn` 里实例化。`World` 场景内 `RoadBuilder` 与 `CityBuilder` 是兄弟节点，`CityBuilder` 只清理自己的子节点，不删除道路。
 
-### 5.6 整合者职责
+### 5.5 整合者职责
 
 - 维护 `project.godot`、输入映射、碰撞层、`main.tscn`、`.gitattributes`、`.gitignore`。
 - 审核 PR：是否只改自己负责的目录、是否夹带调试残留、是否更新日志。

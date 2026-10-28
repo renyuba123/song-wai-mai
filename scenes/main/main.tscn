@@ -1,11 +1,10 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://scripts/core/main.gd" id="1_main"]
 [ext_resource type="PackedScene" path="res://scenes/world/world.tscn" id="2_world"]
 [ext_resource type="PackedScene" path="res://scenes/navigation/navigation_system.tscn" id="3_navigation"]
 [ext_resource type="PackedScene" path="res://scenes/traffic/traffic_system.tscn" id="4_traffic"]
 [ext_resource type="PackedScene" path="res://scenes/player/player.tscn" id="5_player"]
-[ext_resource type="Script" path="res://scripts/orders/order_manager.gd" id="6_orders"]
 
 [node name="Main" type="Node3D"]
 script = ExtResource("1_main")
@@ -16,9 +15,6 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.0, 0)
 [node name="NavigationSystem" parent="." instance=ExtResource("3_navigation")]
 
 [node name="TrafficSystem" parent="." instance=ExtResource("4_traffic")]
-
-[node name="OrderSystem" type="Node3D" parent="."]
-script = ExtResource("6_orders")
 
 [node name="World" parent="." instance=ExtResource("2_world")]
 seed = 118

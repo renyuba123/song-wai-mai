@@ -6,8 +6,6 @@ class_name CityGenerator
 ## 同一城市种子总是得到相同结果；编号与数组下标一致。
 
 const CITY_RNG_SALT := 0x5EEDC17
-const EXTRA_START_RNG_SALT := 0x57A275
-const MAX_PLAYER_STARTS := 12
 const MAX_LOTS := 240
 const MAX_LOTS_PER_SIDE := 2
 const MIN_FRONTAGE := 18.0
@@ -104,12 +102,6 @@ static func generate(network: RoadNetwork) -> CityContent:
 	city.player_start = _make_player_start(network, edge_ids, used_edges, entrance_sides, rng)
 	if city.player_start == null:
 		push_error("城市没有可用的玩家出生点")
-		return city
-	city.player_starts = _make_player_starts(
-		network, edge_ids, used_edges, entrance_sides, city.player_start, city.buildings
-	)
-	if city.player_starts.size() < 2:
-		push_error("城市可用的玩家出生点不足：%d" % city.player_starts.size())
 	return city
 
 
@@ -269,97 +261,38 @@ static func _make_player_start(
 			var is_used := used_edges.has(edge_id)
 			if require_unused == is_used:
 				continue
-			var spawn := _make_start_on_edge(network, int(edge_id), is_used, entrance_sides, rng)
-			if spawn != null:
-				return spawn
+			var required := network.get_entrance_setback(edge_id)
+			var edge: Dictionary = network.edges[edge_id]
+			var a: Vector2 = network.nodes[edge.a]
+			var b: Vector2 = network.nodes[edge.b]
+			var length := a.distance_to(b)
+			if length < required * 2.0 + 20.0:
+				continue
+			var redline: float = network.widths[int(edge.kind)]
+			var direction := (b - a) / length
+			var left := Vector2(direction.y, -direction.x)
+			var sides := _block_sides(network, a, b, left, redline)
+			if sides.is_empty():
+				continue
+			var side: int = sides[0]
+			if is_used and entrance_sides.has(edge_id):
+				var opposite := -int(entrance_sides[edge_id])
+				if sides.has(opposite):
+					side = opposite
+			elif sides.size() > 1:
+				side = sides[rng.randi_range(0, sides.size() - 1)]
+			var lateral := RoadNetwork.sidewalk_offset(redline)
+			var signed_lateral := float(side) * lateral
+			var point := a.lerp(b, 0.5) + left * signed_lateral
+			var spawn := SpawnPoint.new()
+			spawn.kind = SpawnPoint.Kind.PLAYER_START
+			spawn.position = Vector3(point.x, RoadNetwork.SURFACE_Y, point.y)
+			spawn.facing_yaw = _yaw_from_dir(direction)
+			spawn.road_edge_id = edge_id
+			spawn.road_offset_m = length * 0.5
+			spawn.lateral_offset_m = signed_lateral
+			return spawn
 	return null
-
-
-static func _make_start_on_edge(
-	network: RoadNetwork,
-	edge_id: int,
-	is_used: bool,
-	entrance_sides: Dictionary,
-	rng: RandomNumberGenerator
-) -> SpawnPoint:
-	var required := network.get_entrance_setback(edge_id)
-	var edge: Dictionary = network.edges[edge_id]
-	var a: Vector2 = network.nodes[edge.a]
-	var b: Vector2 = network.nodes[edge.b]
-	var length := a.distance_to(b)
-	if length < required * 2.0 + 20.0:
-		return null
-	var redline: float = network.widths[int(edge.kind)]
-	var direction := (b - a) / length
-	var left := Vector2(direction.y, -direction.x)
-	var sides := _block_sides(network, a, b, left, redline)
-	if sides.is_empty():
-		return null
-	var side: int = sides[0]
-	if is_used and entrance_sides.has(edge_id):
-		var opposite := -int(entrance_sides[edge_id])
-		if sides.has(opposite):
-			side = opposite
-	elif sides.size() > 1:
-		side = sides[rng.randi_range(0, sides.size() - 1)]
-	var lateral := RoadNetwork.sidewalk_offset(redline)
-	var signed_lateral := float(side) * lateral
-	var point := a.lerp(b, 0.5) + left * signed_lateral
-	var spawn := SpawnPoint.new()
-	spawn.kind = SpawnPoint.Kind.PLAYER_START
-	spawn.position = Vector3(point.x, RoadNetwork.SURFACE_Y, point.y)
-	spawn.facing_yaw = _yaw_from_dir(direction)
-	spawn.road_edge_id = edge_id
-	spawn.road_offset_m = length * 0.5
-	spawn.lateral_offset_m = signed_lateral
-	return spawn
-
-
-static func _make_player_starts(
-	network: RoadNetwork,
-	edge_ids: Array,
-	used_edges: Dictionary,
-	entrance_sides: Dictionary,
-	legacy: SpawnPoint,
-	buildings: Array[Dictionary]
-) -> Array[SpawnPoint]:
-	var result: Array[SpawnPoint] = [legacy]
-	var rng := RandomNumberGenerator.new()
-	rng.seed = network.seed_value ^ EXTRA_START_RNG_SALT
-	var candidates := edge_ids.duplicate()
-	_shuffle(candidates, rng)
-	for edge_id in candidates:
-		if result.size() >= MAX_PLAYER_STARTS:
-			break
-		if int(edge_id) == legacy.road_edge_id:
-			continue
-		var spawn := _make_start_on_edge(
-			network, int(edge_id), used_edges.has(edge_id), entrance_sides, rng
-		)
-		if spawn == null or not spawn.is_valid(network):
-			continue
-		if _point_in_buildings(Vector2(spawn.position.x, spawn.position.z), buildings):
-			continue
-		var duplicate := false
-		for existing in result:
-			var existing_xz := Vector2(existing.position.x, existing.position.z)
-			if existing_xz.distance_to(Vector2(spawn.position.x, spawn.position.z)) < 0.5:
-				duplicate = true
-				break
-		if duplicate:
-			continue
-		result.append(spawn)
-	return result
-
-
-static func _point_in_buildings(point: Vector2, buildings: Array[Dictionary]) -> bool:
-	for building in buildings:
-		if not building.has("rect"):
-			continue
-		var rect: Rect2 = building.rect
-		if rect.has_point(point):
-			return true
-	return false
 
 
 static func _block_sides(network: RoadNetwork, a: Vector2, b: Vector2, left: Vector2, redline: float) -> Array[int]:
