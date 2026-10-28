@@ -1,0 +1,1112 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>卡通临街外卖建筑 · 八类识别版</title>
+<style>
+  :root{ --ink:#232733; --accent:#ff6b2c; }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0;height:100%;overflow:hidden;background:#bfe4ff;
+    font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+    color:var(--ink);
+  }
+  #app{position:fixed;inset:0;}
+
+  #panel{
+    position:fixed;left:18px;top:18px;width:322px;
+    background:rgba(250,247,240,.95);
+    border:3px solid var(--ink);border-radius:18px;
+    padding:14px 16px 16px;
+    box-shadow:7px 7px 0 rgba(35,39,51,.85);
+    backdrop-filter:blur(8px);user-select:none;
+    z-index:10;
+  }
+  #panel h1{font-size:16px;margin:0 0 2px;letter-spacing:.3px;}
+  #panel h1 small{display:block;font-size:11px;font-weight:500;color:#6a7180;margin-top:4px;letter-spacing:0;}
+  .row{margin-top:12px;}
+  .label{display:block;font-size:11px;font-weight:800;color:#6a7180;letter-spacing:1px;margin-bottom:6px;}
+  .btns{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
+  .btns.one{grid-template-columns:1fr;}
+  button{
+    font-family:inherit;font-size:11px;font-weight:800;padding:9px 4px;
+    border-radius:10px;cursor:pointer;border:2px solid var(--ink);
+    background:#fff;color:var(--ink);
+    box-shadow:2px 2px 0 rgba(35,39,51,.85);
+    transition:transform .08s ease,background .15s ease;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  button:hover{background:#f2eee4;}
+  button:active{transform:translate(2px,2px);box-shadow:0 0 0 rgba(35,39,51,.85);}
+  button.on{background:var(--accent);color:#fff;border-color:var(--ink);}
+  #meta{
+    margin-top:12px;font-size:12px;line-height:1.65;color:#4a5060;
+    border-top:2px dashed #cfc7b8;padding-top:10px;
+  }
+  #meta b{color:var(--ink);font-size:13px;}
+  .tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;}
+  .tag{font-size:10px;font-weight:800;padding:3px 8px;border-radius:999px;background:#e8e0d1;color:#4a5060;}
+  .tag.hot{background:#ffd8c4;color:#c1441e;}
+  #hint{
+    position:fixed;left:50%;bottom:16px;transform:translateX(-50%);
+    font-size:11px;font-weight:700;color:#4a5060;
+    background:rgba(250,247,240,.92);
+    border:2px solid var(--ink);border-radius:999px;
+    padding:6px 16px;box-shadow:3px 3px 0 rgba(35,39,51,.8);
+    white-space:nowrap;z-index:10;
+  }
+  @media (max-width:640px){
+    #panel{width:calc(100% - 24px);left:12px;top:12px;padding:10px 12px 12px;}
+    #panel h1{font-size:14px;}
+    #meta{display:none;}
+    #hint{font-size:10px;padding:5px 12px;}
+  }
+</style>
+</head>
+<body>
+
+<div id="app"></div>
+
+<div id="panel">
+  <h1>卡通临街外卖建筑 · 八类识别版
+    <small>卡通风格 · 独特外形 · 统一外卖取餐窗口</small>
+  </h1>
+
+  <div class="row">
+    <span class="label">建筑类型</span>
+    <div class="btns" id="types"></div>
+  </div>
+
+  <div class="row btns one">
+    <button id="rotBtn">自动旋转：关</button>
+  </div>
+
+  <div id="meta"></div>
+</div>
+
+<div id="hint">左键拖拽旋转 · 滚轮缩放 · 右键平移</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+
+/* =========================================================
+   0. 渲染基础
+   ========================================================= */
+const container = document.getElementById('app');
+
+const renderer = new THREE.WebGLRenderer({ antialias:true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+container.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xbfe4ff);
+scene.fog = new THREE.Fog(0xbfe4ff, 90, 240);
+
+const camera = new THREE.PerspectiveCamera(40, window.innerWidth/window.innerHeight, 0.1, 600);
+camera.position.set(20, 12, -27);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 4.5, 0);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.minDistance = 15;
+controls.maxDistance = 80;
+controls.maxPolarAngle = Math.PI * 0.49;
+controls.autoRotateSpeed = 0.8;
+
+scene.add(new THREE.HemisphereLight(0xffffff, 0xa8c8e0, 1.2));
+
+const sun = new THREE.DirectionalLight(0xfff3de, 2.1);
+sun.position.set(24, 36, -24);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+{
+  const sc = sun.shadow.camera;
+  sc.left = -30; sc.right = 30; sc.top = 40; sc.bottom = -14;
+  sc.near = 1; sc.far = 140;
+  sc.updateProjectionMatrix();
+}
+sun.shadow.bias = -0.0006;
+sun.shadow.normalBias = 0.02;
+scene.add(sun);
+
+const fill = new THREE.DirectionalLight(0xaed8ff, 0.5);
+fill.position.set(-22, 16, 24);
+scene.add(fill);
+
+/* =========================================================
+   1. 卡通材质与几何工具
+   ========================================================= */
+const GRADIENT = (() => {
+  const data = new Uint8Array([120, 195, 255]);
+  const tex = new THREE.DataTexture(data, data.length, 1, THREE.RedFormat);
+  tex.minFilter = THREE.NearestFilter;
+  tex.magFilter = THREE.NearestFilter;
+  tex.generateMipmaps = false;
+  tex.needsUpdate = true;
+  return tex;
+})();
+
+const toonMat = (color) => new THREE.MeshToonMaterial({ color, gradientMap: GRADIENT });
+const glowMat = (color) => new THREE.MeshBasicMaterial({ color });
+
+function addBox(parent, w, h, d, r, mat, x, y, z, opt = {}) {
+  const rr = Math.max(0.004, Math.min(r, Math.min(w, h, d) / 2 - 0.004));
+  const geo = new RoundedBoxGeometry(w, h, d, 2, rr);
+  const m = new THREE.Mesh(geo, mat);
+  m.position.set(x, y, z);
+  m.castShadow = opt.cast !== false;
+  m.receiveShadow = opt.recv !== false;
+  parent.add(m);
+  return m;
+}
+
+function addCyl(parent, rt, rb, h, seg, mat, x, y, z, opt = {}) {
+  const geo = new THREE.CylinderGeometry(rt, rb, h, seg);
+  const m = new THREE.Mesh(geo, mat);
+  m.position.set(x, y, z);
+  m.castShadow = opt.cast !== false;
+  m.receiveShadow = opt.recv !== false;
+  parent.add(m);
+  return m;
+}
+
+function addSphere(parent, r, mat, x, y, z, sx = 1, sy = 1, sz = 1, opt = {}) {
+  const geo = new THREE.SphereGeometry(r, 16, 12);
+  const m = new THREE.Mesh(geo, mat);
+  m.position.set(x, y, z);
+  m.scale.set(sx, sy, sz);
+  m.castShadow = opt.cast !== false;
+  m.receiveShadow = opt.recv !== false;
+  parent.add(m);
+  return m;
+}
+
+function makeStripeTexture(c1, c2, n = 8) {
+  const W = 256, H = 32;
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const ctx = c.getContext('2d');
+  const bw = W / n;
+  for (let i = 0; i < n; i++) {
+    ctx.fillStyle = i % 2 ? c2 : c1;
+    ctx.fillRect(i * bw, 0, Math.ceil(bw) + 1, H);
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.anisotropy = 8;
+  return t;
+}
+
+function makeTextTexture(text, opts = {}) {
+  const {
+    bg = null, fg = '#ffffff', w = 1024, h = 256,
+    size = 160, weight = 900, metal = false, outline = '#1a1f28'
+  } = opts;
+
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, w, h);
+
+  if (bg) {
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, w, h);
+  }
+
+  const font = `${weight} ${size}px "PingFang SC","Microsoft YaHei",sans-serif`;
+  ctx.font = font;
+  let fs = size;
+  while (ctx.measureText(text).width > w - 60 && fs > 30) {
+    fs -= 6;
+    ctx.font = `${weight} ${fs}px "PingFang SC","Microsoft YaHei",sans-serif`;
+  }
+
+  const cx = w / 2, cy = h / 2 + 6;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+
+  if (outline) {
+    ctx.lineWidth = Math.max(12, fs * 0.13);
+    ctx.strokeStyle = outline;
+    ctx.strokeText(text, cx, cy);
+  }
+
+  if (metal) {
+    const grd = ctx.createLinearGradient(0, cy - fs / 2, 0, cy + fs / 2);
+    grd.addColorStop(0, '#fffbe8');
+    grd.addColorStop(0.35, '#ffe27a');
+    grd.addColorStop(0.65, '#f5b02a');
+    grd.addColorStop(1, '#c47a10');
+    ctx.fillStyle = grd;
+  } else {
+    ctx.fillStyle = fg;
+  }
+
+  ctx.fillText(text, cx, cy);
+
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 8;
+  return t;
+}
+
+function disposeGroup(obj) {
+  obj.traverse(o => {
+    if (o.geometry) o.geometry.dispose();
+    if (o.material) {
+      const mats = Array.isArray(o.material) ? o.material : [o.material];
+      mats.forEach(m => {
+        if (m.map && m.map.isCanvasTexture) m.map.dispose();
+        m.dispose();
+      });
+    }
+  });
+}
+
+/* =========================================================
+   2. 建筑类型配置
+   ========================================================= */
+const BUILDINGS = [
+  {
+    key: 'hospital',
+    name: '社区医院',
+    sign: '社区医院',
+    desc: '白色外墙、红色十字、蓝色窗带。24 小时急诊，外卖送到门口橙色取餐台。',
+    tags: ['医疗', '24小时', '红色十字'],
+    wall: '#F6FAFE',
+    wall2: '#EAF2FA',
+    trim: '#C8D8E8',
+    accent: '#E84855',
+    window: '#4A7A9A',
+    doorColor: '#6B9AB8',
+    doorStyle: 'auto',
+    roofIcon: 'cross',
+    prop: 'ambulance'
+  },
+  {
+    key: 'fire',
+    name: '消防救援站',
+    sign: '消防救援站',
+    desc: '红色车库卷帘门、屋顶警笛塔、门口消防栓。外卖放门口取餐柜，不影响出警。',
+    tags: ['应急', '红色车库', '警笛'],
+    wall: '#F7EAE2',
+    wall2: '#F0DDD2',
+    trim: '#D4B8A8',
+    accent: '#D93025',
+    window: '#3A5A7A',
+    doorColor: '#C8281E',
+    doorStyle: 'garage',
+    roofIcon: 'siren',
+    prop: 'hydrant'
+  },
+  {
+    key: 'book',
+    name: '街角书店',
+    sign: '街角书店',
+    desc: '暖木色外墙、大玻璃橱窗、屋顶书堆。门口常备一本翻开的书，外卖放前台小桌。',
+    tags: ['文化', '暖木色', '屋顶书堆'],
+    wall: '#F4E6CE',
+    wall2: '#EAD8BA',
+    trim: '#C8A878',
+    accent: '#8B5A2B',
+    window: '#5A7A5A',
+    doorColor: '#8A6040',
+    doorStyle: 'wood',
+    roofIcon: 'books',
+    prop: 'bookstack'
+  },
+  {
+    key: 'coffee',
+    name: '转角咖啡',
+    sign: '转角咖啡',
+    desc: '深棕木与奶油白、屋顶大咖啡杯、门口小圆桌。外卖窗口直接出杯，取餐台有杯托。',
+    tags: ['咖啡', '深棕木', '屋顶大杯'],
+    wall: '#F2E6DA',
+    wall2: '#E6D6C6',
+    trim: '#C0A888',
+    accent: '#6B4226',
+    window: '#4A6A6A',
+    doorColor: '#7A5A3A',
+    doorStyle: 'wood',
+    roofIcon: 'cup',
+    prop: 'cafe'
+  },
+  {
+    key: 'bakery',
+    name: '面包工坊',
+    sign: '面包工坊',
+    desc: '粉橙墙面、条纹雨棚、屋顶牛角包。清晨出炉，外卖取餐台带保温灯。',
+    tags: ['烘焙', '粉橙色', '屋顶牛角包'],
+    wall: '#FCEEE2',
+    wall2: '#F6E2CE',
+    trim: '#E8C0A0',
+    accent: '#E07A3F',
+    window: '#7A5A4A',
+    doorColor: '#B87A4A',
+    doorStyle: 'wood',
+    roofIcon: 'croissant',
+    prop: 'breadbasket'
+  },
+  {
+    key: 'flower',
+    name: '花间花店',
+    sign: '花间花店',
+    desc: '浅绿墙面、屋顶大花朵、门口摆满花盆。外卖窗口有小花台，取花取餐都方便。',
+    tags: ['花卉', '浅绿色', '屋顶花朵'],
+    wall: '#F2FAEE',
+    wall2: '#E6F2DE',
+    trim: '#A8C898',
+    accent: '#4A8A4A',
+    window: '#5A7A6A',
+    doorColor: '#6A9A5A',
+    doorStyle: 'wood',
+    roofIcon: 'flower',
+    prop: 'flowerpot'
+  },
+  {
+    key: 'post',
+    name: '邮政所',
+    sign: '邮政所',
+    desc: '蓝绿色外墙、屋顶大信封、门口绿色邮筒。外卖放门口取件台，与寄件区分开。',
+    tags: ['邮政', '蓝绿色', '屋顶信封'],
+    wall: '#EAF2F8',
+    wall2: '#DEEAF2',
+    trim: '#B0C8D8',
+    accent: '#2A6A8A',
+    window: '#4A7A9A',
+    doorColor: '#4A8AA8',
+    doorStyle: 'glass',
+    roofIcon: 'envelope',
+    prop: 'postbox'
+  },
+  {
+    key: 'pet',
+    name: '萌宠诊所',
+    sign: '萌宠诊所',
+    desc: '暖黄墙面、屋顶大骨头、门口宠物饮水碗。外卖放前台，猫狗等候区在旁边。',
+    tags: ['宠物', '暖黄色', '屋顶骨头'],
+    wall: '#FFFAEC',
+    wall2: '#F8F0DA',
+    trim: '#D8C898',
+    accent: '#E8A020',
+    window: '#5A6A8A',
+    doorColor: '#C89640',
+    doorStyle: 'wood',
+    roofIcon: 'bone',
+    prop: 'petbowl'
+  }
+];
+
+/* =========================================================
+   3. 尺寸常量
+   ========================================================= */
+const W1 = 10;
+const D1 = 7;
+const H1 = 3.8;
+const W2 = 10.6;
+const D2 = 7.6;
+const H2 = 3.0;
+const ROOF_Y = H1 + H2 + 0.35;
+const BODY_Z = -0.15;
+
+const DOOR_X = -2.6;
+const WINDOW_X = -0.2;
+const WINDOW_W = 2.4;
+const PICKUP_X = 2.6;
+
+/* 建筑落地：整体下移，底部落在草地 y = -0.44 */
+const GROUND_Y = -0.44;
+
+/* =========================================================
+   4. 外卖取餐窗口
+   ========================================================= */
+function buildPickupCounter(parent, cfg) {
+  const g = new THREE.Group();
+  g.position.set(PICKUP_X, 0, -D1 / 2);
+  parent.add(g);
+
+  const cw = 2.2, ch = 1.3;
+  const cy = 1.65;
+  const orange = toonMat('#FF6B2C');
+  const orangeDark = toonMat('#E8551E');
+  const cream = toonMat('#FFF6E8');
+
+  addBox(g, cw, ch, 0.16, 0.05, toonMat('#1A2028'), 0, cy, 0.08, { cast:false });
+  addBox(g, cw - 0.5, 0.1, 0.05, 0.02, glowMat('#FFD890'), 0, cy + 0.36, 0.03, { cast:false });
+  addBox(g, 0.16, 0.5, 0.05, 0.03, toonMat('#3A3028'), -0.6, cy - 0.15, 0.04, { cast:false });
+  addBox(g, 0.16, 0.5, 0.05, 0.03, toonMat('#3A3028'), 0.6, cy - 0.15, 0.04, { cast:false });
+
+  const fw = cw + 0.25;
+  const bw = 0.15;
+  addBox(g, fw, bw, 0.24, 0.05, orange, 0, cy + ch / 2 + 0.075, -0.04);
+  addBox(g, fw, bw, 0.24, 0.05, orange, 0, cy - ch / 2 - 0.075, -0.04);
+  addBox(g, bw, ch + 0.3, 0.24, 0.05, orange, -fw / 2 + bw / 2, cy, -0.04);
+  addBox(g, bw, ch + 0.3, 0.24, 0.05, orange, fw / 2 - bw / 2, cy, -0.04);
+
+  const tw = cw + 0.6;
+  addBox(g, tw, 0.18, 0.7, 0.07, cream, 0, cy - ch / 2 - 0.22, -0.4);
+  addBox(g, tw - 0.1, 0.06, 0.08, 0.02, glowMat('#FFC864'), 0, cy - ch / 2 - 0.3, -0.74, { cast:false });
+
+  const legBottom = 0;
+  const legTop = cy - ch / 2 - 0.31;
+  const legH = legTop - legBottom;
+  const legY = legBottom + legH / 2;
+  addBox(g, 0.14, legH, 0.14, 0.05, orangeDark, -(tw - 0.2) / 2, legY, -0.55, { cast:false });
+  addBox(g, 0.14, legH, 0.14, 0.05, orangeDark, (tw - 0.2) / 2, legY, -0.55, { cast:false });
+
+  const bannerY = cy + ch / 2 + 0.55;
+  addBox(g, tw - 0.1, 0.55, 0.16, 0.05, orangeDark, 0, bannerY, -0.06);
+  const bannerTex = makeTextTexture('外卖取餐', {
+    bg: '#FF6B2C', fg: '#FFFFFF', w: 512, h: 128, size: 74
+  });
+  const banner = new THREE.Mesh(
+    new THREE.PlaneGeometry(tw - 0.2, 0.44),
+    new THREE.MeshBasicMaterial({ map: bannerTex })
+  );
+  banner.position.set(0, bannerY, -0.15);
+  banner.rotation.y = Math.PI;
+  g.add(banner);
+
+  const badgeTex = (() => {
+    const S = 128;
+    const c = document.createElement('canvas');
+    c.width = S; c.height = S;
+    const ctx = c.getContext('2d');
+    ctx.clearRect(0, 0, S, S);
+    ctx.beginPath();
+    ctx.arc(S / 2, S / 2, S / 2 - 4, 0, Math.PI * 2);
+    ctx.fillStyle = '#FF6B2C';
+    ctx.fill();
+    ctx.lineWidth = 6;
+    ctx.strokeStyle = '#1b1f28';
+    ctx.stroke();
+    ctx.fillStyle = '#fff';
+    ctx.font = '900 44px "PingFang SC","Microsoft YaHei",sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('外卖', S / 2, S / 2 + 2);
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  })();
+  const badge = new THREE.Mesh(
+    new THREE.CircleGeometry(0.3, 24),
+    new THREE.MeshBasicMaterial({ map: badgeTex, transparent: true })
+  );
+  badge.position.set(-(tw / 2 + 0.36), cy + 0.42, -0.2);
+  badge.rotation.y = Math.PI;
+  g.add(badge);
+  addBox(g, 0.05, 0.36, 0.05, 0.02, toonMat('#2A2E3A'), -(tw / 2 + 0.36), cy + 0.8, -0.2, { cast:false });
+
+  const awLen = tw;
+  const awRad = 0.32;
+  const awGeo = new THREE.CylinderGeometry(awRad, awRad, awLen, 14, 1, true, -Math.PI / 2, Math.PI);
+  awGeo.rotateZ(Math.PI / 2);
+  awGeo.rotateX(-Math.PI / 2 + 0.30);
+  const awMat = new THREE.MeshToonMaterial({
+    map: makeStripeTexture('#FF6B2C', '#FFFFFF', 8),
+    gradientMap: GRADIENT,
+    side: THREE.DoubleSide
+  });
+  const awning = new THREE.Mesh(awGeo, awMat);
+  awning.position.set(0, bannerY + 0.35, -0.48);
+  awning.castShadow = true;
+  g.add(awning);
+
+  addBox(g, tw + 0.4, 0.06, 1.3, 0.03, toonMat('#FFD8B0'), 0, 0.03, -0.9, { cast:false });
+
+  return g;
+}
+
+/* =========================================================
+   5. 主招牌
+   ========================================================= */
+function buildMainSign(parent, cfg) {
+  const g = new THREE.Group();
+  g.position.set(0, 5.15, BODY_Z - D2 / 2 - 0.02);
+  parent.add(g);
+
+  const SW = 7.8, SH = 1.35;
+
+  addBox(g, SW + 0.4, SH + 0.4, 0.14, 0.12, glowMat(cfg.accent), 0, 0, 0.06, { cast:false });
+  addBox(g, SW, SH, 0.24, 0.1, toonMat('#232733'), 0, 0, 0);
+
+  const tex = makeTextTexture(cfg.sign, {
+    bg: null, w: 1024, h: 256, size: 150, metal: true, outline: '#1a1f28'
+  });
+  const textMesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(SW - 0.4, SH - 0.35),
+    new THREE.MeshBasicMaterial({ map: tex, transparent: true })
+  );
+  textMesh.position.set(0, 0, -0.14);
+  textMesh.rotation.y = Math.PI;
+  g.add(textMesh);
+
+  addBox(g, SW - 0.4, 0.07, 0.12, 0.03, glowMat(cfg.accent), 0, -SH / 2 - 0.12, -0.06, { cast:false });
+
+  return g;
+}
+
+/* =========================================================
+   6. 大门、橱窗、二层窗
+   ========================================================= */
+function buildDoor(parent, cfg) {
+  const g = new THREE.Group();
+  g.position.set(DOOR_X, 0, -D1 / 2);
+  parent.add(g);
+
+  const isGarage = cfg.doorStyle === 'garage';
+  const dw = isGarage ? 3.4 : 1.6;
+  const dh = isGarage ? 3.0 : 2.6;
+  const doorMat = toonMat(cfg.doorColor);
+
+  addBox(g, dw, dh, 0.16, 0.06, doorMat, 0, dh / 2, 0.06);
+
+  addBox(g, dw + 0.3, 0.14, 0.24, 0.05, toonMat(cfg.accent), 0, dh + 0.07, -0.05);
+  addBox(g, 0.14, dh + 0.14, 0.24, 0.05, toonMat(cfg.accent), -dw / 2 - 0.08, dh / 2, -0.05);
+  addBox(g, 0.14, dh + 0.14, 0.24, 0.05, toonMat(cfg.accent), dw / 2 + 0.08, dh / 2, -0.05);
+
+  if (isGarage) {
+    for (let i = 1; i < 6; i++) {
+      addBox(g, dw - 0.2, 0.06, 0.06, 0.02, toonMat('#A81E14'), 0, i * 0.46, -0.1, { cast:false });
+    }
+    addBox(g, dw + 0.2, 0.18, 0.14, 0.05, glowMat('#FFB020'), 0, dh + 0.38, -0.12, { cast:false });
+  } else {
+    addSphere(g, 0.07, toonMat('#FFD166'), dw / 2 - 0.3, dh * 0.48, -0.12);
+  }
+
+  addBox(g, dw + 0.5, 0.14, 0.7, 0.05, toonMat('#D8D0C4'), 0, 0.07, -0.35, { cast:false });
+  addSphere(g, 0.13, glowMat('#FFE8B8'), 0, dh + 0.55, -0.18);
+
+  return g;
+}
+
+/* 橱窗：消防站（车库门）直接不生成，避免与宽门穿模 */
+function buildShopWindow(parent, cfg) {
+  if (cfg.doorStyle === 'garage') return new THREE.Group();
+
+  const g = new THREE.Group();
+  g.position.set(WINDOW_X, 0, -D1 / 2);
+  parent.add(g);
+
+  const ww = WINDOW_W, wh = 1.85, wy = 1.9;
+
+  addBox(g, ww, wh, 0.1, 0.04, toonMat(cfg.window), 0, wy, 0.04, { cast:false, recv:false });
+  addBox(g, ww * 0.32, wh * 0.55, 0.02, 0.01, glowMat('#FFFFFF'), -ww * 0.18, wy + 0.25, -0.02, { cast:false });
+  addBox(g, ww + 0.26, 0.14, 0.24, 0.05, toonMat(cfg.trim), 0, wy + wh / 2 + 0.07, -0.05);
+  addBox(g, ww + 0.26, 0.14, 0.24, 0.05, toonMat(cfg.trim), 0, wy - wh / 2 - 0.07, -0.05);
+  addBox(g, 0.14, wh + 0.26, 0.24, 0.05, toonMat(cfg.trim), -ww / 2 - 0.07, wy, -0.05);
+  addBox(g, 0.14, wh + 0.26, 0.24, 0.05, toonMat(cfg.trim), ww / 2 + 0.07, wy, -0.05);
+
+  if (cfg.key === 'flower') {
+    for (let i = 0; i < 3; i++) {
+      const px = -ww / 2 + 0.5 + i * 0.7;
+      addCyl(g, 0.14, 0.11, 0.26, 10, toonMat('#D88A6A'), px, wy - wh / 2 - 0.18, -0.2);
+      addSphere(g, 0.16, toonMat(i % 2 ? '#FF9EC4' : '#FFD166'), px, wy - wh / 2 + 0.06, -0.2);
+    }
+  } else if (cfg.key === 'book') {
+    for (let i = 0; i < 3; i++) {
+      addBox(g, 0.45, 0.12, 0.3, 0.03, toonMat(['#C84A3A', '#3A7AC8', '#3AA86A'][i]), -0.7 + i * 0.5, wy - wh / 2 + 0.1, -0.25, { cast:false });
+    }
+  } else if (cfg.key === 'bakery') {
+    for (let i = 0; i < 4; i++) {
+      addSphere(g, 0.12, toonMat('#E8B86A'), -0.6 + i * 0.42, wy - wh / 2 + 0.14, -0.25, 1.2, 0.8, 1);
+    }
+  }
+
+  return g;
+}
+
+function buildUpperWindows(parent, cfg) {
+  const g = new THREE.Group();
+  g.position.set(0, 0, BODY_Z - D2 / 2 - 0.02);
+  parent.add(g);
+
+  for (const sx of [-1, 1]) {
+    const wx = sx * 4.2;
+    addBox(g, 0.9, 1.4, 0.12, 0.05, toonMat(cfg.window), wx, 5.0, 0.04, { cast:false, recv:false });
+    addBox(g, 1.1, 0.12, 0.2, 0.04, toonMat(cfg.trim), wx, 5.76, -0.04, { cast:false });
+    addBox(g, 1.1, 0.12, 0.2, 0.04, toonMat(cfg.trim), wx, 4.24, -0.04, { cast:false });
+  }
+
+  return g;
+}
+
+/* =========================================================
+   7. 屋顶标志物
+   ========================================================= */
+function buildRoofIcon(parent, cfg) {
+  const g = new THREE.Group();
+  g.position.set(0, ROOF_Y, BODY_Z - 1.2);
+  parent.add(g);
+
+  const y0 = 0;
+
+  addBox(g, 4.2, 0.35, 3.0, 0.12, toonMat(cfg.wall2), 0, y0 + 0.175, 0);
+  addBox(g, 3.7, 0.1, 2.5, 0.04, toonMat('#FFFDF7'), 0, y0 + 0.37, 0, { cast:false });
+
+  const iconGroup = new THREE.Group();
+  iconGroup.position.y = y0 + 0.42;
+  g.add(iconGroup);
+
+  switch (cfg.roofIcon) {
+
+    case 'cross': {
+      addBox(iconGroup, 1.9, 1.9, 0.3, 0.1, toonMat('#FFFFFF'), 0, 1.2, 0);
+      addBox(iconGroup, 0.62, 1.55, 0.4, 0.08, toonMat(cfg.accent), 0, 1.2, -0.06);
+      addBox(iconGroup, 1.55, 0.62, 0.4, 0.08, toonMat(cfg.accent), 0, 1.2, -0.06);
+      addBox(iconGroup, 0.5, 1.4, 0.06, 0.03, glowMat('#FF8A90'), 0, 1.2, -0.24, { cast:false });
+      addBox(iconGroup, 1.4, 0.5, 0.06, 0.03, glowMat('#FF8A90'), 0, 1.2, -0.24, { cast:false });
+      break;
+    }
+
+    case 'siren': {
+      addCyl(iconGroup, 0.45, 0.55, 0.6, 12, toonMat('#8A8A8A'), 0, 0.3, 0);
+      addCyl(iconGroup, 0.7, 0.7, 0.75, 16, toonMat(cfg.accent), 0, 1.0, 0);
+      addSphere(iconGroup, 0.7, toonMat(cfg.accent), 0, 1.38, 0, 1, 0.6, 1);
+      addCyl(iconGroup, 0.74, 0.74, 0.1, 16, toonMat('#D8D8D8'), 0, 1.2, 0);
+      addSphere(iconGroup, 0.16, glowMat('#FF4A4A'), -0.55, 1.7, 0);
+      addSphere(iconGroup, 0.16, glowMat('#FF4A4A'), 0.55, 1.7, 0);
+      const ladder = new THREE.Group();
+      ladder.position.set(-1.7, 0.75, 0.2);
+      ladder.rotation.z = 0.22;
+      iconGroup.add(ladder);
+      addBox(ladder, 0.12, 2.0, 0.12, 0.04, toonMat('#D8D8D8'), -0.32, 0, 0);
+      addBox(ladder, 0.12, 2.0, 0.12, 0.04, toonMat('#D8D8D8'), 0.32, 0, 0);
+      for (let i = -3; i <= 3; i++) {
+        addBox(ladder, 0.7, 0.08, 0.08, 0.02, toonMat('#D8D8D8'), 0, i * 0.26, 0, { cast:false });
+      }
+      break;
+    }
+
+    case 'books': {
+      const bookColors = ['#C84A3A', '#3A7AC8', '#3AA86A', '#E8A020', '#8A4AC8'];
+      const sizes = [[2.2, 0.36, 1.5], [1.9, 0.32, 1.3], [2.0, 0.34, 1.4], [1.6, 0.28, 1.1], [1.4, 0.26, 1.0]];
+      let yy = 0.05;
+      for (let i = 0; i < 5; i++) {
+        const [bw, bh, bd] = sizes[i];
+        const book = addBox(iconGroup, bw, bh, bd, 0.04, toonMat(bookColors[i]),
+          (i % 2 ? 0.15 : -0.12), yy + bh / 2, (i % 2 ? 0.1 : -0.08));
+        book.rotation.y = (i - 2) * 0.08;
+        yy += bh + 0.02;
+      }
+      const openL = addBox(iconGroup, 0.85, 0.08, 1.1, 0.02, toonMat('#F5E8D0'), -0.4, yy + 0.1, 0);
+      openL.rotation.z = 0.12;
+      const openR = addBox(iconGroup, 0.85, 0.08, 1.1, 0.02, toonMat('#F5E8D0'), 0.4, yy + 0.1, 0);
+      openR.rotation.z = -0.12;
+      break;
+    }
+
+    case 'cup': {
+      addCyl(iconGroup, 1.25, 1.35, 0.16, 24, toonMat('#FFF6E8'), 0, 0.08, 0);
+      addCyl(iconGroup, 0.85, 0.65, 1.15, 20, toonMat('#FFFFFF'), 0, 0.73, 0);
+      addCyl(iconGroup, 0.78, 0.78, 0.06, 20, toonMat('#6B4226'), 0, 1.28, 0);
+      addCyl(iconGroup, 0.88, 0.88, 0.12, 20, toonMat('#FFFFFF'), 0, 1.34, 0);
+      const handle = new THREE.Mesh(
+        new THREE.TorusGeometry(0.36, 0.09, 8, 16, Math.PI * 1.3),
+        toonMat('#FFFFFF')
+      );
+      handle.position.set(0.95, 0.83, 0);
+      handle.rotation.z = Math.PI * 0.62;
+      handle.castShadow = true;
+      iconGroup.add(handle);
+      for (let i = 0; i < 3; i++) {
+        const steam = addSphere(iconGroup, 0.12,
+          new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.35, depthWrite: false }),
+          (i - 1) * 0.3, 1.85 + i * 0.16, 0, 1, 1.4, 1);
+        animItems.push({ type: 'float', obj: steam, baseY: steam.position.y, phase: i * 0.8, amp: 0.12, spd: 1.2 });
+      }
+      break;
+    }
+
+    case 'croissant': {
+      const crMat = toonMat('#E8A860');
+      const crMat2 = toonMat('#F5C070');
+      const segs = [
+        { x: -1.15, y: 0.3, s: 0.55 },
+        { x: -0.78, y: 0.63, s: 0.72 },
+        { x: -0.32, y: 0.86, s: 0.85 },
+        { x: 0.18, y: 0.93, s: 0.9 },
+        { x: 0.68, y: 0.83, s: 0.82 },
+        { x: 1.05, y: 0.58, s: 0.68 },
+        { x: 1.3, y: 0.26, s: 0.5 }
+      ];
+      segs.forEach((s, i) => {
+        addSphere(iconGroup, s.s, i % 2 ? crMat2 : crMat, s.x, 0.55 + s.y, 0, 1.15, 0.85, 1.05);
+      });
+      addCyl(iconGroup, 1.1, 1.2, 0.14, 20, toonMat('#F5E8D0'), 0, 0.1, 0);
+      break;
+    }
+
+    case 'flower': {
+      addCyl(iconGroup, 0.12, 0.14, 1.9, 8, toonMat('#4A8A4A'), 0, 0.95, 0);
+      for (const sx of [-1, 1]) {
+        const leaf = addSphere(iconGroup, 0.4, toonMat('#5AA85A'), sx * 0.42, 0.72, 0, 1.4, 0.25, 0.7);
+        leaf.rotation.z = sx * -0.5;
+      }
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2;
+        addSphere(iconGroup, 0.42, toonMat(cfg.accent === '#4A8A4A' ? '#FFB8D0' : '#FFD166'),
+          Math.cos(a) * 0.55, 1.92, Math.sin(a) * 0.55, 1, 0.6, 1);
+      }
+      addSphere(iconGroup, 0.42, toonMat('#FFD166'), 0, 1.97, 0, 1, 0.8, 1);
+      addCyl(iconGroup, 0.55, 0.45, 0.6, 12, toonMat('#D88A6A'), 0, 0.3, 0);
+      break;
+    }
+
+    case 'envelope': {
+      const env = addBox(iconGroup, 2.8, 0.22, 1.9, 0.06, toonMat('#FFFFFF'), 0, 0.9, 0);
+      env.rotation.z = 0.06;
+      addBox(iconGroup, 2.9, 0.08, 2.0, 0.03, toonMat(cfg.accent), 0, 0.78, 0, { cast:false });
+      const flapShape = new THREE.Shape();
+      flapShape.moveTo(-1.3, 0);
+      flapShape.lineTo(1.3, 0);
+      flapShape.lineTo(0, 0.9);
+      flapShape.closePath();
+      const flapGeo = new THREE.ExtrudeGeometry(flapShape, { depth: 0.1, bevelEnabled: false });
+      const flap = new THREE.Mesh(flapGeo, toonMat(cfg.accent));
+      flap.position.set(0, 0.95, 0.05);
+      flap.rotation.x = -0.5;
+      flap.castShadow = true;
+      iconGroup.add(flap);
+      addBox(iconGroup, 0.5, 0.04, 0.6, 0.02, toonMat('#E84855'), 0.85, 1.02, -0.5, { cast:false });
+      addCyl(iconGroup, 0.28, 0.28, 0.04, 16, toonMat('#8AB0C8'), -0.7, 1.02, -0.45);
+      break;
+    }
+
+    case 'bone': {
+      const boneMat = toonMat('#FFF6E0');
+      const bar = addCyl(iconGroup, 0.24, 0.24, 2.0, 12, boneMat, 0, 0.85, 0);
+      bar.rotation.z = Math.PI / 2;
+      for (const sx of [-1, 1]) {
+        addSphere(iconGroup, 0.42, boneMat, sx * 1.15, 0.85, 0.18);
+        addSphere(iconGroup, 0.42, boneMat, sx * 1.15, 0.85, -0.18);
+      }
+      addCyl(iconGroup, 1.2, 1.3, 0.12, 16, toonMat('#E8D8B8'), 0, 0.1, 0);
+      for (let i = 0; i < 3; i++) {
+        addSphere(iconGroup, 0.18, toonMat('#E8A020'), -0.8 + i * 0.8, 0.28, 0.8, 1, 0.5, 1);
+      }
+      break;
+    }
+  }
+
+  animItems.push({ type: 'sway', obj: iconGroup, amp: 0.02, spd: 0.7, phase: Math.random() * 6 });
+
+  const flagX = cfg.roofIcon === 'siren' ? 1.9 : -1.9;
+  addBox(g, 0.08, 1.4, 0.08, 0.03, toonMat('#2A2E3A'), flagX, y0 + 1.0, 1.0, { cast:false });
+  const flag = new THREE.Mesh(
+    new THREE.CircleGeometry(0.36, 12, 0, Math.PI),
+    toonMat(cfg.accent)
+  );
+  flag.position.set(flagX + (flagX < 0 ? 0.38 : -0.38), y0 + 1.5, 1.0);
+  flag.rotation.y = flagX < 0 ? Math.PI / 2 : -Math.PI / 2;
+  g.add(flag);
+
+  return g;
+}
+
+/* =========================================================
+   8. 门前道具
+   ========================================================= */
+function buildStreetProp(parent, cfg) {
+  const g = new THREE.Group();
+  g.position.set(-4.0, 0, -D1 / 2 - 1.6);
+  parent.add(g);
+
+  switch (cfg.prop) {
+
+    case 'ambulance': {
+      addBox(g, 2.8, 1.1, 1.3, 0.2, toonMat('#FFFFFF'), 0, 0.75, 0);
+      addBox(g, 1.4, 0.7, 1.25, 0.15, toonMat('#FFFFFF'), 1.0, 1.35, 0);
+      addBox(g, 0.9, 0.35, 1.0, 0.08, toonMat('#4A7A9A'), 1.0, 1.42, -0.65);
+      addBox(g, 0.9, 0.35, 1.0, 0.08, toonMat('#4A7A9A'), 1.0, 1.42, 0.65);
+      addBox(g, 0.3, 0.6, 0.06, 0.02, toonMat('#E84855'), -0.4, 0.85, -0.67, { cast:false });
+      addBox(g, 0.6, 0.3, 0.06, 0.02, toonMat('#E84855'), -0.4, 0.85, -0.67, { cast:false });
+      for (const wx of [-0.9, 0.9]) {
+        for (const wz of [-0.65, 0.65]) {
+          addCyl(g, 0.28, 0.28, 0.18, 12, toonMat('#2A2E3A'), wx, 0.28, wz);
+        }
+      }
+      addSphere(g, 0.1, glowMat('#FF4A4A'), -0.1, 1.35, 0);
+      addSphere(g, 0.1, glowMat('#4A8AFF'), 0.2, 1.35, 0);
+      break;
+    }
+
+    case 'hydrant': {
+      addCyl(g, 0.3, 0.36, 0.9, 12, toonMat('#D93025'), 0, 0.45, 0);
+      addSphere(g, 0.3, toonMat('#D93025'), 0, 0.92, 0, 1, 0.7, 1);
+      addCyl(g, 0.4, 0.4, 0.12, 12, toonMat('#E8E8E8'), 0, 0.3, 0);
+      addSphere(g, 0.12, glowMat('#FFE8A0'), 0, 1.08, 0);
+      for (const sx of [-1, 1]) {
+        addCyl(g, 0.12, 0.12, 0.35, 8, toonMat('#E8E8E8'), sx * 0.35, 0.58, 0);
+      }
+      break;
+    }
+
+    case 'bookstack': {
+      const colors = ['#C84A3A', '#3A7AC8', '#3AA86A', '#E8A020', '#8A4AC8', '#E85A7A'];
+      let yy = 0.1;
+      for (let i = 0; i < 6; i++) {
+        addBox(g, 1.0 + Math.random() * 0.3, 0.18, 0.7, 0.03, toonMat(colors[i]), 0, yy + 0.09, 0);
+        yy += 0.19;
+      }
+      addCyl(g, 0.4, 0.4, 0.08, 12, toonMat('#D8C8A8'), 1.3, 0.6, 0);
+      addCyl(g, 0.1, 0.1, 0.55, 8, toonMat('#B8A888'), 1.3, 0.3, 0);
+      break;
+    }
+
+    case 'cafe': {
+      addCyl(g, 0.5, 0.5, 0.08, 16, toonMat('#D8C8A8'), 0, 0.7, 0);
+      addCyl(g, 0.1, 0.1, 0.65, 8, toonMat('#B8A888'), 0, 0.35, 0);
+      addCyl(g, 0.18, 0.18, 0.25, 12, toonMat('#FFFFFF'), 0, 0.86, 0);
+      addCyl(g, 0.16, 0.16, 0.06, 12, toonMat('#6B4226'), 0, 1.0, 0);
+      addCyl(g, 0.12, 0.12, 0.08, 12, toonMat('#FFFFFF'), 0, 1.05, 0);
+      for (const sx of [-1, 1]) {
+        addBox(g, 0.5, 0.08, 0.5, 0.04, toonMat('#B8A888'), sx * 1.0, 0.45, 0);
+        addBox(g, 0.5, 0.5, 0.06, 0.03, toonMat('#B8A888'), sx * 1.0, 0.7, 0.25);
+      }
+      break;
+    }
+
+    case 'breadbasket': {
+      addCyl(g, 0.5, 0.4, 0.35, 12, toonMat('#D8B888'), 0, 0.18, 0);
+      for (let i = 0; i < 4; i++) {
+        addSphere(g, 0.22, toonMat(i % 2 ? '#E8A860' : '#F5C070'),
+          Math.cos(i * 1.6) * 0.22, 0.45 + i * 0.08, Math.sin(i * 1.6) * 0.22, 1, 0.7, 1);
+      }
+      break;
+    }
+
+    case 'flowerpot': {
+      for (let i = 0; i < 3; i++) {
+        const px = (i - 1) * 0.8;
+        addCyl(g, 0.3, 0.24, 0.45, 10, toonMat('#D88A6A'), px, 0.23, 0);
+        addCyl(g, 0.04, 0.05, 0.5, 6, toonMat('#4A8A4A'), px, 0.7, 0);
+        addSphere(g, 0.28, toonMat(i === 0 ? '#FF9EC4' : i === 1 ? '#FFD166' : '#FFB8D0'), px, 0.98, 0);
+        addSphere(g, 0.14, toonMat('#FFD166'), px, 0.98, -0.2, 1, 0.6, 1);
+      }
+      break;
+    }
+
+    case 'postbox': {
+      addCyl(g, 0.35, 0.4, 1.2, 12, toonMat('#2A8A5A'), 0, 0.6, 0);
+      addSphere(g, 0.35, toonMat('#2A8A5A'), 0, 1.2, 0, 1, 0.5, 1);
+      addBox(g, 0.4, 0.12, 0.3, 0.03, toonMat('#1A5A3A'), 0, 0.9, -0.25, { cast:false });
+      addCyl(g, 0.42, 0.42, 0.12, 12, toonMat('#1A5A3A'), 0, 0.18, 0);
+      break;
+    }
+
+    case 'petbowl': {
+      addCyl(g, 0.5, 0.4, 0.22, 14, toonMat('#E8A020'), 0, 0.11, 0);
+      addCyl(g, 0.36, 0.36, 0.04, 14, toonMat('#4A8AC8'), 0, 0.2, 0);
+      for (let i = 0; i < 3; i++) {
+        addSphere(g, 0.12, toonMat('#E8A020'), -0.5 + i * 0.5, 0.35, 0.6, 1, 0.4, 1);
+      }
+      break;
+    }
+  }
+
+  return g;
+}
+
+/* =========================================================
+   9. 建筑组装（整体落地到草地）
+   ========================================================= */
+function buildBuilding(cfg) {
+  const root = new THREE.Group();
+  /* 关键：整体下移，使建筑底部落在草地 y = -0.44 上 */
+  root.position.y = GROUND_Y;
+
+  const wallMat = toonMat(cfg.wall);
+  const wall2Mat = toonMat(cfg.wall2);
+  const accentMat = toonMat(cfg.accent);
+  const trimMat = toonMat(cfg.trim);
+  const creamMat = toonMat('#FFFDF7');
+
+  addBox(root, W1, H1, D1, 0.25, wallMat, 0, H1 / 2, 0);
+  addBox(root, W1 + 0.16, 0.4, D1 + 0.16, 0.08, trimMat, 0, 0.2, 0, { cast:false });
+
+  addBox(root, W2, H2, D2, 0.35, wall2Mat, 0, H1 + H2 / 2, BODY_Z);
+
+  addBox(root, W2 + 0.2, 0.3, D2 + 0.2, 0.1, accentMat, 0, H1 + 0.15, BODY_Z, { cast:false });
+
+  addBox(root, W2 + 1.0, 0.45, D2 + 1.0, 0.15, accentMat, 0, H1 + H2 + 0.22, BODY_Z);
+  addBox(root, W2 + 0.5, 0.16, D2 + 0.5, 0.08, creamMat, 0, H1 + H2 + 0.5, BODY_Z, { cast:false });
+
+  buildUpperWindows(root, cfg);
+  buildMainSign(root, cfg);
+  buildDoor(root, cfg);
+  buildShopWindow(root, cfg);
+  buildPickupCounter(root, cfg);
+  buildRoofIcon(root, cfg);
+  buildStreetProp(root, cfg);
+
+  const decoX = cfg.roofIcon === 'siren' ? -2.2 : 2.2;
+  addBox(root, 0.7, 0.5, 0.7, 0.1, toonMat('#E8B796'), decoX, ROOF_Y + 0.75, BODY_Z + 1.0);
+  addSphere(root, 0.45, toonMat('#6FBF73'), decoX, ROOF_Y + 1.3, BODY_Z + 1.0);
+  addSphere(root, 0.3, toonMat('#8FD694'), decoX + 0.25, ROOF_Y + 1.55, BODY_Z + 1.0);
+
+  return root;
+}
+
+/* =========================================================
+   10. 场景与切换
+   ========================================================= */
+let currentBuilding = null;
+let animItems = [];
+
+function disposeObject(obj) {
+  obj.traverse(o => {
+    if (o.geometry) o.geometry.dispose();
+    if (o.material) {
+      const mats = Array.isArray(o.material) ? o.material : [o.material];
+      mats.forEach(m => {
+        if (m.map && m.map.isCanvasTexture) m.map.dispose();
+        m.dispose();
+      });
+    }
+  });
+}
+
+function buildScene() {
+  const ground = new THREE.Mesh(
+    new THREE.CircleGeometry(70, 64),
+    toonMat('#B4CFA8')
+  );
+  ground.rotation.x = -Math.PI / 2;
+  ground.position.y = GROUND_Y;
+  ground.receiveShadow = true;
+  scene.add(ground);
+
+  addBox(scene, 26, 0.42, 5, 0.1, toonMat('#DDE2E8'), 0, -0.21, -8.5, { cast:false });
+  addBox(scene, 26.4, 0.16, 5.4, 0.06, toonMat('#B8C0C8'), 0, -0.5, -8.5, { cast:false });
+
+  addBox(scene, 26, 0.06, 10, 0.03, toonMat('#8A949E'), 0, -0.4, -17, { cast:false });
+  for (let i = -4; i <= 4; i++) {
+    addBox(scene, 1.2, 0.04, 0.22, 0.02, toonMat('#E8ECF0'), i * 3.2, -0.35, -17, { cast:false });
+  }
+
+  function tree(x, z) {
+    addCyl(scene, 0.14, 0.18, 1.4, 8, toonMat('#8A7050'), x, GROUND_Y + 1.14, z);
+    addSphere(scene, 0.9, toonMat('#7AAD7A'), x, GROUND_Y + 2.29, z);
+    addSphere(scene, 0.55, toonMat('#8CC08C'), x + 0.5, GROUND_Y + 2.59, z - 0.2);
+  }
+  tree(-7.2, -10.5);
+  tree(7.2, -10.5);
+
+  function lamp(x, z) {
+    addBox(scene, 0.14, 4.0, 0.14, 0.05, toonMat('#5A6070'), x, GROUND_Y + 2.0, z, { cast:false });
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.26, 12, 8), glowMat('#FFE8B8'));
+    head.position.set(x, GROUND_Y + 4.1, z);
+    scene.add(head);
+    const cap = new THREE.Mesh(new THREE.ConeGeometry(0.34, 0.28, 12), toonMat('#5A6070'));
+    cap.position.set(x, GROUND_Y + 4.38, z);
+    scene.add(cap);
+  }
+  lamp(-5.5, -10.5);
+  lamp(5.5, -10.5);
+}
+
+function switchBuilding(index) {
+  if (currentBuilding) {
+    scene.remove(currentBuilding);
+    disposeObject(currentBuilding);
+    currentBuilding = null;
+  }
+  animItems = [];
+  currentBuilding = buildBuilding(BUILDINGS[index]);
+  scene.add(currentBuilding);
+
+  const cfg = BUILDINGS[index];
+  document.getElementById('meta').innerHTML = `
+    <b>${cfg.name}</b> · ${cfg.desc}
+    <div class="tags">
+      ${cfg.tags.map(t => `<span class="tag hot">${t}</span>`).join('')}
+      <span class="tag">外卖取餐窗口</span>
+    </div>
+  `;
+
+  document.querySelectorAll('#types button').forEach((b, i) => {
+    b.classList.toggle('on', i === index);
+  });
+}
+
+/* =========================================================
+   11. UI
+   ========================================================= */
+const typesBox = document.getElementById('types');
+BUILDINGS.forEach((b, i) => {
+  const btn = document.createElement('button');
+  btn.textContent = b.name;
+  btn.onclick = () => switchBuilding(i);
+  typesBox.appendChild(btn);
+});
+
+const rotBtn = document.getElementById('rotBtn');
+let autoRotate = false;
+rotBtn.onclick = () => {
+  autoRotate = !autoRotate;
+  controls.autoRotate = autoRotate;
+  rotBtn.textContent = '自动旋转：' + (autoRotate ? '开' : '关');
+  rotBtn.classList.toggle('on', autoRotate);
+};
+
+/* =========================================================
+   12. 动画循环
+   ========================================================= */
+function animate() {
+  requestAnimationFrame(animate);
+
+  const t = performance.now() * 0.001;
+
+  for (const it of animItems) {
+    if (it.type === 'float') {
+      it.obj.position.y = it.baseY + Math.sin(t * it.spd + it.phase) * it.amp;
+      const s = 0.85 + Math.sin(t * it.spd * 1.3 + it.phase) * 0.15;
+      it.obj.scale.set(1, 1.4 * s, 1);
+    } else if (it.type === 'sway') {
+      it.obj.rotation.y = Math.sin(t * it.spd + it.phase) * it.amp;
+    }
+  }
+
+  controls.update();
+  renderer.render(scene, camera);
+}
+
+function onResize() {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+}
+window.addEventListener('resize', onResize);
+
+/* =========================================================
+   13. 启动
+   ========================================================= */
+buildScene();
+switchBuilding(0);
+animate();
+</script>
+
+</body>
+</html>
