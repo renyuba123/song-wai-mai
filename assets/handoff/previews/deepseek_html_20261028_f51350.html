@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>城市背景商铺 · 低识别度版</title>
+<style>
+  :root{ --ink:#232733; --accent:#7a8a9a; }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0;height:100%;overflow:hidden;background:#c9e8ff;
+    font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+    color:var(--ink);
+  }
+  #app{position:fixed;inset:0;}
+
+  #panel{
+    position:fixed;left:18px;top:18px;width:290px;
+    background:rgba(248,246,242,.95);
+    border:3px solid var(--ink);border-radius:16px;
+    padding:14px 16px 16px;
+    box-shadow:6px 6px 0 rgba(35,39,51,.85);
+    backdrop-filter:blur(8px);user-select:none;
+  }
+  #panel h1{font-size:15px;margin:0 0 2px;letter-spacing:.3px;}
+  #panel h1 small{display:block;font-size:11px;font-weight:500;color:#7a8090;margin-top:4px;letter-spacing:0;}
+  .row{margin-top:12px;}
+  .label{display:block;font-size:11px;font-weight:800;color:#7a8090;letter-spacing:1px;margin-bottom:6px;}
+  .btns{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
+  .btns.one{grid-template-columns:1fr;}
+  button{
+    font-family:inherit;font-size:12px;font-weight:800;padding:9px 6px;
+    border-radius:10px;cursor:pointer;border:2px solid var(--ink);
+    background:#fff;color:var(--ink);
+    box-shadow:2px 2px 0 rgba(35,39,51,.85);
+    transition:transform .08s ease,background .15s ease;
+  }
+  button:hover{background:#f0ece6;}
+  button:active{transform:translate(2px,2px);box-shadow:0 0 0 rgba(35,39,51,.85);}
+  button.on{background:var(--accent);color:#fff;}
+  #meta{
+    margin-top:12px;font-size:12px;line-height:1.6;color:#5a6070;
+    border-top:2px dashed #d0c8bc;padding-top:10px;
+  }
+  .tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;}
+  .tag{font-size:10px;font-weight:800;padding:3px 8px;border-radius:999px;background:#e8e2d8;color:#5a6070;}
+  .tag.mute{background:#dfe4ea;color:#5a6878;}
+  #hint{
+    position:fixed;left:50%;bottom:16px;transform:translateX(-50%);
+    font-size:11px;font-weight:700;color:#5a6070;
+    background:rgba(248,246,242,.9);
+    border:2px solid var(--ink);border-radius:999px;
+    padding:6px 16px;box-shadow:3px 3px 0 rgba(35,39,51,.8);
+    white-space:nowrap;
+  }
+  @media (max-width:640px){
+    #panel{width:calc(100% - 24px);left:12px;top:12px;padding:10px 12px 12px;}
+    #panel h1{font-size:13px;}
+    #meta{display:none;}
+    #hint{font-size:10px;padding:5px 12px;}
+  }
+</style>
+</head>
+<body>
+
+<div id="app"></div>
+
+<div id="panel">
+  <h1>城市背景商铺 · 低识别度版
+    <small>不可进入 · 仅作街道填充 · 无外卖窗口与 3D 标志物</small>
+  </h1>
+
+  <div class="row">
+    <span class="label">背景体量</span>
+    <div class="btns" id="uppers"></div>
+  </div>
+
+  <div class="row btns one">
+    <button id="shuffleBtn">换一批变体</button>
+  </div>
+
+  <div class="row btns one">
+    <button id="rotBtn">自动旋转：关</button>
+  </div>
+
+  <div id="meta"></div>
+</div>
+
+<div id="hint">左键拖拽旋转 · 滚轮缩放 · 右键平移</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+
+/* =========================================================
+   0. 渲染基础
+   ========================================================= */
+const container = document.getElementById('app');
+
+const renderer = new THREE.WebGLRenderer({ antialias:true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+container.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xc9e8ff);
+scene.fog = new THREE.Fog(0xc9e8ff, 70, 200);
+
+const camera = new THREE.PerspectiveCamera(38, window.innerWidth/window.innerHeight, 0.5, 600);
+camera.position.set(32, 22, -48);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 10, -2);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.minDistance = 20;
+controls.maxDistance = 160;
+controls.maxPolarAngle = Math.PI * 0.495;
+controls.autoRotateSpeed = 0.7;
+
+scene.add(new THREE.HemisphereLight(0xffffff, 0xa8c0d8, 1.15));
+
+const sun = new THREE.DirectionalLight(0xfff5e8, 2.0);
+sun.position.set(40, 60, -42);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+{
+  const sc = sun.shadow.camera;
+  sc.left = -60; sc.right = 60; sc.top = 80; sc.bottom = -20;
+  sc.near = 1; sc.far = 240;
+  sc.updateProjectionMatrix();
+}
+sun.shadow.bias = -0.0006;
+sun.shadow.normalBias = 0.02;
+scene.add(sun);
+
+const fill = new THREE.DirectionalLight(0xb8d8ff, 0.45);
+fill.position.set(-36, 24, 40);
+scene.add(fill);
+
+/* =========================================================
+   1. 卡通材质与几何工具
+   ========================================================= */
+const GRADIENT = (() => {
+  const data = new Uint8Array([120, 195, 255]);
+  const tex = new THREE.DataTexture(data, data.length, 1, THREE.RedFormat);
+  tex.minFilter = THREE.NearestFilter;
+  tex.magFilter = THREE.NearestFilter;
+  tex.generateMipmaps = false;
+  tex.needsUpdate = true;
+  return tex;
+})();
+
+const toonMat = (color) => new THREE.MeshToonMaterial({ color, gradientMap: GRADIENT });
+const glowMat = (color) => new THREE.MeshBasicMaterial({ color });
+
+function rBox(parent, w, h, d, r, mat, x, y, z, opt = {}) {
+  const rr = Math.max(0.004, Math.min(r, Math.min(w, h, d) / 2 - 0.004));
+  const geo = new RoundedBoxGeometry(w, h, d, 2, rr);
+  const m = new THREE.Mesh(geo, mat);
+  m.position.set(x, y, z);
+  m.castShadow = opt.cast !== false;
+  m.receiveShadow = opt.recv !== false;
+  parent.add(m);
+  return m;
+}
+
+function isDarkColor(hex) {
+  const c = parseInt(hex.slice(1), 16);
+  const r = (c >> 16) & 255, g = (c >> 8) & 255, b = c & 255;
+  return (r * 0.299 + g * 0.587 + b * 0.114) < 128;
+}
+
+function makeWallTexture(pattern, baseColor) {
+  if (!pattern || pattern === 'plain') return null;
+
+  const S = 256;
+  const c = document.createElement('canvas');
+  c.width = S; c.height = S;
+  const ctx = c.getContext('2d');
+
+  ctx.fillStyle = baseColor;
+  ctx.fillRect(0, 0, S, S);
+
+  const dark = isDarkColor(baseColor);
+  const lineColor = dark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.08)';
+  const lineW = 2;
+
+  if (pattern === 'brick') {
+    const bw = 64, bh = 32;
+    ctx.strokeStyle = lineColor;
+    ctx.lineWidth = lineW;
+    for (let y = 0; y < S; y += bh) {
+      const offset = (Math.floor(y / bh) % 2) * (bw / 2);
+      for (let x = -bw; x < S + bw; x += bw) {
+        ctx.strokeRect(x + offset, y, bw, bh);
+      }
+    }
+  } else if (pattern === 'tile') {
+    const t = 64;
+    ctx.strokeStyle = lineColor;
+    ctx.lineWidth = lineW;
+    for (let x = 0; x <= S; x += t) {
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, S); ctx.stroke();
+    }
+    for (let y = 0; y <= S; y += t) {
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(S, y); ctx.stroke();
+    }
+  }
+
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(3, 2);
+  tex.anisotropy = 8;
+  return tex;
+}
+
+function makeShutterTexture(color) {
+  const W = 64, H = 128;
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = color;
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.strokeStyle = 'rgba(0,0,0,0.08)';
+  ctx.lineWidth = 2;
+  for (let y = 8; y < H; y += 12) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(W, y);
+    ctx.stroke();
+  }
+
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.anisotropy = 8;
+  return t;
+}
+
+function makeStripeTexture(c1, c2, n = 7) {
+  const W = 256, H = 32;
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const ctx = c.getContext('2d');
+  const bw = W / n;
+  for (let i = 0; i < n; i++) {
+    ctx.fillStyle = i % 2 ? c1 : c2;
+    ctx.fillRect(i * bw, 0, Math.ceil(bw) + 1, H);
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.anisotropy = 8;
+  return t;
+}
+
+/* =========================================================
+   2. 背景商铺变体池（低饱和、低识别度）
+   ========================================================= */
+const SHOP_VARIANTS = [
+  {
+    name:'浅灰卷帘',
+    wall:'#E6E0D6', wallPattern:'plain',
+    door:'shutter', doorColor:'#C4BCB0', doorSide:'left',
+    awning:'none',
+    sign:'#9A9288', signStyle:'small'
+  },
+  {
+    name:'米色玻璃',
+    wall:'#F2E8D8', wallPattern:'plain',
+    door:'glass', doorColor:'#8A9AA8', doorSide:'right',
+    awning:'flat', awningColor:'#C8B8A0',
+    sign:'#A89880', signStyle:'band'
+  },
+  {
+    name:'浅棕砖墙',
+    wall:'#DCCAB8', wallPattern:'brick',
+    door:'wood', doorColor:'#8A7060', doorSide:'left',
+    awning:'arc', awningColor:'#B0A090',
+    sign:'#988070', signStyle:'vertical'
+  },
+  {
+    name:'蓝灰瓷砖',
+    wall:'#D4DCE4', wallPattern:'tile',
+    door:'glass', doorColor:'#7A8A9A', doorSide:'right',
+    awning:'none',
+    sign:'#8898A8', signStyle:'small'
+  },
+  {
+    name:'暖灰木门',
+    wall:'#E8DDD0', wallPattern:'plain',
+    door:'wood', doorColor:'#A08070', doorSide:'left',
+    awning:'flat', awningColor:'#B8A898',
+    sign:'#A89888', signStyle:'band'
+  },
+  {
+    name:'灰蓝卷帘',
+    wall:'#D8DDE2', wallPattern:'brick',
+    door:'shutter', doorColor:'#B0B8C0', doorSide:'right',
+    awning:'arc', awningColor:'#A8B0B8',
+    sign:'#9098A0', signStyle:'vertical'
+  }
+];
+
+/* =========================================================
+   3. 尺寸定义
+   ========================================================= */
+const SHOP_W = 6.5;
+const SHOP_D = 5.0;
+const SHOP_H = 3.8;
+const SHOP_PITCH = 7.5;
+const SHOP_COUNT = 5;
+const SHOP_Z = -5.0;
+
+const BACK_W = 40;
+const BACK_D = 8;
+const BACK_Z = 1.5;
+
+/* =========================================================
+   4. 商铺生成
+   ========================================================= */
+function buildShopBlock(parent, v, x) {
+  const g = new THREE.Group();
+  g.position.set(x, 0, SHOP_Z);
+  parent.add(g);
+
+  const W = SHOP_W, D = SHOP_D, H = SHOP_H;
+  const zf = -D / 2;
+
+  /* 墙体 */
+  let wallMat;
+  if (v.wallPattern && v.wallPattern !== 'plain') {
+    const tex = makeWallTexture(v.wallPattern, v.wall);
+    wallMat = new THREE.MeshToonMaterial({ map: tex, gradientMap: GRADIENT });
+  } else {
+    wallMat = toonMat(v.wall);
+  }
+
+  /* 主体 */
+  rBox(g, W, H, D, 0.12, wallMat, 0, H / 2, 0);
+
+  /* 勒脚 */
+  rBox(g, W + 0.08, 0.28, D + 0.08, 0.06, toonMat('#C8C0B4'), 0, 0.14, 0, { cast:false });
+
+  /* 顶部小挑檐 */
+  rBox(g, W + 0.24, 0.22, D + 0.24, 0.08, toonMat('#D8D0C4'), 0, H + 0.08, 0, { cast:false });
+
+  /* 门 */
+  const doorW = 1.5, doorH = 2.6;
+  const doorX = v.doorSide === 'left' ? -W / 2 + 1.35 : W / 2 - 1.35;
+  const winX  = v.doorSide === 'left' ? W / 2 - 1.8 : -W / 2 + 1.8;
+  const winW = 2.4, winH = 1.7;
+
+  let doorMat;
+  if (v.door === 'shutter') {
+    const tex = makeShutterTexture(v.doorColor);
+    doorMat = new THREE.MeshToonMaterial({ map: tex, gradientMap: GRADIENT });
+  } else if (v.door === 'glass') {
+    doorMat = toonMat(v.doorColor);
+  } else {
+    doorMat = toonMat(v.doorColor);
+  }
+
+  rBox(g, doorW, doorH, 0.1, 0.04, doorMat, doorX, doorH / 2, zf - 0.05);
+  /* 门框 */
+  rBox(g, doorW + 0.18, 0.1, 0.14, 0.03, toonMat('#B8B0A4'), doorX, doorH + 0.05, zf - 0.08, { cast:false });
+
+  /* 窗 */
+  rBox(g, winW, winH, 0.08, 0.04, toonMat('#4A5A6A'), winX, 1.8, zf - 0.04, { cast:false, recv:false });
+  /* 窗框 */
+  rBox(g, winW + 0.2, 0.08, 0.12, 0.03, toonMat('#B8B0A4'), winX, 1.8 + winH / 2 + 0.04, zf - 0.07, { cast:false });
+  rBox(g, winW + 0.2, 0.08, 0.12, 0.03, toonMat('#B8B0A4'), winX, 1.8 - winH / 2 - 0.04, zf - 0.07, { cast:false });
+
+  /* 招牌（低饱和色块，无文字） */
+  const signMat = toonMat(v.sign);
+  if (v.signStyle === 'small') {
+    rBox(g, 2.0, 0.45, 0.1, 0.03, signMat, doorX, 3.3, zf - 0.06, { cast:false });
+  } else if (v.signStyle === 'band') {
+    rBox(g, W - 0.6, 0.45, 0.1, 0.03, signMat, 0, 3.3, zf - 0.06, { cast:false });
+  } else if (v.signStyle === 'vertical') {
+    rBox(g, 0.45, 1.7, 0.1, 0.03, signMat, W / 2 - 0.5, 2.2, zf - 0.06, { cast:false });
+  }
+
+  /* 雨棚 */
+  if (v.awning === 'flat') {
+    rBox(g, W - 0.4, 0.1, 1.0, 0.04, toonMat(v.awningColor), 0, 2.88, zf - 0.55);
+    rBox(g, W - 0.4, 0.08, 0.08, 0.03, toonMat('#B8B0A4'), 0, 2.76, zf - 1.02, { cast:false });
+  } else if (v.awning === 'arc') {
+    const awGeo = new THREE.CylinderGeometry(0.48, 0.48, W - 0.4, 16, 1, true, -Math.PI / 2, Math.PI);
+    awGeo.rotateZ(Math.PI / 2);
+    awGeo.rotateX(-Math.PI / 2 + 0.3);
+    const awMat = new THREE.MeshToonMaterial({
+      map: makeStripeTexture(v.awningColor, '#F5F2EC', 7),
+      gradientMap: GRADIENT,
+      side: THREE.DoubleSide
+    });
+    const awning = new THREE.Mesh(awGeo, awMat);
+    awning.position.set(0, 2.92, zf - 0.42);
+    awning.castShadow = true;
+    g.add(awning);
+  }
+
+  /* 空调外机（侧墙，低调） */
+  const acX = v.doorSide === 'left' ? W / 2 + 0.16 : -W / 2 - 0.16;
+  rBox(g, 0.55, 0.4, 0.3, 0.06, toonMat('#C0C4C8'), acX, 2.4, 0.4);
+  rBox(g, 0.5, 0.04, 0.04, 0.01, toonMat('#A8B0B8'), acX, 2.3, 0.4, { cast:false });
+  rBox(g, 0.5, 0.04, 0.04, 0.01, toonMat('#A8B0B8'), acX, 2.4, 0.4, { cast:false });
+  rBox(g, 0.5, 0.04, 0.04, 0.01, toonMat('#A8B0B8'), acX, 2.5, 0.4, { cast:false });
+
+  /* 门前小灯（弱光，不抢眼） */
+  rBox(g, 0.1, 0.12, 0.1, 0.03, glowMat('#FFE8C0'), doorX, 2.9, zf - 0.12, { cast:false });
+
+  return g;
+}
+
+/* =========================================================
+   5. 背景楼生成
+   ========================================================= */
+function buildBackdrop(parent, upper) {
+  const isOffice = upper === 'office';
+  const g = new THREE.Group();
+  g.position.set(0, 0, BACK_Z);
+  parent.add(g);
+
+  const W = BACK_W, D = BACK_D;
+  const floorH = isOffice ? 3.7 : 3.0;
+  const floors = isOffice ? 6 : 5;
+  const baseY = SHOP_H;
+  const H = baseY + floorH * floors + 0.8;
+
+  const bodyMat = toonMat(isOffice ? '#DDE6EE' : '#F0E8DC');
+  const trimMat = toonMat(isOffice ? '#C0CDD8' : '#E0D4C4');
+  const winMat  = toonMat(isOffice ? '#4A6A8A' : '#6A7A8A');
+
+  /* 主体 */
+  rBox(g, W, H, D, 0.2, bodyMat, 0, H / 2, 0);
+
+  /* 层间线 */
+  for (let i = 0; i < floors; i++) {
+    const y = baseY + i * floorH;
+    rBox(g, W + 0.1, 0.1, D + 0.1, 0.04, trimMat, 0, y, 0, { cast:false });
+  }
+
+  /* 窗户 */
+  const cols = 10;
+  const usable = W - 2.4;
+  const gap = 0.5;
+  const winW = (usable - gap * (cols - 1)) / cols;
+  const winH = floorH * 0.48;
+
+  for (let f = 0; f < floors; f++) {
+    const winY = baseY + f * floorH + floorH * 0.55;
+    for (let c = 0; c < cols; c++) {
+      const x = -usable / 2 + winW / 2 + c * (winW + gap);
+      rBox(g, winW, winH, 0.1, 0.04, winMat, x, winY, -D / 2 - 0.05, { cast:false, recv:false });
+    }
+  }
+
+  /* 住宅阳台 */
+  if (!isOffice) {
+    for (let f = 0; f < floors; f++) {
+      const by = baseY + f * floorH + floorH * 0.2;
+      rBox(g, W - 2.4, 0.1, 0.8, 0.04, toonMat('#E8F0F4'), 0, by, -D / 2 - 0.4);
+      rBox(g, W - 2.4, 0.36, 0.06, 0.02, toonMat('#C0D8E0'), 0, by + 0.23, -D / 2 - 0.78, { cast:false });
+    }
+  }
+
+  /* 顶部压顶 */
+  rBox(g, W + 0.4, 0.3, D + 0.4, 0.1, trimMat, 0, H + 0.15, 0, { cast:false });
+  rBox(g, W + 0.2, 0.5, D + 0.2, 0.15, bodyMat, 0, H + 0.55, 0, { cast:false });
+
+  /* 屋顶设备 */
+  rBox(g, 3, 1, 2.5, 0.2, toonMat('#B8C0C8'), -8, H + 1.2, 0);
+  rBox(g, 2, 0.8, 2, 0.2, toonMat('#C0C8D0'), 9, H + 1.1, 0);
+
+  /* 水塔 */
+  const tank = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 1.3, 12), toonMat('#9AA8B4'));
+  tank.position.set(2, H + 1.5, 1.5);
+  tank.castShadow = true;
+  g.add(tank);
+  const tankTop = new THREE.Mesh(
+    new THREE.SphereGeometry(0.7, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2),
+    toonMat('#8A98A4')
+  );
+  tankTop.position.set(2, H + 2.15, 1.5);
+  g.add(tankTop);
+
+  /* 天线 */
+  rBox(g, 0.08, 2.5, 0.08, 0.03, toonMat('#6A7080'), -14, H + 1.6, -1, { cast:false });
+  const tip = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), glowMat('#E8A0A0'));
+  tip.position.set(-14, H + 2.9, -1);
+  g.add(tip);
+
+  return g;
+}
+
+/* =========================================================
+   6. 场地
+   ========================================================= */
+function buildSite() {
+  const site = new THREE.Group();
+  scene.add(site);
+
+  const grass = new THREE.Mesh(new THREE.CircleGeometry(160, 64), toonMat('#B4CFA8'));
+  grass.rotation.x = -Math.PI / 2;
+  grass.position.y = -0.44;
+  grass.receiveShadow = true;
+  site.add(grass);
+
+  /* 人行道 */
+  rBox(site, BACK_W, 0.42, 4.5, 0.1, toonMat('#DDE2E8'), 0, -0.21, -9.2, { cast:false });
+  rBox(site, BACK_W + 0.4, 0.16, 4.9, 0.06, toonMat('#B8C0C8'), 0, -0.5, -9.2, { cast:false });
+
+  /* 街道 */
+  rBox(site, BACK_W + 4, 0.06, 11, 0.03, toonMat('#8A949E'), 0, -0.4, -17, { cast:false });
+
+  /* 街道中线 */
+  for (let i = -5; i <= 5; i++) {
+    rBox(site, 1.4, 0.04, 0.25, 0.02, toonMat('#E8ECF0'), i * 3.4, -0.35, -17, { cast:false });
+  }
+
+  /* 行道树 */
+  function tree(x, z) {
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.18, 1.6, 8), toonMat('#8A7050'));
+    trunk.position.set(x, 0.8, z);
+    trunk.castShadow = true;
+    site.add(trunk);
+
+    const crown = new THREE.Mesh(new THREE.IcosahedronGeometry(0.9, 1), toonMat('#7AAD7A'));
+    crown.position.set(x, 2.0, z);
+    crown.castShadow = true;
+    site.add(crown);
+
+    const crown2 = new THREE.Mesh(new THREE.IcosahedronGeometry(0.55, 1), toonMat('#8CC08C'));
+    crown2.position.set(x + 0.5, 2.35, z - 0.2);
+    crown2.castShadow = true;
+    site.add(crown2);
+  }
+  tree(-16, -10.5);
+  tree(16, -10.5);
+
+  /* 路灯 */
+  function lamp(x, z) {
+    rBox(site, 0.14, 4.0, 0.14, 0.05, toonMat('#5A6070'), x, 2.0, z, { cast:false });
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.26, 12, 8), glowMat('#FFE8B8'));
+    head.position.set(x, 4.1, z);
+    site.add(head);
+    const cap = new THREE.Mesh(new THREE.ConeGeometry(0.34, 0.28, 12), toonMat('#5A6070'));
+    cap.position.set(x, 4.38, z);
+    site.add(cap);
+  }
+  lamp(-10, -10.5);
+  lamp(10, -10.5);
+}
+
+/* =========================================================
+   7. 场景组装
+   ========================================================= */
+let current = null;
+const state = { upper:'res', variants: [] };
+
+function disposeGroup(obj) {
+  obj.traverse(o => {
+    if (o.geometry) o.geometry.dispose();
+    if (o.material) {
+      const mats = Array.isArray(o.material) ? o.material : [o.material];
+      mats.forEach(m => {
+        if (m.map && m.map.isCanvasTexture) m.map.dispose();
+        m.dispose();
+      });
+    }
+  });
+}
+
+function pickVariants() {
+  const pool = [...SHOP_VARIANTS];
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  state.variants = pool.slice(0, SHOP_COUNT);
+}
+
+function rebuild() {
+  if (current) {
+    scene.remove(current);
+    disposeGroup(current);
+    current = null;
+  }
+
+  const root = new THREE.Group();
+
+  /* 背景楼 */
+  buildBackdrop(root, state.upper);
+
+  /* 商铺排列 */
+  const startX = -((SHOP_COUNT - 1) * SHOP_PITCH) / 2;
+  for (let i = 0; i < SHOP_COUNT; i++) {
+    const x = startX + i * SHOP_PITCH;
+    buildShopBlock(root, state.variants[i], x);
+  }
+
+  scene.add(root);
+  current = root;
+
+  /* 面板信息 */
+  const upperName = state.upper === 'office' ? '办公背景体量' : '住宅背景体量';
+  const variantNames = state.variants.map(v => v.name).join(' · ');
+  document.getElementById('meta').innerHTML = `
+    沿街 ${SHOP_COUNT} 间低识别度背景商铺，统一${upperName}。<br>
+    <span style="color:#8a90a0">全部不可进入 · 无外卖窗口 · 无 3D 标志物</span>
+    <div class="tags">
+      <span class="tag mute">背景填充</span>
+      <span class="tag">${upperName}</span>
+      <span class="tag">${variantNames}</span>
+    </div>
+  `;
+}
+
+/* =========================================================
+   8. UI
+   ========================================================= */
+const uppersBox = document.getElementById('uppers');
+[
+  { k:'res', label:'住宅背景' },
+  { k:'office', label:'办公背景' }
+].forEach(o => {
+  const b = document.createElement('button');
+  b.textContent = o.label;
+  b.dataset.k = o.k;
+  b.onclick = () => {
+    state.upper = o.k;
+    syncUpperButtons();
+    rebuild();
+  };
+  uppersBox.appendChild(b);
+});
+
+function syncUpperButtons() {
+  uppersBox.querySelectorAll('button').forEach(b => {
+    b.classList.toggle('on', b.dataset.k === state.upper);
+  });
+}
+
+document.getElementById('shuffleBtn').onclick = () => {
+  pickVariants();
+  rebuild();
+};
+
+const rotBtn = document.getElementById('rotBtn');
+let autoRotate = false;
+rotBtn.onclick = () => {
+  autoRotate = !autoRotate;
+  controls.autoRotate = autoRotate;
+  rotBtn.textContent = '自动旋转：' + (autoRotate ? '开' : '关');
+  rotBtn.classList.toggle('on', autoRotate);
+};
+
+/* =========================================================
+   9. 循环与启动
+   ========================================================= */
+function onResize() {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+}
+window.addEventListener('resize', onResize);
+
+function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  renderer.render(scene, camera);
+}
+
+buildSite();
+pickVariants();
+syncUpperButtons();
+rebuild();
+animate();
+</script>
+
+</body>
+</html>
