@@ -737,3 +737,15 @@ GitHub Actions 报 `resident count grows after revisit`。实测首次访问商�
 定位两个问题：原 TrafficSpawner 把最多 214 辆车撒到整座 2400 米地图，玩家附近缺车；原 TrafficCar 的 AnimatableBody3D 物理同步覆盖脚本写入的位置，造成离树 advance 单测正常、游戏场景车不动。关闭同步并让现有路线沿真实物理帧更新。扫描全部 11 个汽车 GLB，按实测层级包围盒统一缩放、贴地和设置 BoxShape3D；新 TrafficSpawner 只关注附近道路，按等级和长度控制密度，支持基础跟车、转弯减速、路口让行、镜头避让、流式补车及池化回收。离树池由退出处理显式释放。主场景落位后接入玩家位置。
 
 运行全部十二组 Godot headless 测试，包括四 Seed 的模型、真实物理位移、动态生成/回收、对象池及完整城市/订单/交通回归。主场景旧“全图至少 100 辆”断言改为“附近有车且不超上限”，保留其余行为检查。无界面环境未验证实际模型门向、灯光、帧率和驾驶画面，见 TRAFFIC_STREAMING.md。本记录随功能提交。
+
+## 2026-10-29 10:35（Asia/Shanghai）暂停菜单、设置与城市种子显示
+
+需求（任务原文）：Esc 打开暂停层：`get_tree().paused = true`，暂停层自身设 `process_mode = PROCESS_MODE_WHEN_PAUSED`，关闭玩家输入，释放并显示鼠标；再按 Esc 或点“继续”恢复。暂停层按钮：继续；重开本单：调用现有 `OrderManager.handle_restart()`；返回主菜单：调用现有 `OrderManager.return_to_start_menu()`。暂停层里显示当前城市种子和订单种子（从现有生成数据读取，拿不到就显示“—”，不要为此改生成逻辑）。开始菜单、接单选择、结算界面下按 Esc 不打开暂停层，也不误触发游戏操作。
+
+基于 origin/main 的 a25b008 建立独立分支 feature/jzy070407-pause-menu。新增 `scripts/core/pause_controller.gd`：根节点 `PROCESS_MODE_ALWAYS` 负责暂停时仍接收 Esc，内部全屏遮罩 `PROCESS_MODE_WHEN_PAUSED`，暂停时冻结场景树、经 `PlayerController.set_controls_enabled(false)` 停玩家输入并释放鼠标，恢复时还原暂停前的控制状态；城市和订单种子优先读当前 `DeliveryOrder.city_seed`、`order_seed`，拿不到显示“—”。`OrderHUD` 新增只读查询 `is_any_modal_visible()`，暂停只在活动订单且没有开始菜单、接单、结算面板时打开。`main.gd` 在 `orders.setup()` 之后用代码创建 `PauseMenu`，不改 `main.tscn`；重开本单、返回主菜单直接调用 OrderManager 现有接口，没有另写状态切换，`order_manager.gd` 和 `project.godot` 未改。
+
+新增 `tests/test_pause.gd`：验证开始菜单、接单、结算界面按 Esc 不暂停；配送中 Esc 暂停后场景树冻结、倒计时与玩家位置不变、种子显示与当前订单一致，再按 Esc 恢复；重开本单后种子和订单内容不变并回到本单起点；返回主菜单回到开始界面。CI 测试列表加入 test_pause，`docs/USER_GUIDE.md` 的暂停动作说明同步更新。
+
+测试：`--headless --path . --import` 退出码 0；`test_input_actions`、`test_pause`、`test_main_scene`、`test_traffic`、`test_traffic_streaming`、`test_god_view` 全部 PASS。`test_orders` 打印 `PASS orders` 后退出码 -1073741819（Windows 访问冲突，等价 exit 139），日志显示建筑与装饰 GLB 加载失败，按任务约定记为 99 个 GLB 仍是 LFS pointer 的环境阻塞。无界面环境没有人工检查暂停层实际排版和鼠标可用性。
+
+提交与推送：`d5e2f2c feat(core): add pause menu with seed display`；本条日志单独提交。推送和 PR 见本轮 status 记录。
