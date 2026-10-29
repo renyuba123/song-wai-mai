@@ -1703,34 +1703,6 @@ PR #31 合并后，从 `origin/main` 的 `7c3d412` 起 `feature/jzy070407-menu-r
 
 本条记录随 `fix/jzy070407-web-deploy-path` 分支提交、推送并建 PR。
 
-## 2026-10-29 23:12（Asia/Shanghai）修种子随机：每次进游戏换城市、每单随机订单种子、主菜单不显示种子
-
-本轮需求（原文）：“随机效果有问题：应做到每次从主菜单进入游戏时，随机一个新的地图种子；每次开启一个新的订单时，随机一个订单种子，同时主菜单不显示种子id，仅在局内显示”。
-
-**问题定位：**
-
-- 城市种子只在主场景 `_ready()` 时取一次，等于每次启动游戏才换一座城市；从主菜单返回再开始会沿用同一座城市。
-- 首单之后的订单种子按 `+1` 递增，同一局里每单其实是确定的序列，不是随机。
-- 开始界面底部一直显示“城市种子 …”的标签，种子出现在主菜单上。
-
-**改动：**
-
-- `OrderManager` 新增 `session_starting` 信号，`start_game()` 先重新取首单种子再发信号；`main.gd` 收到后按随机模式重新选城市种子并 `world.regenerate()`。`_place_player()` 移进 `world_generated` 回调，换城后先把玩家放到新城市出生点，交通再按玩家位置布置车辆。
-- `GameSeeds` 新增 `next_order_seed(previous)`：正常游玩每单重新随机且不与上一单相同；`pin()` 或 `--order-seed` / `SWM_ORDER_SEED` 固定时仍按“基准 + 1”的固定序列，测试、录制和复现行为不变。拒单、结算后下一单、无订单时按 R 都改用它；每局首单在 `start_game()` 重新取。
-- 固定种子（测试、录制、`--city-seed`）进入游戏时不重复重建城市，保持原城市和确定性。
-- 主菜单移除种子标签（`OrderHUD.show_start_menu()` 不再接收种子），局内 HUD 顶部提示、暂停页和结算页仍显示城市/订单种子；启动日志改为真正开局时打印 `[种子]`。
-- 更新 `README.md`、`docs/USER_GUIDE.md`、`docs/BEHAVIOR_DATA_EXPORT.md` 的种子说明；`test_menu_ui` 改为断言主菜单不显示种子，`test_game_seeds` 增加下一单随机值与固定序列的断言。
-
-**验证：**
-
-- 临时探针（不固定种子，验证后已删除）实跑：主菜单城市 90245，第一次开始变为 409988（订单 266302）；拒单后订单种子 951408、城市不变；返回主菜单再开始，城市 901478（订单 326654）。每次进入换城、每单换种子、同局不换城都符合要求。
-- headless：`test_game_seeds`、`test_menu_ui`、`test_player_handling` 退出码 0；`test_orders`、`test_phone_orders`、`test_city` 打印 PASS，退出阶段的 139 按已知环境问题记录。
-- 窗口渲染：`test_main_scene`（nodes=91、lots=764、order_seed=1）、`test_pause`、`test_traffic`、`test_site_readability`、`test_city_streaming` 全部退出码 0 并打印 PASS，固定种子下城市没有重建。
-- `test_game_seeds` 覆盖：固定 1 时下一单为 2；随机时下一单在 1..999983 且不同于上一单。
-
-**修改文件：** `scripts/core/game_seeds.gd`、`scripts/core/main.gd`、`scripts/orders/order_manager.gd`、`scripts/orders/order_hud.gd`、`tests/test_game_seeds.gd`、`tests/test_menu_ui.gd`、`README.md`、`docs/USER_GUIDE.md`、`docs/BEHAVIOR_DATA_EXPORT.md`、`docs/DEVELOPMENT_LOG.md`。
-
-本条记录随 `feature/jzy070407-seed-randomization` 分支提交、推送并建 PR。
 ## 2026-10-29 22:58（Asia/Shanghai）检查远端更新：main 已合入 #46–#49，服务器同步到最新版本
 
 本轮需求（原文）：“检查 song-wai-mai 仓库的远端更新：进入 E:/Project/Game Work Team/song-wai-mai，先确认工作区状态，再执行 git fetch origin --prune。如果 origin/main 或 origin/refactor/modular-base 有新提交，按 CONTRIBUTING.md 和每轮工作规则安全整合（有未提交改动时先保留或提交，不覆盖），运行相关 Godot 测试，把本轮同步和测试结果追加到 docs/DEVELOPMENT_LOG.md，提交并推送；若出现冲突或权限问题，停止并向用户说明，不要强推。”随后用户补充：“服务器更新至最新版本”。
@@ -1752,6 +1724,7 @@ PR #31 合并后，从 `origin/main` 的 `7c3d412` 起 `feature/jzy070407-menu-r
 **修改文件：** `docs/DEVELOPMENT_LOG.md`。
 
 本条记录随 `docs/jzy070407-sync-20261029-f` 分支提交、推送并建 PR。
+
 ## 2026-10-29 23:12（Asia/Shanghai）修种子随机：每次进游戏换城市、每单随机订单种子、主菜单不显示种子
 
 本轮需求（原文）：“随机效果有问题：应做到每次从主菜单进入游戏时，随机一个新的地图种子；每次开启一个新的订单时，随机一个订单种子，同时主菜单不显示种子id，仅在局内显示”。
@@ -1781,7 +1754,7 @@ PR #31 合并后，从 `origin/main` 的 `7c3d412` 起 `feature/jzy070407-menu-r
 
 本条记录随 `feature/jzy070407-seed-randomization` 分支提交、推送并建 PR。
 
-## 2026-10-29 23:58（Asia/Shanghai）接单阶段把手机详情复制到屏幕右侧，并统一收入显示与入账
+## 2026-10-29 23:22（Asia/Shanghai）接单阶段把手机详情复制到屏幕右侧，并统一收入显示与入账
 
 本轮需求（原文）：“接单阶段，请将手机的详细信息复制显示到屏幕右侧UI位置，同时修正收入与UI显示的收入一致”。
 
@@ -1812,3 +1785,15 @@ PR #31 合并后，从 `origin/main` 的 `7c3d412` 起 `feature/jzy070407-menu-r
 **修改文件：** `scripts/economy/delivery_income.gd`（新增）、`scripts/economy/economy_hud.gd`、`scripts/orders/order_hud.gd`、`scripts/orders/order_manager.gd`、`scripts/orders/order_phone.gd`、`tests/test_economy.gd`、`tests/test_menu_ui.gd`、`tests/test_orders.gd`、`tests/test_phone_orders.gd`、`README.md`、`docs/USER_GUIDE.md`、`docs/DEVELOPMENT_LOG.md`。
 
 本分支基于尚未合并的 `feature/jzy070407-seed-randomization`（PR #51），PR #51 合并后本 PR 的差异只剩这一轮；本条记录随 `feature/jzy070407-offer-detail-income` 分支提交、推送并建 PR。
+
+## 2026-10-29 23:35（Asia/Shanghai）清理合并后重复的文档段落
+
+现象：PR #52 合并进 main 后，`docs/USER_GUIDE.md` 第 78/79 行出现两条相同的测试说明（新版和旧版各一条），`docs/DEVELOPMENT_LOG.md` 里“2026-10-29 23:12 修种子随机”出现两次；另外上一轮记录标题写成 23:58，但对应提交时间是 23:22。
+
+原因：PR #52 分支先合并了 main（带 PR #51 的 23:12 记录），随后远端又对同一分支做了一次 `Merge branch 'main'`；两边都含 22:58/23:12 段落，合并时按行拼接，导致重复。
+
+修改：删除重复的 23:12 记录和 USER_GUIDE 旧版测试说明各一份，按时间顺序保留 22:58、23:12、23:22（接单详情与收入统一）三条记录；把“23:58”标题改为实际提交时间“23:22”。本轮只改文档，不动 GDScript。
+
+**修改文件：** `docs/USER_GUIDE.md`、`docs/DEVELOPMENT_LOG.md`。
+
+本条记录随 `fix/jzy070407-merge-dup-cleanup` 分支提交、推送并建 PR。
