@@ -1,4 +1,4 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=8 format=3]
 
 [ext_resource type="Script" path="res://scripts/core/main.gd" id="1_main"]
 [ext_resource type="PackedScene" path="res://scenes/world/world.tscn" id="2_world"]
@@ -6,12 +6,15 @@
 [ext_resource type="PackedScene" path="res://scenes/traffic/traffic_system.tscn" id="4_traffic"]
 [ext_resource type="PackedScene" path="res://scenes/player/player.tscn" id="5_player"]
 [ext_resource type="Script" path="res://scripts/orders/order_manager.gd" id="6_orders"]
+[ext_resource type="PackedScene" path="res://scenes/world/city_ambience_audio.tscn" id="7_ambience"]
 
 [node name="Main" type="Node3D"]
 script = ExtResource("1_main")
 
 [node name="Player" parent="." instance=ExtResource("5_player")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.0, 0)
+
+[node name="CityAmbienceAudio" parent="." instance=ExtResource("7_ambience")]
 
 [node name="NavigationSystem" parent="." instance=ExtResource("3_navigation")]
 

@@ -1,6 +1,10 @@
-[gd_scene format=3 uid="uid://bhtnsn6bhwr5h"]
+[gd_scene load_steps=8 format=3 uid="uid://bhtnsn6bhwr5h"]
 
 [ext_resource type="Script" uid="uid://dl4qjpdgp2ukb" path="res://scripts/player/player_controller.gd" id="1_player"]
+[ext_resource type="Script" path="res://scripts/player/motorcycle_audio.gd" id="3_audio"]
+[ext_resource type="AudioStream" path="res://assets/audio/motorcycle/start_a1.mp3" id="4_start"]
+[ext_resource type="AudioStream" path="res://assets/audio/motorcycle/drive_b1.mp3" id="5_drive"]
+[ext_resource type="AudioStream" path="res://assets/audio/motorcycle/stop_c2_6_to_10.ogg" id="6_stop"]
 [ext_resource type="PackedScene" uid="uid://c5udir2xpgxqv" path="res://assets/models/电鸡模型.glb" id="2_dovo2"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_player"]
@@ -22,5 +26,20 @@ shape = SubResource("CapsuleShape3D_player")
 [node name="Camera3D" type="Camera3D" parent="." unique_id=191232166]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.0682454, 0)
 current = true
+
+[node name="MotorcycleAudio" type="Node" parent="."]
+script = ExtResource("3_audio")
+
+[node name="Start" type="AudioStreamPlayer" parent="MotorcycleAudio"]
+stream = ExtResource("4_start")
+bus = &"Motorcycle"
+
+[node name="Drive" type="AudioStreamPlayer" parent="MotorcycleAudio"]
+stream = ExtResource("5_drive")
+bus = &"Motorcycle"
+
+[node name="Stop" type="AudioStreamPlayer" parent="MotorcycleAudio"]
+stream = ExtResource("6_stop")
+bus = &"Motorcycle"
 
 [editable path="电鸡模型"]

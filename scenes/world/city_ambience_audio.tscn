@@ -1,0 +1,22 @@
+[gd_scene format=3 uid="uid://da3whdsq3tc0"]
+
+[ext_resource type="Script" uid="uid://711hf2cxtdrf" path="res://scripts/world/city_ambience_audio.gd" id="1_script"]
+[ext_resource type="AudioStream" uid="uid://5cejmqy18wbv" path="res://assets/audio/ambience/crowd_e2.mp3" id="2_crowd"]
+[ext_resource type="AudioStream" uid="uid://tbchtkslq3lj" path="res://assets/audio/ambience/traffic_f2.mp3" id="3_traffic"]
+
+[node name="CityAmbienceAudio" type="Node" unique_id=821159334]
+script = ExtResource("1_script")
+crowd_volume_db = -10.0
+traffic_volume_db = -8.0
+
+[node name="CrowdA" type="AudioStreamPlayer" parent="." unique_id=995201830]
+stream = ExtResource("2_crowd")
+
+[node name="CrowdB" type="AudioStreamPlayer" parent="." unique_id=972618107]
+stream = ExtResource("2_crowd")
+
+[node name="TrafficA" type="AudioStreamPlayer" parent="." unique_id=333254070]
+stream = ExtResource("3_traffic")
+
+[node name="TrafficB" type="AudioStreamPlayer" parent="." unique_id=1160400212]
+stream = ExtResource("3_traffic")
