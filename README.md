@@ -59,6 +59,7 @@ docs/
   ROADMAP.md            已确认的开发路线图
   DEVELOPMENT_LOG.md    每轮开发日志
   USER_GUIDE.md         各角色操作方法与注意事项
+  WEB_DEPLOY.md         main 更新后自动导出 Web 版并部署到 CloudBase
 ```
 
 模块边界与文件所有权、日志和提交流程见 [CONTRIBUTING.md](CONTRIBUTING.md)；建模、世界生成、玩家、导航、技术美术的具体操作见 [docs/USER_GUIDE.md](docs/USER_GUIDE.md)。

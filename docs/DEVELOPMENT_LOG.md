@@ -1287,6 +1287,32 @@ PR #31 合并后，从 `origin/main` 的 `7c3d412` 起 `feature/jzy070407-menu-r
 
 **修改文件：** `scripts/player/player_controller.gd`、`scripts/core/collision_layers.gd`、`scripts/core/main.gd`、`scripts/economy/economy_hud.gd`、`scripts/traffic/traffic_spawner.gd`、`scripts/core/game_settings.gd`、`tests/test_pedestrians.gd`、`tests/test_traffic.gd`、`tests/test_game_settings.gd`、`tests/test_main_scene.gd`、`README.md`、`docs/TRAFFIC_STREAMING.md`、`docs/USER_GUIDE.md`、`docs/ROADMAP.md`、`docs/DEVELOPMENT_LOG.md`。
 
+## 2026-10-29 19:54（Asia/Shanghai）main 更新后自动导出 Web 版并部署到服务器
+
+本轮需求（原文）：“将仓库最新项目与服务器挂钩，做到更新后自动上传至服务器”。
+
+**做了什么：**
+
+- 新增 `.github/workflows/deploy-web.yml`：`main` 推送和手动触发时，带 LFS 检出仓库，先跑 `git lfs fsck --pointers`，再下载标准版 Godot `4.7.2-stable`（非 .NET 版）和 `4.7.2.stable` Web 导出模板，执行 `--headless --path . --import` 和 `--export-release "Web" build/web/index.html`，检查 `index.html`、`index.wasm`、`index.pck` 都不为空后，把产物作为 artifact 保留 7 天。
+- 部署段用 `tcb login --apiKeyId … --apiKey …` 非交互登录 CloudBase CLI，再执行 `tcb hosting deploy build/web / -e <环境 ID> --concurrency 10 --safe --verify`：`--safe` 在发布前备份、失败自动回滚，`--verify` 发布后核对远端文件与本地一致。登录命令的 `--json` 输出重定向到 `/dev/null`，避免登录令牌进日志。
+- 部署后用 `curl` 访问线上地址做一次探活，确认页面里能读到 Godot 相关标记；同一时间只允许一个部署任务，新的推送会取消未完成的旧任务。
+- 凭据通过 GitHub Secrets 传入：`TCB_SECRET_ID`、`TCB_SECRET_KEY`；环境 ID 和站点地址做成可选仓库变量 `TCB_ENV_ID`、`TCB_SITE_URL`，不填时用当前展览环境 `passive-sailfish-d0e1nvt8175333a` 和默认域名。未配置凭据时工作流只构建不部署，并在 Summary 里提示，不会把检查标红。
+- 新增 `docs/WEB_DEPLOY.md`：写清触发方式、腾讯云 CAM 子账号与 API 密钥的获取步骤、`gh secret set` / 网页两种写入方式、工作流每一步的作用、本地手动部署命令和常见问题排查。
+- `exhibition/README.md` 的部署章节改为先指向自动部署文档，并保留本地手动部署命令作为兜底；`README.md` 的文档清单补上 `WEB_DEPLOY.md`。
+
+**校验：**
+
+- 用 Python 的 `yaml.safe_load` 解析工作流，结构和步骤顺序正确。
+- 对照本机 CloudBase CLI 3.8.10 的 `tcb login --help`、`tcb hosting deploy --help` 核对了 `--apiKeyId` / `--apiKey`、`-e`、`--concurrency`、`--safe`、`--verify` 参数确实存在。
+- 本机只装了 .NET 版 Godot（`Godot_v4.7.2-stable_mono_win64`），不能导出 Web，因此没有在本机复跑导出；Web 导出链路此前在展览分支上用标准版 Godot 验证过，产物约 66 MB。
+- 本轮只改 CI、文档和 README，不涉及 GDScript 与场景，未跑 headless 测试。
+
+**需要用户操作：**
+
+- 仓库目前没有配置任何 Actions secret（`gh secret list` 为空）。需要在仓库 Settings → Secrets and variables → Actions 里添加 `TCB_SECRET_ID`、`TCB_SECRET_KEY`，自动部署才会真正上传；在此之前工作流只构建。
+- API 密钥建议用 CAM 子账号单独生成，只授予 CloudBase 需要的权限，泄露时直接禁用并更新 Secret；不要通过聊天或 Issue 传送密钥。
+
+本条记录随 `feature/jzy070407-web-autodeploy` 分支提交、推送并建 PR。
 ## 2026-10-29 19:55（Asia/Shanghai）去掉地面路线指引，改成摩托车式骑行
 
 本轮需求（原文）：“删去地面引导的导航指示线，同时提高车速，修复电动车的物理引擎：当按下左/右移键时，车把对应转动，使之更符合常见游戏中摩托类似物的物理引擎效果”。
@@ -1317,6 +1343,38 @@ PR #31 合并后，从 `origin/main` 的 `7c3d412` 起 `feature/jzy070407-menu-r
 
 本条记录随 `feature/jzy070407-scooter-handling` 分支提交、推送并建 PR。
 
+## 2026-10-29 20:06（Asia/Shanghai）右上角增加配送收支和输入自检两块提示面板
+
+本轮需求（原文）：“右上角增加UI提示，结构类似于[Image #1]”。截图里右上角有上下两块面板，用户确认两块都要。
+
+**排版：**
+
+- `OrderHUD` 上新加一列 `RightPanels`，贴右上角、宽 340，小屏按 `视口宽度 × 0.32` 收窄到 210–340；两块面板共用深蓝底、金色描边的圆角样式，和左上角状态面板同一套配色。
+- 上面一块“配送收支”：小标题、大号绿色“余额”、再往下是本单收入、累计收入、累计赔偿三行，数字右对齐，整数不带小数点（500 而不是 500.00）。
+- 下面一块“输入自检 · F9 隐藏”：窗口焦点、输入激活、键盘输入、角色状态四行，值正常时绿色、异常时红色。手机竖屏时“键盘输入”只显示“次数 · 最近按键”，“角色状态”去掉车头角度。
+- 两块面板都是 `MOUSE_FILTER_IGNORE`，不挡点击和触屏拖动；开始界面和结算界面自动隐藏，进入配送、等待生成、接单和出错时显示。
+
+**收支数据：**
+
+- 新增 `scripts/orders/delivery_wallet.gd`（`DeliveryWallet`）：初始余额 500，记本单收入、累计收入和累计赔偿，`changed` 信号驱动 HUD 刷新。
+- `OrderManager` 持有一个账户，`OrderHUD.bind_wallet()` 订阅；每单结算时记账：成功按 `OrderPhone.calculate_fee()` 的预估收入入账，被汽车撞倒扣 `HIT_COMPENSATION`（50），超时不扣钱；新订单、重开本单、返回主菜单和从主菜单开局都会把本单收入或整个账户清零。
+- 数字和结算页的“本单收入 ¥x.xx”用的是同一个 `calculate_fee()`，不会出现面板和结算对不上的情况。
+
+**输入自检：**
+
+- `OrderHUD._input()` 统计键盘事件次数和最近一次按键（`OS.get_keycode_string()`），并直接处理 **F9** 隐藏/显示面板；F9 不进 InputMap，避免和 `project.godot` 的输入动作冲突。
+- `OrderHUD.bind_player()` 拿到玩家后，每帧读取 `controls_enabled`、水平速度和车头朝向；“窗口焦点”读 `Window.has_focus()`。
+
+**测试与校验：**
+
+- 新增 `tests/test_delivery_wallet.gd`：初始 500、收入累加、本单收入只保留最后一单、清零不影响累计、撞车赔偿 50、零/负赔偿不入账、重置，以及 `changed` 信号次数。headless 打印 `PASS delivery wallet`，退出码 0。
+- 新增 `tests/test_hud_panels.gd`：面板初始数字 `500 / +0 / 0 / -0`、收入后 `523.40 / +23.40 / 23.40`、赔偿后 `473.40 / -50`、开始与结算界面隐藏、绑定玩家后“已连接/可控制”与关闭控制后“已暂停/菜单中”、F9 开关和面板不超出屏幕。headless 四条 PASS，退出码 0。
+- 回归：`test_menu_ui` 四条 PASS、`test_orders` 与 `test_phone_orders` 先打印 PASS、退出阶段以既有 139 结束；窗口渲染下 `test_main_scene` 打印 `PASS main scene nodes=91 lots=764 sites=32 starts=12 vehicles=4 order_seed=1 sky=true`、`test_pause` 打印 `PASS pause`，退出码 0。
+- 真实窗口跑了一次主场景：用临时脚本进入配送、按住 W 后截图，确认右上角两块的排版、数字和绿色状态值与截图结构一致；临时脚本已删除。
+- 两个新测试已加入 CI 清单、README 测试表和命令示例；`docs/USER_GUIDE.md` 增加 5.3 右上角面板一节并补上 F9 行（后续章节顺延为 5.4–5.6）。
+- 没有动 NPC 汽车方向、人类模型、车流量和车速、撞人判定、人行道和马路贴图、红绿灯系统。
+
+本条记录随 `feature/jzy070407-right-hud` 分支提交、推送并建 PR。
 ## 2026-10-29 20:20（Asia/Shanghai）视角与前进方向解绑，车速改成加速度模型
 
 本轮需求（原文）：“目前有低头后电动车建模消失的问题，同时解绑视角旋转与前进方向改变的绑定，将速度模型转换为更贴合现实的加速度模型”。
@@ -1346,6 +1404,44 @@ PR #31 合并后，从 `origin/main` 的 `7c3d412` 起 `feature/jzy070407-menu-r
 
 本条记录随同一分支追加提交。
 
+## 2026-10-29 20:24（Asia/Shanghai）重做用户行为记录：地图、轨迹速度热力、计时点和道路拥挤度
+
+本轮需求（原文）：“修正用户行为记录的内容：地图；当前任务的起止点，玩家的运动轨迹图以及速度热力图（直接已热力形式显示到轨迹图上），以及特定计时点玩家在轨迹图中的位置”。
+
+追加需求（原文）：“追加：用户当前所处道路的npc拥挤度（贴在底图为地图的新图中）”。
+
+续接需求（原文）：“接续，同时数据记录要保证做到藉由网址游玩的玩家的相关行为信息全部记录保存并进行下载”。
+
+用户确认这次改动覆盖“采集 + 分析页”两层，地图底图用“城市路网俯视示意图”。
+
+**采集扩展：**
+
+- 位置采样保持每 2 秒一次，新增平面速度 `speed`、当前最近路段 `road`、路段等级 `rk`、同路段车辆数 `cars`、同路段行人数 `peds`、80 米内车辆数 `near`。速度只取 `Vector2(velocity.x, velocity.z)`，不把重力和跳跃算进去。
+- 骑行中每 30 秒记一个 `checkpoint`，带序号 `i`、已用秒数 `sec`、坐标、速度、剩余时间和道路信息，分析页据此在轨迹上标计时点。
+- `start` 事件记录本单起点 `sx`/`sz`、取餐点 `px`/`pz`、送达点 `dx`/`dz` 和限时 `limit`；`offer` 增加地图种子；`pickup`、`reject`、`finish` 和新增的 `hit` 都带当时的位置、速度、道路和 NPC 数量。
+- `session` 事件记录地图种子、地图尺寸、交通密度和车辆数，方便确认数据对应的城市和交通规模。
+- 本地队列上限提高到 2000 条，每 4 秒或每 50 条批量上报；Web 端在 JS 里维护同样的待发事件，页面关闭时用 `navigator.sendBeacon` 补发，成功后按条数从两边同时移除，失败则放回队首重试。
+- `main.gd` 仍只调用 `_telemetry.setup(orders, player)`；`TelemetryClient` 自己从同级节点里补 `WorldGenerator` 和 `TrafficSpawner`，不改主场景装配。
+
+**地图与分析页：**
+
+- 新增 `tools/export_city_map.gd`，按主场景实际使用的种子 118、2400×2400 米、密度 0.5 和 40/30/18 米路宽导出 `exhibition/analytics/data/city-118.json`；结果与主场景一致：91 个节点、144 条路段、32 个站点、12 个出生点。
+- 新增 `tools/build_behavior_page_data.py`：既能把 `behavior_events_events.csv` 转成页面 JSON，也能从路网生成演示轨迹；`--js` 会把地图和会话一起写进 `data/sample-data.js`，页面用 `file://` 直接打开也能用。
+- 新增 `exhibition/analytics/` 静态页面（`index.html`、`analytics.css`、`analytics.js`）：地图上画本单起点、取餐点和送达点；轨迹按采样速度从蓝、青、黄渐变到红，热力光晕直接叠在轨迹上；每 30 秒的计时点带时间标签；玩家经过的路段按“每百米车辆数”着色，盖在路网底图上。右侧是本单概况、图例和当前道路信息，点计时点或轨迹可以看速度和道路拥挤度，顶部可以开关拥挤度和计时点。
+- 页面支持多会话切换、载入本地 JSON，以及把当前数据下载成 JSON、CSV 或地图 PNG；布局按手机单列、桌面双列适配。仓库里只提交演示数据，真实访客数据不落仓库。
+- 文档同步：`docs/BEHAVIOR_DATA_EXPORT.md` 补事件字典、道路字段说明和分析页生成步骤；`server/behavior-log/README.md` 补事件表和拥挤度字段；`exhibition/README.md` 补分析页位置、部署方法和 3 号二维码待办。
+
+**验证：**
+
+- 用 `origin/main` 新建干净的临时工作树，只应用本轮补丁后重新导入：路网 91 节点/144 路段、城市 764 地块/建筑、32 站点、141 出入口。
+- 干净工作树 headless：`test_telemetry` 打印 `PASS telemetry`、退出码 0；`test_orders`、`test_phone_orders` 先打印 PASS，退出阶段以既有访问冲突 139 结束。
+- `test_traffic`、`test_pedestrians`、`test_pause`、`test_main_scene` 在 headless 下仍因既有 `RendererDummy`/RID 问题不打印 PASS；`test_main_scene` 改用 1280×720 窗口和 GL Compatibility 复跑，打印 `PASS main scene nodes=91 lots=764 sites=32 starts=12 vehicles=4 order_seed=1 sky=true`、退出码 0，说明主场景创建采集节点和自动补齐世界/交通不会报错。
+- 用 headless Edge 打开 `exhibition/analytics/index.html` 截图核对：地图、渐变轨迹、起点/取餐/送达标记、计时点标签、道路拥挤度、概况数字和左右布局都正常；演示会话为 6 分 04 秒、2680 米、12 个计时点。
+- 用一条自造的导出 CSV 跑 `tools/build_behavior_page_data.py --csv`，生成 1 个会话、7 条事件、`city=118`、`demo=false`，确认 CSV 转换路径可用。
+
+**修改文件：** 新增 `exhibition/analytics/index.html`、`exhibition/analytics/analytics.css`、`exhibition/analytics/analytics.js`、`exhibition/analytics/data/city-118.json`、`exhibition/analytics/data/sample-data.js`、`tools/export_city_map.gd`、`tools/build_behavior_page_data.py`；修改 `scripts/core/telemetry_client.gd`、`tests/test_telemetry.gd`、`docs/BEHAVIOR_DATA_EXPORT.md`、`server/behavior-log/README.md`、`exhibition/README.md`、`docs/DEVELOPMENT_LOG.md`。
+
+本条记录随 `feature/jzy070407-behavior-analytics` 分支提交、推送并建 PR。
 ## 2026-10-29 20:35（Asia/Shanghai）整合第四个交接包：交通、行人、信号灯、经济与输入自检
 
 本轮需求（原文）：“仓库当前没有 Actions secrets，需要添加：TCB_SECRET_ID TCB_SECRET_KEY直接帮我操作，同时有新交接包进入”。同时继续遵守此前约束（原文）：“npc汽车行进方向，人类模型，调整了一下车流量和速度，细化了撞到人的判定均已更新，正等待更新包，不要动这方面的内容”，以及“人行道和马路贴图红绿灯系统也算在内”。
@@ -1385,4 +1481,10 @@ PR #31 合并后，从 `origin/main` 的 `7c3d412` 起 `feature/jzy070407-menu-r
 
 **修改文件：** 新增 `scripts/economy/economy_hud.gd`、`scripts/core/game_settings.gd`、`scripts/core/input_activation_overlay.gd`、`scripts/core/input_diagnostics_hud.gd`、`scripts/dev/accident_research_panel.gd`、`scripts/traffic/traffic_signals.gd`、`scripts/player/rider_status_hud.gd`、`tests/test_economy.gd`、`tests/test_game_settings.gd`、`tests/test_accident_research.gd`、`tests/test_traffic_signals.gd`、`assets/models/人物模型/zsky_stylized_character.glb`、`assets/textures/road_asphalt_02_diff_1k.jpg`、`assets/textures/sidewalk_concrete_pavement_02_diff_1k.jpg`、`assets/audio/traffic_horn.ogg` 及两份 `ATTRIBUTION.md`；修改 `scripts/core/main.gd`、`scripts/core/pause_controller.gd`、`scripts/core/collision_layers.gd`、`scripts/orders/order_manager.gd`、`scripts/orders/order_hud.gd`、`scripts/player/player_controller.gd`、`scripts/traffic/traffic_car.gd`、`scripts/traffic/traffic_spawner.gd`、`scripts/traffic/pedestrian.gd`、`scripts/traffic/pedestrian_spawner.gd`、`scripts/world/city_builder.gd`、`scripts/world/road_builder.gd`、`tests/` 下 12 个测试、`.github/workflows/repository-integrity.yml`、`README.md`、`docs/USER_GUIDE.md`、`docs/ROADMAP.md`、`docs/TRAFFIC_STREAMING.md`、`docs/DEVELOPMENT_LOG.md`。
 
-本条记录随 `feature/jzy070407-handoff-package-4` 分支提交、推送并建 PR。PR #40 的“配送收支 / 输入自检”面板已由本交接包内的实现取代，本分支已接线上线。
+**合并期间远端的新提交：**
+
+- 分支推送后远端已合入 PR #39（Web 自动部署）、#40（右上角面板）和 #41（行为数据地图），本轮再把 `origin/main` 合进本分支：`.github/workflows/deploy-web.yml`、`docs/WEB_DEPLOY.md`、`exhibition/analytics/`、`tools/`、telemetry 改动原样保留，`docs/DEVELOPMENT_LOG.md` 按时间交错合并。
+- PR #40 的 `scripts/orders/delivery_wallet.gd` 和 `OrderHUD` 里约 300 行面板代码与交接包重复，统一保留交接包的 `EconomyHUD` 与 `InputDiagnosticsHUD`：删除 `delivery_wallet.gd`、`tests/test_delivery_wallet.gd`、`tests/test_hud_panels.gd`，`OrderManager` 不挂账户，收支和输入自检全部由交接包实现负责，测试改由 `test_economy` 覆盖。
+- 合并后有 5 处文本冲突（CI 测试清单、`README.md`、`docs/USER_GUIDE.md`、`docs/DEVELOPMENT_LOG.md`、`order_manager.gd`），全部手工解决，没有强制推送。
+
+本条记录随 `feature/jzy070407-handoff-package-4` 分支提交、推送并建 PR。

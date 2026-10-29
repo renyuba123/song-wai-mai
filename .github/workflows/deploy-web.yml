@@ -1,0 +1,133 @@
+name: Deploy web build
+
+# main 每次更新后自动导出 Web 版并上传到 CloudBase 静态托管。
+# 没有配置 TCB_SECRET_ID / TCB_SECRET_KEY 时只构建不部署，并在日志里提示。
+# 配置方法见 docs/WEB_DEPLOY.md。
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-web
+  cancel-in-progress: true
+
+env:
+  GODOT_VERSION: 4.7.2-stable
+  GODOT_DIR: ${{ github.workspace }}/.ci-godot
+  TCB_ENV_ID: ${{ vars.TCB_ENV_ID != '' && vars.TCB_ENV_ID || 'passive-sailfish-d0e1nvt8175333a' }}
+  TCB_SITE_URL: ${{ vars.TCB_SITE_URL != '' && vars.TCB_SITE_URL || 'https://passive-sailfish-d0e1nvt8175333a-1451076912.tcloudbaseapp.com' }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out repository with LFS objects
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Verify Git LFS objects
+        run: git lfs fsck --pointers
+
+      - name: Check deployment secrets
+        id: credentials
+        env:
+          TCB_SECRET_ID: ${{ secrets.TCB_SECRET_ID }}
+          TCB_SECRET_KEY: ${{ secrets.TCB_SECRET_KEY }}
+        run: |
+          if [ -n "$TCB_SECRET_ID" ] && [ -n "$TCB_SECRET_KEY" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::未配置 TCB_SECRET_ID / TCB_SECRET_KEY，本轮只构建不部署。配置方法见 docs/WEB_DEPLOY.md。"
+          fi
+
+      - name: Cache Godot editor and export templates
+        uses: actions/cache@v4
+        with:
+          path: |
+            .ci-godot
+            ~/.local/share/godot/export_templates
+          key: godot-${{ env.GODOT_VERSION }}-web-templates
+
+      - name: Install Godot 4.7.2 and web export templates
+        run: |
+          set -euo pipefail
+          mkdir -p "$GODOT_DIR"
+          godot_bin="$GODOT_DIR/Godot_v${GODOT_VERSION}_linux.x86_64"
+          if [ ! -x "$godot_bin" ]; then
+            curl -fsSL -o /tmp/godot.zip \
+              "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}/Godot_v${GODOT_VERSION}_linux.x86_64.zip"
+            unzip -q -o /tmp/godot.zip -d "$GODOT_DIR"
+            chmod +x "$godot_bin"
+          fi
+          template_dir="$HOME/.local/share/godot/export_templates/4.7.2.stable"
+          if [ ! -f "$template_dir/web_nothreads_release.zip" ]; then
+            curl -fsSL -o /tmp/templates.tpz \
+              "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}/Godot_v${GODOT_VERSION}_export_templates.tpz"
+            rm -rf /tmp/godot-templates
+            mkdir -p /tmp/godot-templates "$template_dir"
+            unzip -q /tmp/templates.tpz -d /tmp/godot-templates
+            cp -f /tmp/godot-templates/templates/* "$template_dir/"
+          fi
+          "$godot_bin" --version
+          "$godot_bin" --version | head -n 1 | grep -q '^4.7.2.stable'
+
+      - name: Import and export web build
+        run: |
+          set -euo pipefail
+          godot_bin="$GODOT_DIR/Godot_v${GODOT_VERSION}_linux.x86_64"
+          "$godot_bin" --headless --path . --import
+          rm -rf build/web
+          mkdir -p build/web
+          "$godot_bin" --headless --path . --export-release "Web" build/web/index.html
+          test -s build/web/index.html
+          test -s build/web/index.wasm
+          test -s build/web/index.pck
+          ls -lh build/web
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-build
+          path: build/web
+          retention-days: 7
+
+      - name: Install CloudBase CLI
+        if: steps.credentials.outputs.configured == 'true'
+        run: |
+          npm install -g @cloudbase/cli --registry=https://registry.npmmirror.com
+          tcb --version
+
+      - name: Deploy to CloudBase hosting
+        if: steps.credentials.outputs.configured == 'true'
+        env:
+          TCB_SECRET_ID: ${{ secrets.TCB_SECRET_ID }}
+          TCB_SECRET_KEY: ${{ secrets.TCB_SECRET_KEY }}
+        run: |
+          set -euo pipefail
+          # --json 会打印登录令牌，重定向到 /dev/null，避免出现在公开日志里
+          tcb login --apiKeyId "$TCB_SECRET_ID" --apiKey "$TCB_SECRET_KEY" --json > /dev/null
+          tcb hosting deploy build/web / -e "$TCB_ENV_ID" \
+            --concurrency 10 --safe --verify
+          echo "已在环境 $TCB_ENV_ID 的静态托管根目录发布 build/web"
+
+      - name: Smoke test the deployed page
+        if: steps.credentials.outputs.configured == 'true'
+        run: |
+          set -euo pipefail
+          url="${TCB_SITE_URL%/}/"
+          for attempt in 1 2 3 4 5; do
+            if curl -fsSL --max-time 30 "$url" -o /tmp/index.html; then
+              break
+            fi
+            sleep $((attempt * 10))
+          done
+          test -s /tmp/index.html
+          grep -qi "godot" /tmp/index.html
+          echo "页面可访问：$url"
