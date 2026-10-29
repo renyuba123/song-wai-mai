@@ -9,6 +9,7 @@ const MAP_SIZE := Vector2(1200.0, 1200.0)
 const MAP_SEED := 1
 const MAP_DENSITY := 1.0
 const EPS := 0.001
+const HORN_STREAM := preload("res://assets/audio/traffic_horn.ogg")
 
 var _failed := false
 
@@ -19,12 +20,16 @@ func _initialize() -> void:
 
 func _run() -> void:
 	_check_lane_math()
+	_check_speed_and_density_defaults()
 	var network: RoadNetwork = Generator.generate(MAP_SIZE, MAP_SEED, MAP_DENSITY, WIDTHS)
 	var city: CityContent = CityGenerator.generate(network)
 	_expect(network.validate().valid, "交通测试路网校验失败")
 	_expect(city.is_valid(network), "交通测试城市校验失败")
 	_check_spawn(network, city)
+	_check_nearby_vehicle_floor(network, city)
 	_check_movement(network, city)
+	_check_horn(network, city)
+	await _check_distant_red_motion(network)
 	_check_limits(network, city)
 	await _check_hit_area(network)
 	await _check_main_scene()
@@ -70,9 +75,47 @@ func _check_lane_math() -> void:
 	)
 
 
+func _check_speed_and_density_defaults() -> void:
+	var traffic := TrafficSpawner.new()
+	_expect(
+		TrafficSpawner.SPEEDS == [18.0, 13.5, 10.5],
+		"主/次/支路基础车速应整体提高"
+	)
+	_expect(
+		is_equal_approx(traffic.traffic_density, 3.0),
+		"默认交通密度应为 3.0"
+	)
+	_expect(traffic.max_vehicles == 120, "默认车辆上限应为 120")
+	_expect(is_equal_approx(traffic.max_speed_kmh, 72.0), "汽车限速上限应提高到 72 km/h")
+	_expect(
+		is_equal_approx(traffic.min_vehicle_spacing, 18.0),
+		"高密度车流的默认跟车间距应为 18 米"
+	)
+	_expect(is_equal_approx(traffic.acceleration_mps2, 3.2), "汽车应使用更快的起步加速度")
+	_expect(is_equal_approx(traffic.braking_mps2, 7.0), "提速后应同步增强制动能力")
+	var fastest_cruise := TrafficSpawner.SPEEDS[0] * 1.1
+	var stopping_distance := (
+		fastest_cruise * fastest_cruise / (2.0 * traffic.braking_mps2)
+	)
+	_expect(
+		stopping_distance <= TrafficSignals.RED_BRAKE_DISTANCE_M,
+		"最高目标车速必须能在红灯制动区内停住"
+	)
+	var player := PlayerController.new()
+	_expect(is_equal_approx(player.move_speed, 23.0), "玩家移动速度应提高到 23 m/s")
+	player.free()
+	traffic.free()
+
+
 func _check_spawn(network: RoadNetwork, city: CityContent) -> void:
 	var first := _make_spawner(network, city, 8)
 	var second := _make_spawner(network, city, 8)
+	var signals := first.get_traffic_signals()
+	_expect(signals != null, "正常构建后应创建交通信号控制器")
+	_expect(
+		signals != null and not signals.get_signal_node_ids().is_empty(),
+		"交通信号控制器应识别至少一个多岔路口"
+	)
 	var first_cars := first.get_cars()
 	var second_cars := second.get_cars()
 	_expect(first.get_vehicle_count() > 0, "应至少生成一辆汽车")
@@ -90,7 +133,7 @@ func _check_spawn(network: RoadNetwork, city: CityContent) -> void:
 	)
 
 	var avoidance := _avoidance_points(city)
-	var used_edges := {}
+	var edge_counts := {}
 	for car in first_cars:
 		_expect(car is AnimatableBody3D, "汽车应为 AnimatableBody3D")
 		_expect(car.position.is_finite(), "汽车出生位置无效")
@@ -116,8 +159,8 @@ func _check_spawn(network: RoadNetwork, city: CityContent) -> void:
 		)
 		var edge_id := car.get_spawn_edge_id()
 		_expect(edge_id >= 0 and edge_id < network.edges.size(), "汽车出生路段无效")
-		_expect(not used_edges.has(edge_id), "同一路段生成了多辆汽车")
-		used_edges[edge_id] = true
+		# High-density traffic may put several cars on one long road segment.
+		edge_counts[edge_id] = int(edge_counts.get(edge_id, 0)) + 1
 
 		var collision := car.get_node_or_null("CollisionShape3D") as CollisionShape3D
 		_expect(
@@ -148,6 +191,13 @@ func _check_spawn(network: RoadNetwork, city: CityContent) -> void:
 				distance >= TrafficSpawner.MIN_SPAWN_CLEARANCE_M - EPS,
 				"汽车出生点距玩家/站点出生点过近：%.1f 米" % distance
 			)
+
+	for edge_id in edge_counts:
+		var kind: int = network.edges[edge_id].kind
+		_expect(
+			int(edge_counts[edge_id]) <= first.get_edge_capacity(kind),
+			"spawned cars must respect the configured per-edge capacity"
+		)
 
 	first.free()
 	second.free()
@@ -205,6 +255,185 @@ func _check_movement(network: RoadNetwork, city: CityContent) -> void:
 	second.free()
 
 
+func _check_horn(network: RoadNetwork, city: CityContent) -> void:
+	_expect(HORN_STREAM != null, "鸣笛音频资源未导入")
+	if HORN_STREAM != null:
+		_expect(HORN_STREAM.get_length() > 0.1, "鸣笛音频不应为空")
+
+	var traffic := _make_spawner(network, city, 16)
+	var player := PlayerController.new()
+	root.add_child(player)
+	root.add_child(traffic)
+	traffic.set_player(player)
+	var cars := traffic.get_cars()
+	_expect(not cars.is_empty(), "鸣笛测试缺少车辆")
+	if cars.is_empty():
+		player.free()
+		traffic.free()
+		return
+
+	var car := cars[0]
+	var forward := car.get_forward()
+	car.speed_mps = 8.0
+	player.global_position = car.global_position
+	player.controls_enabled = true
+	player.velocity = Vector3(-forward.x, 0.0, -forward.y) * 12.0
+	_expect(
+		traffic.detect_horn_reason() == &"wrong_way",
+		"与车流反向行驶时应识别为逆行鸣笛"
+	)
+
+	var signals := traffic.get_traffic_signals()
+	var red_node := -1
+	var red_direction := Vector2.ZERO
+	if signals != null:
+		for node_id in signals.get_signal_node_ids():
+			for direction in [
+				Vector2(0.0, -1.0),
+				Vector2(1.0, 0.0),
+				Vector2(0.0, 1.0),
+				Vector2(-1.0, 0.0),
+			]:
+				if (
+					signals.get_vehicle_state(node_id, direction)
+					== TrafficSignals.VehicleState.RED
+				):
+					red_node = node_id
+					red_direction = direction
+					break
+			if red_node >= 0:
+				break
+	_expect(red_node >= 0, "鸣笛测试未找到红灯相位")
+	if red_node >= 0:
+		player.global_position = signals.get_junction_position(red_node)
+		var red_event := traffic._find_red_light_horn(red_direction)
+		_expect(
+			StringName(red_event.get("reason", &"")) == &"red_light",
+			"红灯穿越路口时应识别为闯红灯鸣笛"
+		)
+
+	player.global_position = car.global_position - Vector3(
+		forward.x, 0.0, forward.y
+	) * 10.0
+	var near_miss := traffic._find_near_miss_horn(forward, 15.0)
+	_expect(
+		StringName(near_miss.get("reason", &"")) == &"near_miss",
+		"高速擦肩超车时应识别为贴近鸣笛"
+	)
+
+	var horn_player := traffic.get_horn_player()
+	_expect(horn_player != null, "交通系统应创建 3D 鸣笛播放器")
+	if horn_player != null:
+		_expect(horn_player.stream == HORN_STREAM, "鸣笛播放器未加载鸣笛音频")
+		_expect(is_equal_approx(horn_player.max_distance, 100.0), "鸣笛可听距离错误")
+	var first_play := traffic._play_horn(&"wrong_way", player.global_position)
+	var second_play := traffic._play_horn(&"red_light", player.global_position)
+	_expect(first_play, "鸣笛播放器首次播放应成功")
+	_expect(not second_play, "鸣笛播放期间不应叠播")
+	_expect(traffic.get_horn_count() == 1, "鸣笛次数统计错误")
+	_expect(traffic.get_last_horn_reason() == &"wrong_way", "最近鸣笛原因错误")
+	_expect(traffic.is_horn_playing(), "播放后应进入鸣笛保护期")
+
+	player.free()
+	traffic.free()
+
+
+func _check_distant_red_motion(network: RoadNetwork) -> void:
+	## A forced red must only brake cars near the stop line. This exercises
+	## the spawner update loop with real physics frames so a rule that zeroes
+	## target speed at the full 60 m detection radius cannot regress silently.
+	var traffic := TrafficSpawner.new()
+	traffic.max_vehicles = 0
+	traffic.build(network)
+	var signals := traffic.get_traffic_signals()
+	if signals == null:
+		_expect(false, "远处红灯移动测试缺少信号控制器")
+		traffic.free()
+		return
+
+	var signal_node := -1
+	var edge_id := -1
+	var from_node := -1
+	for candidate_node in signals.get_signal_node_ids():
+		for candidate_edge in network.edges.size():
+			var edge: Dictionary = network.edges[candidate_edge]
+			var candidate_from := -1
+			if int(edge.a) == int(candidate_node):
+				candidate_from = int(edge.b)
+			elif int(edge.b) == int(candidate_node):
+				candidate_from = int(edge.a)
+			if candidate_from < 0:
+				continue
+			var lane := TrafficRoute.edge_lane(network, candidate_edge, candidate_from)
+			if not lane.is_empty() and float(lane.length) >= 60.0:
+				signal_node = int(candidate_node)
+				edge_id = candidate_edge
+				from_node = candidate_from
+				break
+		if signal_node >= 0:
+			break
+	if signal_node < 0:
+		_expect(false, "远处红灯移动测试找不到足够的信号路口进口道")
+		traffic.free()
+		return
+
+	var lane := TrafficRoute.edge_lane(network, edge_id, from_node)
+	var car := TrafficCar.new()
+	var car_rng := RandomNumberGenerator.new()
+	car_rng.seed = 20261029
+	car.setup(
+		network,
+		TrafficRoute.build_adjacency(network),
+		edge_id,
+		from_node,
+		float(lane.length) - 45.0,
+		8.0,
+		car_rng,
+		Color.WHITE
+	)
+	car.set_simulation_enabled(false)
+
+	traffic.max_vehicles = 1
+	var vehicles := Node3D.new()
+	vehicles.name = "TestVehicles"
+	traffic.add_child(vehicles)
+	traffic._vehicles = vehicles
+	vehicles.add_child(car)
+	traffic._cars.append(car)
+	traffic._focus = car.position
+	root.add_child(traffic)
+
+	signals.trigger_main_controller_red(signal_node, car.get_forward(), 60.0)
+	var start_distance := car.get_distance_travelled()
+	var junction := car.get_next_junction()
+	_expect(
+		car.position.distance_to(junction) > TrafficSignals.RED_BRAKE_DISTANCE_M,
+		"回归车辆应从红灯制动区外开始"
+	)
+	_expect(
+		not signals.should_vehicle_stop(
+			signal_node,
+			car.get_forward(),
+			car.position.distance_to(junction)
+		),
+		"远处强制红灯不应要求车辆停车"
+	)
+
+	for _frame in 90:
+		await physics_frame
+	_expect(
+		car.speed_mps > 2.0,
+		"红灯制动区外的车辆被错误减速停车"
+	)
+	_expect(
+		car.get_distance_travelled() - start_distance > 8.0,
+		"红灯制动区外的车辆没有继续前进"
+	)
+
+	traffic.free()
+	await process_frame
+
+
 func _check_limits(network: RoadNetwork, city: CityContent) -> void:
 	var zero := TrafficSpawner.new()
 	var zero_ready: Array = []
@@ -213,6 +442,10 @@ func _check_limits(network: RoadNetwork, city: CityContent) -> void:
 	zero.build(network, city)
 	_expect(zero.get_vehicle_count() == 0, "max_vehicles=0 时不应生成汽车")
 	_expect(zero_ready.size() == 1, "max_vehicles=0 时也应发出 traffic_ready")
+	_expect(
+		zero.get_traffic_signals() != null,
+		"max_vehicles=0 时仍应创建交通信号控制器"
+	)
 	zero.free()
 
 	var empty := TrafficSpawner.new()
@@ -377,6 +610,52 @@ func _check_main_scene() -> void:
 
 	main.queue_free()
 	await process_frame
+
+
+func _check_nearby_vehicle_floor(
+	network: RoadNetwork,
+	city: CityContent
+) -> void:
+	var traffic := _make_spawner(network, city, 12)
+	var center := city.player_start.position
+	for car in traffic.get_cars().duplicate():
+		var distance := Vector2(car.position.x - center.x, car.position.z - center.z).length()
+		if distance <= TrafficSpawner.NEARBY_VEHICLE_RADIUS_M:
+			traffic.recycle_car(car)
+	_expect(
+		traffic.get_nearby_vehicle_count(center) < TrafficSpawner.MIN_NEARBY_VEHICLES,
+		"nearby-floor test should start below the configured minimum"
+	)
+	traffic.update_traffic(center, false)
+	_expect(
+		traffic.get_nearby_vehicle_count(center)
+			>= TrafficSpawner.NEARBY_VEHICLE_TARGET,
+		"traffic update should refill to the nearby vehicle target"
+	)
+
+	var moved_center := center
+	for node in network.nodes:
+		var candidate := Vector3(node.x, RoadNetwork.SURFACE_Y, node.y)
+		if candidate.distance_to(center) > 180.0:
+			moved_center = candidate
+			break
+	_expect(
+		moved_center != center,
+		"nearby-floor movement test should find a distant road node"
+	)
+	traffic.update_traffic(moved_center, true)
+	var moved_nearby_count := traffic.get_nearby_vehicle_count(moved_center)
+	_expect(
+		moved_nearby_count >= TrafficSpawner.MIN_NEARBY_VEHICLES,
+		"moving the player must keep the four-car hard floor, got %d"
+			% moved_nearby_count
+	)
+	_expect(
+		TrafficSpawner.NEARBY_VEHICLE_TARGET
+			> TrafficSpawner.MIN_NEARBY_VEHICLES,
+		"the nearby refill target must exceed the four-car hard floor"
+	)
+	traffic.free()
 
 
 func _make_spawner(

@@ -39,6 +39,31 @@ func _run() -> void:
 		and bool(world.city_report.get("valid", false))
 		and world.city.is_valid(world.network)
 	)
+	var initial_vehicle_count := 0
+	var minimum_vehicle_count := 0
+	var minimum_nearby_count := 0
+	if ok:
+		initial_vehicle_count = traffic.get_vehicle_count()
+		minimum_vehicle_count = initial_vehicle_count
+		minimum_nearby_count = traffic.get_nearby_vehicle_count(
+			player.global_position
+		)
+		for _step in 8:
+			for _frame in 15:
+				await physics_frame
+			minimum_vehicle_count = mini(
+				minimum_vehicle_count,
+				traffic.get_vehicle_count()
+			)
+			minimum_nearby_count = mini(
+				minimum_nearby_count,
+				traffic.get_nearby_vehicle_count(player.global_position)
+			)
+		ok = (
+			minimum_nearby_count >= TrafficSpawner.MIN_NEARBY_VEHICLES
+			and traffic.get_vehicle_count() >= initial_vehicle_count
+			and traffic.get_vehicle_count() <= traffic.max_vehicles
+		)
 	if ok:
 		for _frame in 120:
 			if navigation.is_ready():
@@ -82,6 +107,8 @@ func _run() -> void:
 			" sites=", world.city.sites.size(),
 			" starts=", world.city.player_starts.size(),
 			" vehicles=", traffic.get_vehicle_count(),
+			" min_nearby=", minimum_nearby_count,
+			" min_vehicles=", minimum_vehicle_count,
 			" order_seed=", orders.get_order_seed(),
 			" sky=", sky_ready
 		)
@@ -93,6 +120,8 @@ func _run() -> void:
 			" orders=", orders != null,
 			" traffic=", traffic != null,
 			" vehicles=", traffic != null and traffic.get_vehicle_count(),
+			" min_nearby=", minimum_nearby_count,
+			" min_vehicles=", minimum_vehicle_count,
 			" order=", orders != null and orders.get_current_order() != null,
 			" start_screen=", orders != null and orders.is_start_screen_visible(),
 			" offer=", orders != null and orders.is_offer_visible(),

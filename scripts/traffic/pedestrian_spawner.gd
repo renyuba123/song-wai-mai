@@ -22,7 +22,7 @@ const MAX_PEDESTRIANS_PER_EDGE := [3, 2, 2]
 @export_range(50.0, 1000.0) var spawn_radius := 220.0
 @export_range(100.0, 1400.0) var despawn_radius := 320.0
 @export_range(0.1, 2.0) var update_interval := 0.75
-@export_range(0.5, 4.0) var walk_speed_mps := 1.4
+@export_range(0.5, 4.0) var walk_speed_mps := 1.8
 @export_range(0.0, 1.0) var crossing_chance := 0.35
 
 var network: RoadNetwork = null
@@ -32,6 +32,7 @@ var _adjacency: Array = []
 var _avoidance: Array[Vector3] = []
 var _player: Node3D = null
 var _camera: Camera3D = null
+var _signals: TrafficSignals = null
 var _focus := Vector3.ZERO
 var _clock := 0.0
 var _serial := 0
@@ -81,6 +82,10 @@ func set_player(player: Node3D) -> void:
 		update_pedestrians(player.global_position, true)
 
 
+func set_traffic_signals(signals: TrafficSignals) -> void:
+	_signals = signals
+
+
 func set_simulation_enabled(enabled: bool) -> void:
 	set_physics_process(enabled)
 
@@ -91,7 +96,19 @@ func _physics_process(delta: float) -> void:
 	if is_instance_valid(_player):
 		_focus = _player.global_position
 	for pedestrian in _pedestrians:
-		pedestrian.advance(pedestrian.speed_mps * delta)
+		var may_walk := true
+		if pedestrian.needs_crossing_permission():
+			var node_id := pedestrian.get_pending_crossing_node()
+			var can_cross := (
+				not is_instance_valid(_signals)
+				or not _signals.is_signalized(node_id)
+				or _signals.can_pedestrian_cross(node_id)
+			)
+			if not can_cross:
+				may_walk = false
+			else:
+				pedestrian.commit_crossing()
+		pedestrian.advance_motion(delta, may_walk)
 	_clock += delta
 	if _clock >= update_interval:
 		_clock = 0.0

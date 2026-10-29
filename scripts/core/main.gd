@@ -13,14 +13,21 @@ const MINI_MAP_SCRIPT := preload("res://scripts/ui/mini_map.gd")
 var _pause_menu: PauseController = null
 var _telemetry: TelemetryClient = null
 var _mini_map: Control = null
+var _settings: GameSettings = null
+var _economy: EconomyHUD = null
+var _input_activation: InputActivationOverlay = null
+var _input_diagnostics: InputDiagnosticsHUD = null
 
 
 func _ready() -> void:
+	_setup_settings()
+	_setup_input_layers()
 	world.world_generated.connect(_on_world_generated)
 	traffic.player_hit.connect(_on_traffic_player_hit)
 	world.regenerate()
 	_place_player()
 	traffic.set_player(player)
+	_setup_economy()
 	orders.setup(world, navigation, player)
 	_setup_pause_menu()
 	_setup_touch_controls()
@@ -29,9 +36,19 @@ func _ready() -> void:
 	_setup_mini_map()
 
 
+func _setup_settings() -> void:
+	_settings = GameSettings.new()
+	_settings.name = "GameSettings"
+	add_child(_settings)
+	_settings.load_settings()
+	_settings.apply_to(player, traffic)
+
+
 func _on_world_generated(network: RoadNetwork) -> void:
 	navigation.build(network)
 	traffic.build(network, world.city)
+	if _settings != null:
+		_settings.apply_to(player, traffic)
 	if _mini_map != null:
 		_mini_map.call("set_network", network)
 
@@ -51,11 +68,77 @@ func _setup_pause_menu() -> void:
 	_pause_menu = PauseController.new()
 	_pause_menu.name = "PauseMenu"
 	add_child(_pause_menu)
-	_pause_menu.setup(orders, player)
+	_pause_menu.setup(orders, player, _settings, traffic)
 
 
 func get_pause_menu() -> PauseController:
 	return _pause_menu
+
+
+func get_game_settings() -> GameSettings:
+	return _settings
+
+
+func get_economy_hud() -> EconomyHUD:
+	return _economy
+
+
+func get_input_diagnostics() -> InputDiagnosticsHUD:
+	return _input_diagnostics
+
+
+func _setup_input_layers() -> void:
+	## 浏览器/桌面窗口丢失焦点时先点一下画面，键盘才会交回游戏；自检面板常驻右上角。
+	_input_activation = InputActivationOverlay.new()
+	_input_activation.name = "InputActivation"
+	add_child(_input_activation)
+	_input_diagnostics = InputDiagnosticsHUD.new()
+	_input_diagnostics.name = "InputDiagnostics"
+	add_child(_input_diagnostics)
+	_input_diagnostics.setup(player, _input_activation)
+
+
+func _setup_economy() -> void:
+	_economy = EconomyHUD.new()
+	_economy.name = "EconomyHUD"
+	add_child(_economy)
+	player.pedestrian_hit.connect(_on_player_pedestrian_hit)
+	orders.game_started.connect(_on_game_started)
+	orders.order_started.connect(_on_order_started)
+	orders.order_finished.connect(_on_order_finished)
+
+
+func _on_game_started() -> void:
+	## 从主菜单重新开始时账户归位；后续订单在同一局里累加。
+	if _economy != null:
+		_economy.reset_economy()
+
+
+func _on_order_started(_order: DeliveryOrder) -> void:
+	if _economy != null:
+		_economy.begin_order()
+
+
+func _on_order_finished(success: bool) -> void:
+	## 送达按预估路程和剩余时间入账；撞车、超时和撞行人不加收入。
+	if not success or _economy == null:
+		return
+	var order := orders.get_current_order()
+	var session := orders.get_session()
+	if order == null or session == null:
+		return
+	var distance := order.pickup_path_length_m + order.delivery_path_length_m
+	_economy.record_successful_delivery(distance, session.time_remaining)
+
+
+func _on_player_pedestrian_hit(
+	_pedestrian: Pedestrian,
+	compensation: int
+) -> void:
+	if _economy != null:
+		_economy.add_compensation(compensation)
+	if orders != null and orders.get_hud() != null:
+		orders.get_hud().show_toast("撞到行人，赔偿 %d 元" % compensation)
 
 
 func _setup_touch_controls() -> void:

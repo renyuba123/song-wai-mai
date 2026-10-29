@@ -21,6 +21,9 @@ const OFFER_TEXT_COLOR := Color(0.98, 0.90, 0.72, 1.0)
 const MUTED_COLOR := Color(0.72, 0.78, 0.86, 1.0)
 const ACCENT_COLOR := Color(1.0, 0.72, 0.28, 1.0)
 const ERROR_COLOR := Color(1.0, 0.45, 0.38, 1.0)
+const TOAST_BG := Color(0.12, 0.035, 0.035, 0.94)
+const TOAST_BORDER := Color(1.0, 0.45, 0.34, 0.92)
+const TOAST_TEXT := Color(1.0, 0.92, 0.82, 1.0)
 
 const GOLD := Color(1.0, 0.72, 0.30, 1.0)
 const GOLD_BRIGHT := Color(1.0, 0.83, 0.50, 1.0)
@@ -40,6 +43,9 @@ var _arrow_label: Label
 var _hint_label: Label
 var _prompt_label: Label
 var _error_label: Label
+var _toast_panel: PanelContainer
+var _toast_label: Label
+var _toast_timer: Timer
 
 var _start_layer: Control
 var _start_backdrop: MenuBackdrop
@@ -73,20 +79,6 @@ var _result_hint: Label
 var _result_next_button: Button
 var _result_menu_button: Button
 
-var _right_column: VBoxContainer
-var _wallet_panel: PanelContainer
-var _wallet_balance_label: Label
-var _wallet_rows: Array[Label] = []
-var _self_check_panel: PanelContainer
-var _self_check_values: Array[Label] = []
-
-var _wallet: DeliveryWallet = null
-var _player: PlayerController = null
-var _self_check_visible := true
-var _key_event_count := 0
-var _last_key_text := ""
-var _last_key_msec := 0
-
 var _bold_font: FontVariation
 var _responsive_pending := false
 
@@ -99,65 +91,13 @@ func _ready() -> void:
 	_request_responsive_layout()
 
 
-## 订阅配送账户；账户每次变化都会刷新右上角收支面板。
-func bind_wallet(wallet: DeliveryWallet) -> void:
-	if _wallet == wallet:
-		return
-	if _wallet != null and _wallet.changed.is_connected(_refresh_wallet):
-		_wallet.changed.disconnect(_refresh_wallet)
-	_wallet = wallet
-	if _wallet != null:
-		_wallet.changed.connect(_refresh_wallet)
-	_refresh_wallet()
-
-
-## 输入自检面板读取玩家的可控状态、速度和车头朝向。
-func bind_player(player: PlayerController) -> void:
-	_player = player
-	refresh_self_check()
-
-
-func toggle_self_check() -> void:
-	_self_check_visible = not _self_check_visible
-	_self_check_panel.visible = _self_check_visible
-	refresh_self_check()
-
-
-func is_self_check_visible() -> bool:
-	return _self_check_panel.visible
-
-
-func is_wallet_panel_visible() -> bool:
-	return _wallet_panel.visible and _right_column.visible
-
-
-func get_right_column_rect() -> Rect2:
-	return _right_column.get_global_rect()
-
-
-func get_balance_text() -> String:
-	return _wallet_balance_label.text
-
-
-func get_wallet_row_text(index: int) -> String:
-	if index < 0 or index >= _wallet_rows.size():
-		return ""
-	return _wallet_rows[index].text
-
-
-func get_self_check_value(index: int) -> String:
-	if index < 0 or index >= _self_check_values.size():
-		return ""
-	return _self_check_values[index].text
-
-
 func show_start_menu(city_seed: int) -> void:
+	hide_toast()
 	_offer_active = false
 	_offer_text = ""
 	_set_offer_panel(false)
 	_set_menu_visible(true, false)
 	_status_panel.visible = false
-	_set_right_column_visible(false)
 	_prompt_label.visible = false
 	clear_error()
 	_start_seed_label.text = "城市种子 %d" % city_seed
@@ -180,12 +120,12 @@ func show_offer(order: DeliveryOrder, time_limit: float) -> void:
 	## 接单详情在三维手机屏幕上；HUD 只保留左上角的新订单提醒。
 	if order == null:
 		return
+	hide_toast()
 	_offer_active = true
 	_offer_text = OrderPhone.format_offer_text(order, time_limit)
 	_set_offer_panel(true)
 	_set_menu_visible(false, false)
 	_status_panel.visible = true
-	_set_right_column_visible(true)
 	_objective_label.text = "手机收到新订单 · Y 接单 / N 拒单"
 	_detail_label.text = ""
 	_arrow_label.text = ""
@@ -202,11 +142,11 @@ func hide_offer() -> void:
 
 
 func show_waiting(text: String = "正在生成订单…") -> void:
+	hide_toast()
 	_offer_active = false
 	_set_offer_panel(false)
 	_set_menu_visible(false, false)
 	_status_panel.visible = true
-	_set_right_column_visible(true)
 	_error_label.text = ""
 	_error_label.visible = false
 	_objective_label.text = text
@@ -220,11 +160,11 @@ func show_waiting(text: String = "正在生成订单…") -> void:
 
 
 func show_active(order: DeliveryOrder, session: OrderSession) -> void:
+	hide_toast()
 	_offer_active = false
 	_set_offer_panel(false)
 	_set_menu_visible(false, false)
 	_status_panel.visible = true
-	_set_right_column_visible(true)
 	_error_label.text = ""
 	_error_label.visible = false
 	if order == null or session == null:
@@ -268,11 +208,11 @@ func update_active(
 func show_result(order: DeliveryOrder, session: OrderSession) -> void:
 	if order == null or session == null:
 		return
+	hide_toast()
 	_offer_active = false
 	_set_offer_panel(false)
 	_set_menu_visible(false, true)
 	_status_panel.visible = false
-	_set_right_column_visible(false)
 	_result_title.text = "订单完成" if session.is_success() else "订单失败"
 	var tone := MINT if session.is_success() else CORAL
 	_result_title.add_theme_color_override("font_color", tone)
@@ -330,11 +270,11 @@ func show_result(order: DeliveryOrder, session: OrderSession) -> void:
 
 
 func show_error(text: String) -> void:
+	hide_toast()
 	_offer_active = false
 	_set_offer_panel(false)
 	_set_menu_visible(false, false)
 	_status_panel.visible = true
-	_set_right_column_visible(true)
 	_objective_label.text = "订单未开始"
 	_detail_label.text = ""
 	_arrow_label.text = ""
@@ -350,6 +290,31 @@ func show_error(text: String) -> void:
 func clear_error() -> void:
 	_error_label.text = ""
 	_error_label.visible = false
+
+
+func show_toast(text: String, duration := 2.5) -> void:
+	if _toast_panel == null or _toast_label == null or text.is_empty():
+		return
+	_toast_label.text = text
+	_toast_panel.visible = true
+	_toast_panel.move_to_front()
+	if _toast_timer != null:
+		_toast_timer.start(maxf(duration, 0.1))
+
+
+func hide_toast() -> void:
+	if _toast_timer != null:
+		_toast_timer.stop()
+	if _toast_panel != null:
+		_toast_panel.visible = false
+
+
+func get_toast_text() -> String:
+	return _toast_label.text if _toast_label != null else ""
+
+
+func is_toast_visible() -> bool:
+	return _toast_panel != null and _toast_panel.visible
 
 
 func get_objective_text() -> String:
@@ -480,13 +445,6 @@ static func format_time(seconds: float) -> String:
 	return "%d:%02d" % [floori(total / 60.0), total % 60]
 
 
-## 金额展示：整数不补小数，避免“余额 500”变成“余额 500.00”。
-static func format_money(value: float) -> String:
-	if is_equal_approx(value, roundf(value)):
-		return str(roundi(value))
-	return "%.2f" % value
-
-
 func _build() -> void:
 	_root = Control.new()
 	_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -544,223 +502,10 @@ func _build() -> void:
 	_error_label.offset_bottom = -38
 	_root.add_child(_error_label)
 
-	_build_right_column()
 	_build_start_layer()
 	_build_result_layer()
+	_build_toast()
 	show_waiting()
-
-
-func _build_right_column() -> void:
-	## 右上角两块的公共列：上面是配送收支，下面是输入自检。
-	_right_column = VBoxContainer.new()
-	_right_column.name = "RightPanels"
-	_right_column.anchor_left = 1.0
-	_right_column.anchor_right = 1.0
-	_right_column.offset_left = -364.0
-	_right_column.offset_right = -24.0
-	_right_column.offset_top = 24.0
-	_right_column.offset_bottom = 24.0
-	_right_column.add_theme_constant_override("separation", 10)
-	_right_column.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_root.add_child(_right_column)
-	_build_wallet_panel()
-	_build_self_check_panel()
-	_refresh_wallet()
-	refresh_self_check()
-
-
-func _build_wallet_panel() -> void:
-	_wallet_panel = PanelContainer.new()
-	_wallet_panel.name = "WalletPanel"
-	_wallet_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_wallet_panel.add_theme_stylebox_override("panel", _right_panel_style())
-	_right_column.add_child(_wallet_panel)
-
-	var margin := _panel_margin()
-	_wallet_panel.add_child(margin)
-	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 2)
-	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	margin.add_child(box)
-
-	var title := _make_label(13, MUTED_UI, false, 3)
-	title.text = "配送收支"
-	box.add_child(title)
-
-	var balance_row := HBoxContainer.new()
-	balance_row.add_theme_constant_override("separation", 8)
-	balance_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	box.add_child(balance_row)
-	var balance_caption := _make_label(18, TEXT_COLOR, true)
-	balance_caption.text = "余额"
-	balance_caption.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	balance_row.add_child(balance_caption)
-	_wallet_balance_label = _make_label(32, MINT, true)
-	_wallet_balance_label.text = "0"
-	balance_row.add_child(_wallet_balance_label)
-
-	var grid := GridContainer.new()
-	grid.columns = 2
-	grid.add_theme_constant_override("h_separation", 18)
-	grid.add_theme_constant_override("v_separation", 3)
-	grid.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	box.add_child(grid)
-	_add_wallet_row(grid, "本单收入")
-	_add_wallet_row(grid, "累计收入")
-	_add_wallet_row(grid, "累计赔偿")
-
-
-func _build_self_check_panel() -> void:
-	_self_check_panel = PanelContainer.new()
-	_self_check_panel.name = "SelfCheckPanel"
-	_self_check_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_self_check_panel.add_theme_stylebox_override("panel", _right_panel_style())
-	_self_check_panel.visible = _self_check_visible
-	_right_column.add_child(_self_check_panel)
-
-	var margin := _panel_margin()
-	_self_check_panel.add_child(margin)
-	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 4)
-	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	margin.add_child(box)
-
-	var title := _make_label(12, GOLD_BRIGHT, true, 3)
-	title.text = "输入自检 · F9 隐藏"
-	box.add_child(title)
-
-	var grid := GridContainer.new()
-	grid.columns = 2
-	grid.add_theme_constant_override("h_separation", 14)
-	grid.add_theme_constant_override("v_separation", 2)
-	grid.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	box.add_child(grid)
-	_add_self_check_row(grid, "窗口焦点")
-	_add_self_check_row(grid, "输入激活")
-	_add_self_check_row(grid, "键盘输入")
-	_add_self_check_row(grid, "角色状态")
-
-
-func _add_wallet_row(grid: GridContainer, caption: String) -> void:
-	var caption_label := _make_label(13, MUTED_UI, false, 3)
-	caption_label.text = caption
-	grid.add_child(caption_label)
-	var value := _make_label(14, MUTED_UI, true, 3)
-	value.text = "0"
-	value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	value.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	grid.add_child(value)
-	_wallet_rows.append(value)
-
-
-func _add_self_check_row(grid: GridContainer, caption: String) -> void:
-	var caption_label := _make_label(12, MUTED_UI, false, 3)
-	caption_label.text = caption
-	grid.add_child(caption_label)
-	var value := _make_label(12, MUTED_UI, true, 3)
-	value.text = "—"
-	value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	value.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	grid.add_child(value)
-	_self_check_values.append(value)
-
-
-func _refresh_wallet() -> void:
-	if _wallet_rows.size() < 3 or _wallet_balance_label == null:
-		return
-	var balance := DeliveryWallet.STARTING_BALANCE
-	var order_income := 0.0
-	var total_income := 0.0
-	var compensation := 0.0
-	if _wallet != null:
-		balance = _wallet.balance
-		order_income = _wallet.order_income
-		total_income = _wallet.total_income
-		compensation = _wallet.total_compensation
-	_wallet_balance_label.text = format_money(balance)
-	_wallet_rows[0].text = "+%s" % format_money(order_income)
-	_wallet_rows[1].text = format_money(total_income)
-	_wallet_rows[2].text = "-%s" % format_money(compensation)
-	_wallet_rows[0].add_theme_color_override(
-		"font_color", GOLD if order_income > 0.0 else MUTED_UI
-	)
-	_wallet_rows[2].add_theme_color_override(
-		"font_color", CORAL if compensation > 0.0 else MUTED_UI
-	)
-
-
-## 刷新输入自检的每一行；每帧调用，开销只是几个字符串。
-func refresh_self_check() -> void:
-	if _self_check_values.is_empty():
-		return
-	var window := get_window()
-	var focused := window != null and window.has_focus()
-	_set_self_check_value(0, "已获得" if focused else "未获得", focused)
-
-	var has_player := _player != null
-	var controllable := has_player and _player.controls_enabled
-	var input_text := "未接入"
-	if has_player:
-		input_text = "已连接" if controllable else "已暂停"
-	_set_self_check_value(1, input_text, controllable)
-
-	# 手机竖屏时面板只有两百来像素宽，只保留最关键的信息。
-	var compact := get_viewport().get_visible_rect().size.x < 560.0
-	var keyboard := "尚未收到按键"
-	if _key_event_count > 0:
-		if compact:
-			keyboard = "%d 次 · %s" % [_key_event_count, _last_key_text]
-		else:
-			var age := Time.get_ticks_msec() - _last_key_msec
-			keyboard = "%d 次 · 最近 %s %d ms" % [_key_event_count, _last_key_text, age]
-	_set_self_check_value(2, keyboard, _key_event_count > 0)
-
-	var speed := 0.0
-	var heading := 0.0
-	if has_player:
-		speed = Vector2(_player.velocity.x, _player.velocity.z).length()
-		heading = fposmod(rad_to_deg(_player.rotation.y), 360.0)
-	var state := "未接入"
-	if has_player:
-		if controllable:
-			state = "可控制 · %.1f m/s" % speed if compact else "可控制 · %.1f m/s · 车头 %d°" % [speed, roundi(heading)]
-		else:
-			state = "菜单中 · %.1f m/s" % speed
-	_set_self_check_value(3, state, controllable)
-
-
-func _set_self_check_value(index: int, text: String, ok: bool) -> void:
-	if index < 0 or index >= _self_check_values.size():
-		return
-	var label := _self_check_values[index]
-	label.text = text
-	label.add_theme_color_override("font_color", MINT if ok else CORAL)
-
-
-func _set_right_column_visible(value: bool) -> void:
-	if _right_column == null:
-		return
-	_right_column.visible = value
-
-
-func _process(_delta: float) -> void:
-	if _self_check_panel != null and _self_check_panel.visible:
-		refresh_self_check()
-
-
-func _input(event: InputEvent) -> void:
-	## 只做统计和 F9 开关，不拦截其他输入。
-	if not (event is InputEventKey):
-		return
-	var key := event as InputEventKey
-	if not key.pressed or key.echo:
-		return
-	_key_event_count += 1
-	_last_key_text = OS.get_keycode_string(key.physical_keycode)
-	_last_key_msec = Time.get_ticks_msec()
-	if key.physical_keycode == KEY_F9:
-		toggle_self_check()
-		get_viewport().set_input_as_handled()
 
 
 func _build_start_layer() -> void:
@@ -861,7 +606,6 @@ func _build_start_layer() -> void:
 	_add_control_row("视角", "鼠标 / 右侧拖动")
 	_add_control_row("交互", "E 取餐 / 送达")
 	_add_control_row("暂停 · 重开", "Esc · R")
-	_add_control_row("提示面板", "F9 显示 / 隐藏")
 
 	_start_touch_hint = _make_label(16, MUTED_UI)
 	_start_touch_hint.text = "左侧摇杆：上下油门、左右转向\n右侧拖动视角 · E 取餐 / 送达"
@@ -1042,6 +786,41 @@ func _build_result_layer() -> void:
 	box.add_child(_result_hint)
 
 
+func _build_toast() -> void:
+	_toast_panel = PanelContainer.new()
+	_toast_panel.name = "Toast"
+	_toast_panel.anchor_left = 0.5
+	_toast_panel.anchor_right = 0.5
+	_toast_panel.offset_left = -260.0
+	_toast_panel.offset_right = 260.0
+	_toast_panel.offset_top = 28.0
+	_toast_panel.offset_bottom = 92.0
+	_toast_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_toast_panel.add_theme_stylebox_override("panel", _toast_style())
+	_toast_panel.visible = false
+	_root.add_child(_toast_panel)
+
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 24)
+	margin.add_theme_constant_override("margin_right", 24)
+	margin.add_theme_constant_override("margin_top", 13)
+	margin.add_theme_constant_override("margin_bottom", 13)
+	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_toast_panel.add_child(margin)
+
+	_toast_label = _make_label(21, TOAST_TEXT, true, 3)
+	_toast_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_toast_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_toast_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	margin.add_child(_toast_label)
+
+	_toast_timer = Timer.new()
+	_toast_timer.name = "ToastTimer"
+	_toast_timer.one_shot = true
+	_toast_timer.timeout.connect(hide_toast)
+	_root.add_child(_toast_timer)
+
+
 func _add_control_row(caption: String, keys: String) -> void:
 	var caption_label := _make_label(14, MUTED_UI)
 	caption_label.text = caption
@@ -1132,10 +911,6 @@ func _apply_responsive_layout() -> void:
 		return
 	var narrow := viewport.x < 560.0
 	var compact := viewport.x < 900.0 or viewport.y < 760.0
-	# 右上角两块在小屏上收窄，避免挡住画面中间。
-	var right_width := clampf(viewport.x * 0.32, 210.0, 340.0)
-	_right_column.offset_left = -(right_width + 24.0)
-	_right_column.offset_right = -24.0
 	var side := 24 if narrow else (46 if compact else 96)
 	var top := 24 if narrow else (36 if compact else 56)
 	_set_margin(_start_page_margin, side, side, top, top)
@@ -1161,6 +936,14 @@ func _apply_responsive_layout() -> void:
 	_result_route.add_theme_font_size_override("font_size", 14 if narrow else (16 if compact else 17))
 	_result_badge.custom_minimum_size = Vector2(60, 60) if compact else Vector2(72, 72)
 	_result_icon.add_theme_font_size_override("font_size", 30 if compact else 38)
+	if _toast_panel != null:
+		var toast_width := minf(520.0, viewport.x - 36.0)
+		_toast_panel.offset_left = -toast_width * 0.5
+		_toast_panel.offset_right = toast_width * 0.5
+		_toast_panel.offset_top = 18.0 if compact else 28.0
+		_toast_panel.offset_bottom = 82.0 if compact else 92.0
+	if _toast_label != null:
+		_toast_label.add_theme_font_size_override("font_size", 17 if narrow else 21)
 
 
 func _set_margin(container: MarginContainer, left: int, right: int, top: int, bottom: int) -> void:
@@ -1246,26 +1029,6 @@ func _status_style() -> StyleBoxFlat:
 	return style
 
 
-func _right_panel_style() -> StyleBoxFlat:
-	## 右上角两块和左上角状态面板同一套深蓝底、金色描边。
-	var style := StyleBoxFlat.new()
-	style.bg_color = STATUS_BG
-	style.border_color = Color(GOLD.r, GOLD.g, GOLD.b, 0.45)
-	style.set_border_width_all(1)
-	style.set_corner_radius_all(9)
-	return style
-
-
-func _panel_margin() -> MarginContainer:
-	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 14)
-	margin.add_theme_constant_override("margin_right", 14)
-	margin.add_theme_constant_override("margin_top", 10)
-	margin.add_theme_constant_override("margin_bottom", 10)
-	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	return margin
-
-
 func _glass_style() -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
 	style.bg_color = GLASS_BG
@@ -1302,6 +1065,18 @@ func _result_panel_style() -> StyleBoxFlat:
 	style.shadow_color = Color(0.0, 0.0, 0.0, 0.50)
 	style.shadow_size = 28
 	style.shadow_offset = Vector2(0, 12)
+	return style
+
+
+func _toast_style() -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = TOAST_BG
+	style.border_color = TOAST_BORDER
+	style.set_border_width_all(2)
+	style.set_corner_radius_all(10)
+	style.shadow_color = Color(0.0, 0.0, 0.0, 0.42)
+	style.shadow_size = 12
+	style.shadow_offset = Vector2(0, 4)
 	return style
 
 

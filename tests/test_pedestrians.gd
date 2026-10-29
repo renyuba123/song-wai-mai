@@ -26,9 +26,12 @@ func _run() -> void:
 	_expect(city.is_valid(network), "行人测试城市校验失败")
 	_check_spawn(network, city)
 	_check_walk(network)
+	_check_motion_speed(network)
 	_check_crossing(network)
+	_check_signal_crossing_lock(network)
 	_check_recycle_and_cap(network, city)
 	_check_limits(network, city)
+	await _check_player_pedestrian_impact()
 	await _check_no_hit(network)
 	await _check_main_scene()
 	if _failed:
@@ -116,10 +119,47 @@ func _check_spawn(network: RoadNetwork, city: CityContent) -> void:
 			collision != null and collision.shape is CapsuleShape3D,
 			"行人碰撞体应为 CapsuleShape3D"
 		)
-		var model := pedestrian.get_node_or_null("PedestrianModel") as MeshInstance3D
+		var model := pedestrian.get_node_or_null("PedestrianModel") as Node3D
 		_expect(
-			model != null and model.mesh is CapsuleMesh,
-			"行人占位模型应为 CapsuleMesh"
+			model != null,
+			"行人应创建 PedestrianModel 视觉根节点"
+		)
+		var character := model.get_node_or_null("Character") as Node3D if model != null else null
+		_expect(
+			character != null,
+			"行人视觉应实例化 GLB 人形模型"
+		)
+		if character != null:
+			_expect(
+				is_equal_approx(character.scale.x, Pedestrian.PEDESTRIAN_MODEL_SCALE),
+				"行人模型缩放未按贴地高度设置"
+			)
+			_expect(
+				absf(character.position.y - Pedestrian.PEDESTRIAN_MODEL_OFFSET_Y) < EPS,
+				"行人模型脚底未对齐路面"
+			)
+			_expect(
+				is_equal_approx(
+					character.rotation_degrees.y,
+					Pedestrian.PEDESTRIAN_MODEL_YAW_DEGREES
+				),
+				"行人模型正面未对齐运动方向"
+			)
+			var animation_player := character.get_node_or_null("AnimationPlayer") as AnimationPlayer
+			_expect(
+				animation_player != null
+				and animation_player.has_animation(Pedestrian.PEDESTRIAN_WALK_ANIMATION),
+				"行人模型应包含 Walk 动画"
+			)
+			_expect(
+				animation_player != null
+				and animation_player.current_animation
+				== StringName(Pedestrian.PEDESTRIAN_WALK_ANIMATION),
+				"行人模型应播放 Walk 动画"
+			)
+		_expect(
+			model.get_node_or_null("FallbackCapsule") == null if model != null else false,
+			"GLB 正常加载时不应创建胶囊占位视觉"
 		)
 
 		var edge_id := pedestrian.get_spawn_edge_id()
@@ -185,6 +225,51 @@ func _check_walk(network: RoadNetwork) -> void:
 	_expect(
 		absf(pedestrian.get_lateral_offset()) > redline * RoadNetwork.CARRIAGEWAY_RATIO * 0.5,
 		"行人在步行状态下应位于车行道之外"
+	)
+	pedestrian.free()
+
+
+func _check_motion_speed(network: RoadNetwork) -> void:
+	var edge_id := _first_usable_edge(network)
+	_expect(edge_id >= 0, "找不到可用于速度测试的路段")
+	if edge_id < 0:
+		return
+	var adjacency := TrafficRoute.build_adjacency(network)
+	var edge: Dictionary = network.edges[edge_id]
+	var pedestrian := _make_pedestrian(
+		network, adjacency, edge_id, int(edge.a), 8.0, 1, 0.0, 23
+	)
+	var starting_speed := pedestrian.get_current_speed_mps()
+	pedestrian.advance_motion(0.5, true)
+	_expect(
+		pedestrian.get_current_speed_mps() > starting_speed,
+		"行人放行后应平滑加速"
+	)
+	_expect(
+		pedestrian.get_current_speed_mps() <= pedestrian.get_speed_mps() + EPS,
+		"行人实际速度不应超过目标步速"
+	)
+	for _step in 20:
+		pedestrian.advance_motion(0.05, true)
+	_expect(
+		is_equal_approx(
+			pedestrian.get_current_speed_mps(),
+			pedestrian.get_speed_mps()
+		),
+		"行人持续行走后应达到目标步速"
+	)
+
+	for _step in 20:
+		pedestrian.advance_motion(0.05, false)
+	_expect(
+		pedestrian.get_current_speed_mps() <= Pedestrian.MOTION_SPEED_EPS,
+		"红灯等待时行人应平滑停车"
+	)
+	var stopped_position := pedestrian.position
+	pedestrian.advance_motion(1.0, false)
+	_expect(
+		pedestrian.position.distance_to(stopped_position) < EPS,
+		"行人停车后不应继续滑行车行道"
 	)
 	pedestrian.free()
 
@@ -255,6 +340,124 @@ func _check_crossing(network: RoadNetwork) -> void:
 	pedestrian.free()
 	first.free()
 	second.free()
+
+
+func _check_signal_crossing_lock(network: RoadNetwork) -> void:
+	var signals := TrafficSignals.new()
+	signals.build(network)
+	_expect(
+		not signals.get_signal_node_ids().is_empty(),
+		"signal crossing test needs at least one signalized junction"
+	)
+	if signals.get_signal_node_ids().is_empty():
+		signals.free()
+		return
+
+	var edge_id := -1
+	var from_node := -1
+	var signal_node := -1
+	for candidate_id in network.edges.size():
+		var edge: Dictionary = network.edges[candidate_id]
+		for endpoint in [int(edge.a), int(edge.b)]:
+			var other := TrafficRoute.other_node(edge, endpoint)
+			if not signals.is_signalized(other):
+				continue
+			var redline := float(network.widths[int(edge.kind)])
+			var lateral := Pedestrian.lateral_for_band(redline, 0.5)
+			var lane := Pedestrian.sidewalk_lane(
+				network,
+				candidate_id,
+				endpoint,
+				1,
+				lateral
+			)
+			if not lane.is_empty() and float(lane.length) > 12.0:
+				edge_id = candidate_id
+				from_node = endpoint
+				signal_node = other
+				break
+		if edge_id >= 0:
+			break
+	_expect(edge_id >= 0 and signal_node >= 0, "no usable sidewalk reaches a signal")
+	if edge_id < 0 or signal_node < 0:
+		signals.free()
+		return
+
+	var edge: Dictionary = network.edges[edge_id]
+	var redline := float(network.widths[int(edge.kind)])
+	var lateral := Pedestrian.lateral_for_band(redline, 0.5)
+	var lane := Pedestrian.sidewalk_lane(network, edge_id, from_node, 1, lateral)
+	var adjacency := TrafficRoute.build_adjacency(network)
+	var pedestrian := _make_pedestrian(
+		network,
+		adjacency,
+		edge_id,
+		from_node,
+		float(lane.length) - 3.0,
+		1,
+		1.0,
+		19
+	)
+	for _step in 2000:
+		if pedestrian.needs_crossing_permission():
+			break
+		pedestrian.advance(0.05)
+
+	_expect(
+		pedestrian.needs_crossing_permission(),
+		"pedestrian should wait at the signalized crossing"
+	)
+	_expect(
+		pedestrian.get_active_crossing_node() == -1,
+		"crossing must not become active before permission"
+	)
+	_expect(
+		pedestrian.get_pending_crossing_node() == signal_node,
+		"pending crossing should reference the signalized junction"
+	)
+
+	var red_phase := -1.0
+	for sample in 100:
+		var phase := float(sample) * 0.5
+		signals.set_phase_seconds(phase)
+		if not signals.can_pedestrian_cross(signal_node):
+			red_phase = phase
+			break
+	_expect(red_phase >= 0.0, "a vehicle phase must keep pedestrians waiting")
+	_expect(
+		not signals.can_pedestrian_cross(signal_node),
+		"pedestrian should not receive a walk phase during vehicle traffic"
+	)
+
+	var committed := pedestrian.commit_crossing()
+	_expect(committed == signal_node, "commit_crossing should return the junction")
+	_expect(
+		pedestrian.get_active_crossing_node() == signal_node,
+		"committed crossing must become active"
+	)
+	_expect(pedestrian.is_crossing(), "committed pedestrian should be crossing")
+
+	pedestrian.advance(0.05)
+	_expect(
+		pedestrian.get_active_crossing_node() == signal_node,
+		"a signal change must not interrupt an active crossing"
+	)
+	_expect(
+		not signals.can_pedestrian_cross(signal_node),
+		"test should still be in the red vehicle phase"
+	)
+
+	for _step in 2000:
+		if pedestrian.get_active_crossing_node() == -1:
+			break
+		pedestrian.advance(0.05)
+	_expect(
+		pedestrian.get_active_crossing_node() == -1,
+		"active crossing should clear after the crossing segment completes"
+	)
+
+	pedestrian.free()
+	signals.free()
 
 
 func _check_recycle_and_cap(network: RoadNetwork, city: CityContent) -> void:
@@ -377,6 +580,134 @@ func _check_no_hit(network: RoadNetwork) -> void:
 	await process_frame
 
 
+func _check_player_pedestrian_impact() -> void:
+	_expect(
+		CollisionLayers.PLAYER_MASK & CollisionLayers.PEDESTRIAN == 0,
+		"player collision mask must not block pedestrians"
+	)
+	var packed := load("res://scenes/player/player.tscn") as PackedScene
+	_expect(packed != null, "could not load player scene for pedestrian impact")
+	if packed == null:
+		return
+
+	var arena := Node3D.new()
+	root.add_child(arena)
+	var player := packed.instantiate() as PlayerController
+	arena.add_child(player)
+	await process_frame
+	player.set_physics_process(false)
+	player.velocity = Vector3(0.0, 0.0, -8.0)
+
+	var hit_area := player.get_pedestrian_hit_area()
+	_expect(hit_area != null, "player must create a pedestrian hit area")
+	if hit_area != null:
+		_expect(hit_area.monitoring, "pedestrian hit area must monitor bodies")
+		_expect(
+			hit_area.collision_mask == CollisionLayers.PEDESTRIAN,
+			"pedestrian hit area must only scan the pedestrian layer"
+		)
+
+	var compensation_events: Array[int] = []
+	player.pedestrian_hit.connect(
+		func(_pedestrian: Pedestrian, amount: int) -> void:
+			compensation_events.append(amount)
+	)
+	var first := Pedestrian.new()
+	first.name = "ImpactTestPedestrian"
+	first.position = Vector3(0.0, 0.0, -0.8)
+	arena.add_child(first)
+	for _frame in 30:
+		await physics_frame
+		if not compensation_events.is_empty():
+			break
+
+	_expect(
+		compensation_events.size() == 1,
+		"driving into a pedestrian should emit exactly one compensation event"
+	)
+	_expect(
+		compensation_events.is_empty()
+			or compensation_events[0] == PlayerController.PEDESTRIAN_COMPENSATION,
+		"pedestrian compensation should be 1000"
+	)
+	_expect(
+		is_equal_approx(
+			player.get_pedestrian_speed_multiplier(),
+			PlayerController.PEDESTRIAN_SLOWDOWN_MULTIPLIER
+		),
+		"hitting a pedestrian should slow the player for the configured duration"
+	)
+	_expect(
+		not player.handle_pedestrian_impact(first),
+		"the same pedestrian must not charge compensation twice"
+	)
+	_expect(
+		compensation_events.size() == 1,
+		"repeated contact with one pedestrian must not duplicate compensation"
+	)
+
+	var blocking_hit := player.move_and_collide(Vector3(0.0, 0.0, -2.4), true)
+	_expect(blocking_hit == null, "pedestrian capsule must not physically block the player")
+
+	var second := Pedestrian.new()
+	second.name = "SecondImpactTestPedestrian"
+	second.position = Vector3(20.0, 0.0, 20.0)
+	arena.add_child(second)
+	player.velocity = Vector3(0.0, 0.0, -4.0)
+	_expect(
+		player.handle_pedestrian_impact(second),
+		"each different pedestrian should be chargeable once"
+	)
+	_expect(
+		compensation_events == [
+			PlayerController.PEDESTRIAN_COMPENSATION,
+			PlayerController.PEDESTRIAN_COMPENSATION,
+		],
+		"two different pedestrians should add two separate compensation events"
+	)
+
+	for _step in 5:
+		player._physics_process(0.6)
+	_expect(
+		is_equal_approx(player.get_pedestrian_speed_multiplier(), 1.0),
+		"pedestrian slowdown should expire after 2.5 seconds"
+	)
+
+	arena.queue_free()
+	await process_frame
+
+	var overlap_arena := Node3D.new()
+	root.add_child(overlap_arena)
+	var overlap_player := packed.instantiate() as PlayerController
+	overlap_arena.add_child(overlap_player)
+	await process_frame
+	overlap_player.set_physics_process(false)
+	overlap_player.velocity = Vector3.ZERO
+	var overlap_events: Array[int] = []
+	overlap_player.pedestrian_hit.connect(
+		func(_pedestrian: Pedestrian, amount: int) -> void:
+			overlap_events.append(amount)
+	)
+	var overlapping_pedestrian := Pedestrian.new()
+	overlapping_pedestrian.name = "OverlappingPedestrian"
+	overlapping_pedestrian.position = Vector3(0.0, 0.0, -0.8)
+	overlap_arena.add_child(overlapping_pedestrian)
+	for _frame in 30:
+		await physics_frame
+	_expect(
+		overlap_events.is_empty(),
+		"a stationary player must not be charged for an overlapping pedestrian"
+	)
+	overlap_player.velocity = Vector3(0.0, 0.0, -8.0)
+	overlap_player._process_pending_pedestrian_hits()
+	_expect(
+		overlap_events == [PlayerController.PEDESTRIAN_COMPENSATION],
+		"accelerating out of an overlap must charge exactly once"
+	)
+	overlap_arena.queue_free()
+	await process_frame
+
+
 func _check_main_scene() -> void:
 	var packed := load("res://scenes/main/main.tscn") as PackedScene
 	if packed == null:
@@ -386,11 +717,44 @@ func _check_main_scene() -> void:
 	root.add_child(main)
 	await process_frame
 	var traffic := main.get_node_or_null("TrafficSystem") as TrafficSpawner
+	var orders := main.get_node_or_null("OrderSystem") as OrderManager
 	if traffic == null:
 		_expect(false, "主场景缺少 TrafficSystem")
 		main.queue_free()
 		await process_frame
 		return
+	var player := main.get_node_or_null("Player") as PlayerController
+	var economy := main.get("_economy") as EconomyHUD
+	_expect(player != null, "主场景缺少 Player")
+	_expect(economy != null, "主场景缺少 EconomyHUD")
+	_expect(orders != null, "主场景缺少 OrderSystem")
+	if player != null and economy != null:
+		var balance_before := economy.get_balance()
+		var pedestrian := Pedestrian.new()
+		player.pedestrian_hit.emit(
+			pedestrian,
+			PlayerController.PEDESTRIAN_COMPENSATION
+		)
+		_expect(
+			economy.get_total_compensation()
+				== PlayerController.PEDESTRIAN_COMPENSATION,
+			"pedestrian compensation should be added to the economy"
+		)
+		_expect(
+			economy.get_balance()
+				== balance_before - PlayerController.PEDESTRIAN_COMPENSATION,
+			"pedestrian compensation should reduce the economy balance"
+		)
+		if orders != null and orders.get_hud() != null:
+			_expect(
+				orders.get_hud().get_toast_text().contains("赔偿 1000 元"),
+				"pedestrian hit should show a 1000 yuan compensation toast"
+			)
+			_expect(
+				orders.get_hud().is_toast_visible(),
+				"pedestrian compensation toast should be visible"
+			)
+		pedestrian.free()
 	_expect(
 		traffic.get_pedestrian_spawner() != null,
 		"TrafficSpawner 应由代码创建行人管理器"

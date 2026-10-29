@@ -5,15 +5,25 @@ class_name PlayerController
 ## W/S 控制车速，A/D 转车把并带动整车转向；转率随车速变化，静止时不能原地转身。
 ## 视角只在骑手头上转动，不改变车头方向和前进方向。
 
+signal pedestrian_hit(pedestrian: Pedestrian, compensation: int)
+
+const PEDESTRIAN_COMPENSATION := 1000
+const PEDESTRIAN_SLOWDOWN_DURATION_S := 2.5
+const PEDESTRIAN_SLOWDOWN_MULTIPLIER := 0.42
+const PEDESTRIAN_MIN_IMPACT_SPEED_MPS := 1.5
+const PEDESTRIAN_HIT_SIZE := Vector3(1.3, 1.8, 2.8)
+const PEDESTRIAN_HIT_CENTER := Vector3(0.0, 0.9, -0.45)
+
 @export_group("Movement")
-## 最高车速（米/秒）。
-@export var move_speed := 9.0
+## 最高车速（米/秒）。交接包把车流提速到 18 m/s，主控需要更快才能穿插。
+@export var move_speed := 23.0
 ## 倒车最高速度（米/秒）。
 @export var reverse_speed := 3.0
 ## 起步时的加速度（米/秒²），越接近最高车速加速越弱。
-@export var acceleration := 10.0
+## 23 m/s 的最高车速要在大约四秒内跑到九成，靠的就是这个更大的起步推力。
+@export var acceleration := 20.0
 ## 刹车减速度（米/秒²）。
-@export var brake_deceleration := 18.0
+@export var brake_deceleration := 26.0
 ## 倒车起步加速度（米/秒²）。
 @export var reverse_acceleration := 6.0
 ## 滑行时固定的滚动阻力减速（米/秒²）。
@@ -57,6 +67,10 @@ var _pitch := 0.0
 ## 相机相对车头的水平转角；视角自由转动，不影响行进方向。
 var _yaw := 0.0
 var _steer_base_y := 0.0
+var _pedestrian_hit_area: Area3D = null
+var _pedestrian_slowdown_remaining := 0.0
+var _hit_pedestrian_ids := {}
+var _pending_pedestrians := {}
 
 ## 当前车速（米/秒，负数为倒车）和车把角度（弧度，左正右负）。
 var _speed := 0.0
@@ -66,6 +80,7 @@ var _steer_angle := 0.0
 func _ready() -> void:
 	collision_layer = CollisionLayers.PLAYER
 	collision_mask = CollisionLayers.PLAYER_MASK
+	_ensure_pedestrian_hit_area()
 
 	if controls_enabled:
 		_capture_mouse_if_supported()
@@ -159,6 +174,12 @@ func _process(delta: float) -> void:
 
 
 func _physics_process(delta: float) -> void:
+	if _pedestrian_slowdown_remaining > 0.0:
+		_pedestrian_slowdown_remaining = maxf(
+			_pedestrian_slowdown_remaining - delta,
+			0.0
+		)
+
 	var input := Vector2.ZERO
 	if controls_enabled:
 		input = Input.get_vector(
@@ -182,18 +203,123 @@ func _physics_process(delta: float) -> void:
 		velocity.y -= gravity * delta
 
 	move_and_slide()
+	_process_pending_pedestrian_hits()
+
+
+func get_pedestrian_hit_area() -> Area3D:
+	return _pedestrian_hit_area
+
+
+func get_pedestrian_speed_multiplier() -> float:
+	return (
+		PEDESTRIAN_SLOWDOWN_MULTIPLIER
+		if _pedestrian_slowdown_remaining > 0.0
+		else 1.0
+	)
+
+
+func get_pedestrian_slowdown_remaining() -> float:
+	return _pedestrian_slowdown_remaining
+
+
+func get_planar_velocity() -> Vector2:
+	return Vector2(velocity.x, velocity.z)
+
+
+func get_planar_speed() -> float:
+	return get_planar_velocity().length()
+
+
+## 当前车速（米/秒，负数为倒车）；输入自检面板用它显示车速。
+func get_current_speed_mps() -> float:
+	return _speed
+
+
+## 车头相对初始朝向的角度，用于 HUD 显示。
+func get_heading_degrees() -> float:
+	return fposmod(rad_to_deg(rotation.y), 360.0)
+
+
+func handle_pedestrian_impact(pedestrian: Pedestrian) -> bool:
+	if not controls_enabled or not is_instance_valid(pedestrian):
+		return false
+	var pedestrian_id := pedestrian.get_instance_id()
+	if _hit_pedestrian_ids.has(pedestrian_id):
+		return false
+	var planar_speed := Vector2(velocity.x, velocity.z).length()
+	if planar_speed < PEDESTRIAN_MIN_IMPACT_SPEED_MPS:
+		return false
+
+	_hit_pedestrian_ids[pedestrian_id] = true
+	_pedestrian_slowdown_remaining = PEDESTRIAN_SLOWDOWN_DURATION_S
+	var slowed_speed := planar_speed * PEDESTRIAN_SLOWDOWN_MULTIPLIER
+	velocity.x = velocity.x / planar_speed * slowed_speed
+	velocity.z = velocity.z / planar_speed * slowed_speed
+	# _physics_process 每帧会按 _speed 重算水平速度，这里同步压低车速。
+	_speed *= PEDESTRIAN_SLOWDOWN_MULTIPLIER
+	pedestrian_hit.emit(pedestrian, PEDESTRIAN_COMPENSATION)
+	return true
+
+
+func _ensure_pedestrian_hit_area() -> void:
+	if is_instance_valid(_pedestrian_hit_area):
+		return
+	_pedestrian_hit_area = Area3D.new()
+	_pedestrian_hit_area.name = "PedestrianHitArea"
+	_pedestrian_hit_area.position = PEDESTRIAN_HIT_CENTER
+	_pedestrian_hit_area.collision_layer = CollisionLayers.TRIGGER
+	_pedestrian_hit_area.collision_mask = CollisionLayers.PEDESTRIAN
+	_pedestrian_hit_area.monitoring = true
+	_pedestrian_hit_area.monitorable = false
+	var collision := CollisionShape3D.new()
+	collision.name = "HitShape"
+	var shape := BoxShape3D.new()
+	shape.size = PEDESTRIAN_HIT_SIZE
+	collision.shape = shape
+	_pedestrian_hit_area.add_child(collision)
+	_pedestrian_hit_area.body_entered.connect(
+		_on_pedestrian_hit_body_entered
+	)
+	_pedestrian_hit_area.body_exited.connect(
+		_on_pedestrian_hit_body_exited
+	)
+	add_child(_pedestrian_hit_area)
+
+
+func _on_pedestrian_hit_body_entered(body: Node3D) -> void:
+	if body is Pedestrian:
+		var pedestrian := body as Pedestrian
+		_pending_pedestrians[pedestrian.get_instance_id()] = pedestrian
+		handle_pedestrian_impact(pedestrian)
+
+
+func _on_pedestrian_hit_body_exited(body: Node3D) -> void:
+	if body is Pedestrian:
+		_pending_pedestrians.erase(body.get_instance_id())
+
+
+## body_entered 只触发一次；保持重叠列表，静止贴住行人后起步仍能补结算。
+func _process_pending_pedestrian_hits() -> void:
+	for pedestrian_id in _pending_pedestrians.keys():
+		var pedestrian = _pending_pedestrians.get(pedestrian_id)
+		if not is_instance_valid(pedestrian):
+			_pending_pedestrians.erase(pedestrian_id)
+			continue
+		handle_pedestrian_impact(pedestrian as Pedestrian)
 
 
 func _update_speed(throttle: float, delta: float) -> void:
 	## throttle 正向为油门、负向先刹车再倒车。
 	## 加速力随车速上升而衰减，滑行时按滚阻加风阻减速，接近真实车辆的手感。
+	## 撞到行人的 2.5 秒内最高车速按倍率压低，油门输入仍然有效。
+	var max_speed := move_speed * get_pedestrian_speed_multiplier()
 	if throttle > 0.01:
 		if _speed < 0.0:
 			_speed = move_toward(_speed, 0.0, brake_deceleration * delta)
 		else:
-			var ratio := clampf(_speed / move_speed, 0.0, 1.0)
+			var ratio := clampf(_speed / max_speed, 0.0, 1.0)
 			var drive := acceleration * throttle * (1.0 - ratio)
-			_speed = minf(_speed + drive * delta, move_speed)
+			_speed = minf(_speed + drive * delta, max_speed)
 	elif throttle < -0.01:
 		if _speed > 0.0:
 			_speed = move_toward(
@@ -204,7 +330,7 @@ func _update_speed(throttle: float, delta: float) -> void:
 			var drive := reverse_acceleration * -throttle * (1.0 - ratio)
 			_speed = maxf(_speed - drive * delta, -reverse_speed)
 	else:
-		var ratio := clampf(absf(_speed) / move_speed, 0.0, 1.0)
+		var ratio := clampf(absf(_speed) / max_speed, 0.0, 1.0)
 		var drag := coast_deceleration + coast_drag * ratio * ratio
 		_speed = move_toward(_speed, 0.0, drag * delta)
 
@@ -254,6 +380,9 @@ func reset_to(start: SpawnPoint) -> void:
 	_yaw = 0.0
 	_speed = 0.0
 	_steer_angle = 0.0
+	_pedestrian_slowdown_remaining = 0.0
+	_hit_pedestrian_ids.clear()
+	_pending_pedestrians.clear()
 
 	camera.rotation = Vector3.ZERO
 
