@@ -767,7 +767,14 @@ GitHub Actions 报 `resident count grows after revisit`。实测首次访问商�
 - `test_route_guidance` 输出 `PASS route guidance`，进程退出码仍偶尔为 `-1073741819`（0xC0000005），与 99 个模型仍是 LFS pointer 的环境阻塞一致；`test_orders` 本次 `exit=0`，同一环境两次运行结果不同，说明退出码抖动来自资源加载而非本轮逻辑。
 - 合并只在 `docs/DEVELOPMENT_LOG.md` 产生冲突，按时间顺序保留本条记录和人行道导航记录（`10:13`），合并提交 `b52018c`。
 
-**提交与分支：** 从 `origin/main` `a25b008` 建立 `feature/jzy070407-route-guidance`；功能与日志提交 `d24d158 feat(orders): add ground route guidance`，随后合并 `origin/main` `b872b50` 得到 `b52018c`；推送后向 `main` 建 PR，不直接推送 `main`，不强推。
+**CI 复验与生成重试修复：**
+
+- 推送后 PR #21 的 `integrity` 第一次失败在 `FAIL route guidance: 生成订单后应显示接单界面`；重跑同一任务后改为 `test_orders` 在 `订单系统在 120 个物理帧内没有生成首单` 失败，两次失败都在“导航刚就绪、调用 `start_game()`”的同一位置，说明不是路线指引独有问题。
+- 定位到 `OrderManager._attempt_generation()` 在导航地图刚就绪、`find_path()` 还返回空路径的那个窗口里，会在同一帧连续试完 10 个种子后直接放弃并报错，之后不再重试。
+- 改为保留“生成中”状态，由 `_physics_process` 每 10 个物理帧重试一次，最多等到 `NAV_READY_MAX_FRAMES`（120 帧）再按导航是否就绪给出对应错误；生成成功的路径和订单种子逻辑不变。
+- 本地 `test_orders` 与 `test_route_guidance` 均输出 PASS（路线测试进程退出码仍为已知的 `-1073741819`）；`--import` 再次改写的 `.glb.import` 已还原。
+
+**提交与分支：** 从 `origin/main` `a25b008` 建立 `feature/jzy070407-route-guidance`；功能与日志提交 `d24d158 feat(orders): add ground route guidance`，随后合并 `origin/main` `b872b50` 得到 `b52018c`，CI 修复提交 `fix(orders): retry generation while navigation map syncs`；推送后向 `main` 建 PR [#21](https://github.com/renyuba123/song-wai-mai/pull/21)，不直接推送 `main`，不强推。
 
 ## 2026-10-29 10:13（Asia/Shanghai）人行道与地块导航基础
 

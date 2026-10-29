@@ -10,6 +10,9 @@ signal order_started(order: DeliveryOrder)
 signal order_finished(success: bool)
 
 const NAV_READY_MAX_FRAMES := 120
+## 刚就绪的导航地图在部分平台上要过几个物理帧才能返回路径，
+## 生成失败时按间隔重试，而不是在同一帧耗尽所有种子后直接报错。
+const GENERATION_RETRY_INTERVAL_FRAMES := 10
 const NEXT_SEED_ATTEMPTS := 10
 const BEACON_HEIGHT := 4.0
 const MERCHANT_COLOR := Color(1.0, 0.55, 0.18, 1.0)
@@ -186,13 +189,16 @@ func _physics_process(delta: float) -> void:
 	if not _configured:
 		return
 	if _pending_generation:
-		_attempt_generation()
-		if not _pending_generation:
-			return
 		_nav_wait_frames += 1
 		if _nav_wait_frames > NAV_READY_MAX_FRAMES:
 			_pending_generation = false
-			_hud.show_error("导航在 %d 个物理帧内未就绪，按 R 重试" % NAV_READY_MAX_FRAMES)
+			if _navigation != null and _navigation.is_ready():
+				_hud.show_error("订单生成失败：没有可达的起点/商家/顾客组合，按 R 重试")
+			else:
+				_hud.show_error("导航在 %d 个物理帧内未就绪，按 R 重试" % NAV_READY_MAX_FRAMES)
+			return
+		if _nav_wait_frames % GENERATION_RETRY_INTERVAL_FRAMES == 0:
+			_attempt_generation()
 		return
 	if _current_order == null or _session == null or not _session.is_active():
 		return
@@ -266,8 +272,7 @@ func _attempt_generation() -> void:
 				_offer_order(order)
 				return
 		seed_value += 1
-	_pending_generation = false
-	_hud.show_error("订单生成失败：没有可达的起点/商家/顾客组合，按 R 重试")
+	# 保留“生成中”状态，由 _physics_process 按间隔重试；超时后统一报错。
 
 
 func _offer_order(order: DeliveryOrder) -> void:
