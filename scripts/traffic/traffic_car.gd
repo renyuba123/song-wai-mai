@@ -1,12 +1,11 @@
 extends AnimatableBody3D
 class_name TrafficCar
 
-## 占位汽车：车身、车厢和轮子都由 BoxMesh 在代码里生成，
-## 沿右侧车道折线行驶。等正式汽车模型拆分完成后，只需替换
-## _build_visuals()，路线、碰撞和命中逻辑可以继续复用。
+## 真实汽车模型沿 RoadNetwork 右侧车道行驶；命中与路线复用原接口。
 
 signal player_entered(body: Node3D)
 
+const Catalog = preload("res://scripts/traffic/traffic_model_catalog.gd")
 const BODY_SIZE := Vector3(1.9, 0.7, 4.2)
 const BODY_CENTER_Y := 0.65
 const CABIN_SIZE := Vector3(1.6, 0.6, 2.0)
@@ -34,6 +33,10 @@ const MAX_ADVANCE_STEPS := 4096
 const POINT_EPS := 0.0001
 
 var speed_mps := 8.0
+var cruise_speed_mps := 8.0
+var model_index := -1
+var _model: Node3D = null
+var _idle_seconds := 0.0
 
 var _network: RoadNetwork = null
 var _adjacency: Array = []
@@ -62,15 +65,20 @@ func setup(
 	spawn_offset: float,
 	speed: float,
 	car_rng: RandomNumberGenerator,
-	color: Color
+	color: Color,
+	choice: int = 0
 ) -> void:
 	_network = source_network
 	_adjacency = adjacency
 	_rng = car_rng
 	_car_color = color
 	speed_mps = maxf(speed, 0.0)
+	cruise_speed_mps = speed_mps
+	_distance_travelled = 0.0
+	_idle_seconds = 0.0
 	_spawn_edge_id = edge_id
 	_ensure_nodes()
+	_set_model(choice)
 
 	var lane := TrafficRoute.edge_lane(_network, edge_id, from_node)
 	if lane.is_empty():
@@ -135,6 +143,16 @@ func set_simulation_enabled(enabled: bool) -> void:
 	set_physics_process(enabled)
 
 
+func get_next_junction() -> Vector3:
+	return _path[_path_cursor] if _path_cursor < _path.size() else Vector3.INF
+
+func is_turn_approaching() -> bool:
+	if _path_cursor + 2 >= _path.size():
+		return false
+	var current := _path[_path_cursor] - position
+	var after := _path[_path_cursor + 2] - _path[_path_cursor + 1]
+	return current.length() < 30.0 and current.normalized().dot(after.normalized()) < 0.8
+
 func get_forward() -> Vector2:
 	return Vector2(-sin(rotation.y), -cos(rotation.y))
 
@@ -191,7 +209,7 @@ func _ensure_nodes() -> void:
 	_nodes_built = true
 	collision_layer = CollisionLayers.VEHICLE
 	collision_mask = CollisionLayers.PLAYER
-	sync_to_physics = true
+	sync_to_physics = false
 	_build_visuals()
 
 	var collision := CollisionShape3D.new()
@@ -220,25 +238,54 @@ func _ensure_nodes() -> void:
 
 
 func _build_visuals() -> void:
-	_add_box("Body", BODY_SIZE, Vector3(0.0, BODY_CENTER_Y, 0.0), _car_color)
-	_add_box("Cabin", CABIN_SIZE, CABIN_CENTER, GLASS_COLOR)
-	for side in [-1.0, 1.0]:
-		for end in [-1.0, 1.0]:
-			_add_box(
-				"Wheel", WHEEL_SIZE,
-				Vector3(WHEEL_X * side, WHEEL_Y, WHEEL_Z * end),
-				WHEEL_COLOR
-			)
-		_add_box(
-			"Headlight", LIGHT_SIZE,
-			Vector3(0.55 * side, LIGHT_Y, LIGHT_FRONT_Z),
-			HEADLIGHT_COLOR, HEADLIGHT_COLOR
-		)
-		_add_box(
-			"Taillight", LIGHT_SIZE,
-			Vector3(0.55 * side, LIGHT_Y, LIGHT_BACK_Z),
-			TAILLIGHT_COLOR, TAILLIGHT_COLOR
-		)
+	# Keep a minimal fallback mesh and the historical Body node for diagnostics.
+	var body := _add_box("Body", BODY_SIZE, Vector3(0, BODY_CENTER_Y, 0), _car_color)
+	body.visible = false
+
+
+func _set_model(choice: int) -> void:
+	var index := posmod(choice, Catalog.MODELS.size())
+	if model_index == index and is_instance_valid(_model):
+		return
+	if is_instance_valid(_model):
+		_model.free()
+	model_index = index
+	var info: Dictionary = Catalog.MODELS[index]
+	var path: String = info.path
+	var scene: PackedScene = load(path)
+	_model = Node3D.new()
+	_model.name = "CarModel"
+	_model.add_child(scene.instantiate())
+	var box: AABB = info.bounds
+	# Bounds include imported root transforms. Scale uniformly and rest the lowest vertex on the road.
+	var factor := minf(1.9 / box.size.x, 4.2 / box.size.z)
+	var origin := -box.get_center() * factor
+	origin.y = -box.position.y * factor + 0.025
+	_model.transform = Transform3D(Basis.IDENTITY.scaled(Vector3.ONE * factor), origin)
+	add_child(_model)
+	var collision: CollisionShape3D = get_node_or_null("CollisionShape3D")
+	if collision != null:
+		var shape := BoxShape3D.new()
+		shape.size = Vector3(box.size.x * factor, box.size.y * factor, box.size.z * factor)
+		collision.shape = shape
+		collision.position = Vector3(0, shape.size.y * 0.5 + 0.025, 0)
+	var hit_shape: CollisionShape3D = get_node_or_null("HitBox/HitShape")
+	if hit_shape != null:
+		var trigger := BoxShape3D.new()
+		trigger.size = Vector3(box.size.x * factor + 0.2, box.size.y * factor + 0.2, box.size.z * factor + 0.2)
+		hit_shape.shape = trigger
+		_hit_area.position.y = shape_y() * 0.5 + 0.025
+
+
+func shape_y() -> float:
+	var collision: CollisionShape3D = get_node("CollisionShape3D")
+	return collision.shape.size.y
+
+
+func update_speed(delta: float, target: float, acceleration: float, braking: float) -> void:
+	var rate := acceleration if target >= speed_mps else braking
+	speed_mps = move_toward(speed_mps, maxf(target, 0.0), rate * delta)
+	advance(speed_mps * delta)
 
 
 func _add_box(

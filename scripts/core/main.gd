@@ -15,6 +15,7 @@ func _ready() -> void:
 	traffic.player_hit.connect(_on_traffic_player_hit)
 	world.regenerate()
 	_place_player()
+	traffic.set_player(player)
 	orders.setup(world, navigation, player)
 	_setup_test_god_view()
 
