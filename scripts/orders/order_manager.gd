@@ -9,12 +9,15 @@ signal order_offered(order: DeliveryOrder)
 signal order_rejected(order: DeliveryOrder)
 signal order_started(order: DeliveryOrder)
 signal order_finished(success: bool)
+signal game_started
 
 const NAV_READY_MAX_FRAMES := 120
 const NEXT_SEED_ATTEMPTS := 10
 const BEACON_HEIGHT := 4.0
 const MERCHANT_COLOR := Color(1.0, 0.55, 0.18, 1.0)
 const CUSTOMER_COLOR := Color(0.15, 0.85, 0.95, 1.0)
+const CUSTOMER_HIT_RADIUS_M := 3.0
+const CUSTOMER_HIT_MIN_SPEED_MPS := 7.0
 
 @export var initial_order_seed := 1
 
@@ -36,6 +39,8 @@ var _pending_generation := false
 var _pending_seed := 1
 var _avoid_signature := ""
 var _nav_wait_frames := 0
+var _customer_hit_reported := false
+var _customer_hit_count := 0
 
 
 func _ready() -> void:
@@ -64,6 +69,8 @@ func setup(
 	_pending_offer = false
 	_pending_generation = false
 	_at_start_screen = true
+	_customer_hit_reported = false
+	_customer_hit_count = 0
 	_player.set_controls_enabled(false)
 	if _phone != null:
 		_phone.hide_offer()
@@ -91,6 +98,10 @@ func get_phone() -> OrderPhone:
 	return _phone
 
 
+func get_customer_hit_count() -> int:
+	return _customer_hit_count
+
+
 func is_start_screen_visible() -> bool:
 	return _at_start_screen and _hud != null and _hud.is_start_menu_visible()
 
@@ -116,6 +127,7 @@ func start_game() -> bool:
 		return false
 	_at_start_screen = false
 	_hud.hide_start_menu()
+	game_started.emit()
 	_begin_generation(_order_seed, "")
 	return true
 
@@ -153,6 +165,7 @@ func return_to_start_menu() -> bool:
 	_pending_offer = false
 	_current_order = null
 	_session = null
+	_customer_hit_reported = false
 	_at_start_screen = true
 	_order_seed += 1
 	if _phone != null:
@@ -234,6 +247,7 @@ func _physics_process(delta: float) -> void:
 	_session.advance(delta)
 	if _session.is_finished():
 		return
+	_check_customer_hit()
 	_refresh_hud()
 
 
@@ -269,6 +283,7 @@ func _unhandled_input(event: InputEvent) -> void:
 func _begin_generation(seed_value: int, avoid_signature: String) -> void:
 	_current_order = null
 	_session = null
+	_customer_hit_reported = false
 	_pending_offer = false
 	_pending_generation = true
 	_pending_seed = seed_value
@@ -315,6 +330,7 @@ func _offer_order(order: DeliveryOrder) -> void:
 	_current_order = order
 	_order_seed = order.order_seed
 	_session = null
+	_customer_hit_reported = false
 	_pending_offer = true
 	if _beacon != null:
 		_beacon.visible = false
@@ -334,6 +350,7 @@ func _activate_order(order: DeliveryOrder) -> void:
 	_current_order = order
 	_order_seed = order.order_seed
 	_pending_offer = false
+	_customer_hit_reported = false
 	_session = OrderSession.new(order, _player.move_speed if _player != null else 5.0)
 	_session.state_changed.connect(_on_session_state_changed)
 	_session.finished.connect(_on_session_finished)
@@ -353,6 +370,7 @@ func _activate_order(order: DeliveryOrder) -> void:
 func _restart_same_order() -> void:
 	if _current_order == null:
 		return
+	_customer_hit_reported = false
 	_session = OrderSession.new(_current_order, _player.move_speed if _player != null else 5.0)
 	_session.state_changed.connect(_on_session_state_changed)
 	_session.finished.connect(_on_session_finished)
@@ -373,6 +391,24 @@ func _begin_next_order() -> void:
 	var previous := _current_order
 	var previous_signature := OrderGenerator.signature(previous)
 	_begin_generation(_order_seed + 1, previous_signature)
+
+
+func _check_customer_hit() -> void:
+	if (
+		_customer_hit_reported
+		or _session == null
+		or _session.state != OrderSession.State.TO_CUSTOMER
+		or _player == null
+	):
+		return
+	if _player.get_planar_speed() < CUSTOMER_HIT_MIN_SPEED_MPS:
+		return
+	if _session.get_distance_to_target(_player.global_position) > CUSTOMER_HIT_RADIUS_M:
+		return
+	_customer_hit_reported = true
+	_customer_hit_count += 1
+	if _hud != null:
+		_hud.show_toast("撞到客户了！")
 
 
 func _on_session_state_changed(_state: int) -> void:

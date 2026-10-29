@@ -378,6 +378,23 @@ func _check_manager() -> void:
 	_expect(beacon != null and beacon.visible, "目标信标未显示")
 
 	_player.global_position = order.customer.spawn_point.position
+	var economy := _main.get("_economy") as EconomyHUD
+	var balance_before_customer_hit := economy.get_balance() if economy != null else 0
+	_player.velocity = Vector3(0.0, 0.0, -8.0)
+	_orders._check_customer_hit()
+	_orders._check_customer_hit()
+	_expect(_orders.get_customer_hit_count() == 1, "撞到客户只应提示一次")
+	_expect(hud.get_toast_text() == "撞到客户了！", "撞到客户时应弹出提示")
+	_expect(
+		_orders.get_session().state == OrderSession.State.TO_CUSTOMER,
+		"撞到客户不应改变订单状态"
+	)
+	if economy != null:
+		_expect(
+			economy.get_balance() == balance_before_customer_hit,
+			"撞到客户不应扣除余额"
+		)
+	_player.velocity = Vector3.ZERO
 	_expect(_orders.try_interact(_player.global_position), "经理送达交互失败")
 	_expect(
 		_orders.get_session().state == OrderSession.State.DELIVERED,

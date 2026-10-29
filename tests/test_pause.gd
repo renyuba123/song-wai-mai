@@ -10,6 +10,9 @@ var _navigation: NavigationService = null
 var _player: PlayerController = null
 var _orders: OrderManager = null
 var _pause: PauseController = null
+var _settings: GameSettings = null
+var _traffic: TrafficSpawner = null
+var _settings_test_path := ""
 
 
 func _initialize() -> void:
@@ -29,6 +32,7 @@ func _run() -> void:
 	if _main != null:
 		_main.queue_free()
 	await process_frame
+	_cleanup_settings_file()
 	if _failed:
 		printerr("FAIL pause")
 		quit(1)
@@ -44,6 +48,8 @@ func _expect(condition: bool, message: String) -> void:
 
 
 func _setup_main() -> void:
+	_settings_test_path = "res://.godot/test_pause_settings_%d.cfg" % OS.get_process_id()
+	_cleanup_settings_file()
 	var packed := load("res://scenes/main/main.tscn") as PackedScene
 	if packed == null:
 		_expect(false, "无法加载主场景")
@@ -59,12 +65,20 @@ func _setup_main() -> void:
 	_player = _main.get_node_or_null("Player") as PlayerController
 	_orders = _main.get_node_or_null("OrderSystem") as OrderManager
 	_pause = _main.get_node_or_null("PauseMenu") as PauseController
+	_traffic = _main.get_node_or_null("TrafficSystem") as TrafficSpawner
+	_settings = _main.call("get_game_settings") as GameSettings
 	if _navigation == null or _player == null or _orders == null:
 		_expect(false, "主场景缺少导航、玩家或订单系统")
 		return
 	_expect(_pause != null, "主场景缺少暂停层 PauseMenu")
 	if _pause == null:
 		return
+	_expect(_settings != null, "主场景缺少持久化设置")
+	_expect(_traffic != null, "主场景缺少交通系统")
+	if _settings != null:
+		_settings.config_path = _settings_test_path
+		_settings.reset_to_defaults(false)
+		_settings.apply_to(_player, _traffic)
 	var ready := false
 	for _frame in 120:
 		ready = _navigation.is_ready()
@@ -119,6 +133,7 @@ func _check_pause_and_resume() -> void:
 	_expect(seed_text.contains("订单种子"), "暂停层应显示订单种子")
 	_expect(seed_text.contains(str(order.city_seed)), "暂停层城市种子与当前订单不一致")
 	_expect(seed_text.contains(str(order.order_seed)), "暂停层订单种子与当前订单不一致")
+	_check_settings_page()
 
 	var remaining := session.time_remaining
 	var player_position := _player.global_position
@@ -139,6 +154,107 @@ func _check_pause_and_resume() -> void:
 			Input.get_mouse_mode() == Input.MOUSE_MODE_CAPTURED,
 			"恢复后应捕获鼠标"
 		)
+
+
+func _check_settings_page() -> void:
+	_expect(not _pause.is_settings_visible(), "暂停首页不应显示设置页")
+	_pause.open_settings()
+	_expect(_pause.is_pause_visible(), "打开设置后仍应保持暂停")
+	_expect(_pause.is_settings_visible(), "暂停页应能打开设置")
+	var pause_page := _pause.find_child("PausePage", true, false) as VBoxContainer
+	var settings_page := _pause.find_child("SettingsPage", true, false) as VBoxContainer
+	var volume := _pause.find_child("VolumeSlider", true, false) as HSlider
+	var sensitivity := _pause.find_child("SensitivitySlider", true, false) as HSlider
+	var density := _pause.find_child("DensitySlider", true, false) as HSlider
+	var fullscreen := _pause.find_child("FullscreenCheck", true, false) as CheckBox
+	var reset := _pause.find_child("ResetButton", true, false) as Button
+	var back := _pause.find_child("BackButton", true, false) as Button
+	_expect(pause_page != null and not pause_page.visible, "设置页应隐藏暂停首页")
+	_expect(settings_page != null and settings_page.visible, "设置页节点应可见")
+	_expect(volume != null, "设置页缺少主音量滑块")
+	_expect(sensitivity != null, "设置页缺少鼠标灵敏度滑块")
+	_expect(density != null, "设置页缺少交通密度滑块")
+	_expect(fullscreen != null, "设置页缺少全屏开关")
+	_expect(reset != null, "设置页缺少恢复默认按钮")
+	_expect(back != null, "设置页缺少返回按钮")
+	if (
+		volume == null
+		or sensitivity == null
+		or density == null
+		or reset == null
+		or back == null
+		or _settings == null
+	):
+		return
+
+	volume.value = 0.35
+	sensitivity.value = 0.0065
+	density.value = 2.3
+	_expect(
+		is_equal_approx(_settings.master_volume, 0.35),
+		"主音量滑块应更新设置"
+	)
+	_expect(
+		is_equal_approx(_settings.mouse_sensitivity, 0.0065),
+		"灵敏度滑块应更新设置"
+	)
+	_expect(
+		is_equal_approx(_settings.traffic_density, 2.3),
+		"交通密度滑块应更新设置"
+	)
+	_expect(
+		is_equal_approx(_player.mouse_sensitivity, 0.0065),
+		"灵敏度滑块应立即作用于玩家"
+	)
+	_expect(
+		_traffic != null and is_equal_approx(_traffic.traffic_density, 2.3),
+		"交通密度滑块应立即作用于交通系统"
+	)
+
+	reset.emit_signal("pressed")
+	_expect(
+		is_equal_approx(_settings.master_volume, GameSettings.DEFAULT_MASTER_VOLUME),
+		"恢复默认应重置主音量"
+	)
+	_expect(
+		is_equal_approx(
+			_settings.mouse_sensitivity,
+			GameSettings.DEFAULT_MOUSE_SENSITIVITY
+		),
+		"恢复默认应重置鼠标灵敏度"
+	)
+	_expect(
+		is_equal_approx(
+			_settings.traffic_density,
+			GameSettings.DEFAULT_TRAFFIC_DENSITY
+		),
+		"恢复默认应重置交通密度"
+	)
+
+	volume.value = 0.35
+	sensitivity.value = 0.0065
+	density.value = 2.3
+	back.emit_signal("pressed")
+	_expect(not _pause.is_settings_visible(), "返回后应隐藏设置页")
+	_expect(_pause.is_pause_visible(), "返回后仍应保持暂停")
+	_expect(
+		FileAccess.file_exists(_settings_test_path),
+		"返回暂停首页时应保存临时设置文件"
+	)
+
+	var restored := GameSettings.new()
+	restored.config_path = _settings_test_path
+	_expect(restored.load_settings(), "暂停页保存的设置应能重新加载")
+	_expect(is_equal_approx(restored.master_volume, 0.35), "暂停页主音量未持久化")
+	_expect(
+		is_equal_approx(restored.mouse_sensitivity, 0.0065),
+		"暂停页鼠标灵敏度未持久化"
+	)
+	_expect(
+		is_equal_approx(restored.traffic_density, 2.3),
+		"暂停页交通密度未持久化"
+	)
+	restored.free()
 
 
 func _check_restart_order() -> void:
@@ -207,3 +323,15 @@ func _press_pause() -> void:
 	event.action = &"pause"
 	event.pressed = true
 	_pause._unhandled_input(event)
+
+
+func _cleanup_settings_file() -> void:
+	if _settings_test_path.is_empty():
+		return
+	if not FileAccess.file_exists(_settings_test_path):
+		return
+	var error := DirAccess.remove_absolute(
+		ProjectSettings.globalize_path(_settings_test_path)
+	)
+	if error != OK:
+		_expect(false, "无法清理暂停设置临时文件：%s" % error)

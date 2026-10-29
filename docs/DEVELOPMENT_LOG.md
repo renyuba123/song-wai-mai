@@ -1098,7 +1098,6 @@ PR #31 合并后，从 `origin/main` 的 `7c3d412` 起 `feature/jzy070407-menu-r
 - 本轮没有冲突，也没有权限问题。
 
 本条记录随 `docs/jzy070407-sync-20261029-c` 分支提交、推送并建 PR。
-
 ## 2026-10-29 16:58（Asia/Shanghai）检查远端更新：PR #33、#34 已合并
 
 本轮需求（原文）：“检查 song-wai-mai 仓库的远端更新：进入 E:/Project/Game Work Team/song-wai-mai，先确认工作区状态，再执行 git fetch origin --prune。如果 origin/main 或 origin/refactor/modular-base 有新提交，按 CONTRIBUTING.md 和每轮工作规则安全整合（有未提交改动时先保留或提交，不覆盖），运行相关 Godot 测试，把本轮同步和测试结果追加到 docs/DEVELOPMENT_LOG.md，提交并推送；若出现冲突或权限问题，停止并向用户说明，不要强推。”
@@ -1145,6 +1144,27 @@ PR #31 合并后，从 `origin/main` 的 `7c3d412` 起 `feature/jzy070407-menu-r
 
 本条记录随 `docs/jzy070407-behavior-export` 分支提交、推送并建 PR。
 
+## 2026-10-29 17:06（Asia/Shanghai）完善暂停设置与路口信号灯
+
+本轮需求（原文）：“来做一些改进”，并附项目改进清单截图。只处理清单第 3、4 项中可以闭环验收的部分：暂停菜单缺少设置项，以及车辆和行人尚未受信号灯约束。开始/结算界面重做、人行道与地块入口导航、正式行人模型、车把动画目视确认、CloudBase/二维码、性能与发布准备不在本轮完成范围内。
+
+- 新增 `GameSettings`，用 `ConfigFile` 把主音量、鼠标灵敏度、交通密度和全屏保存到默认 `user://settings.cfg`；提供范围裁剪、恢复默认、载入/保存，以及把值应用到玩家和交通系统的接口。
+- `PauseController` 增加“设置”子页：三项滑块即时应用，全屏开关即时切换，恢复默认会写回配置，返回暂停首页、恢复游戏时保存。Esc 在设置页先返回暂停首页，再次按下才恢复游戏。
+- 新增 `TrafficSignals`。三个及以上分支的路口进入 50 秒确定性周期：两组各 12 秒绿、3 秒黄、2 秒全红，最后 16 秒为行人相位。车辆在 60 米接近区响应红灯；黄灯距路口大于 7 米时停车，已进入路口后不中断。无信号路口保留原有冲突点让行。
+- 行人到信号路口先等待行人相位，放行后提交横穿；横穿过程中即使切回车辆相位也继续走完，避免停在车道中央。无信号路口行为不变。
+- 信号灯复用 `assets/models/装饰模型/红绿灯.glb`。可见模型只在非 headless 模式创建，限制在玩家附近 260 米、最多 8 个；全图逻辑相位仍持续计算。`TrafficSpawner` 即使 `max_vehicles=0` 也创建信号控制器。
+- 新增 `tests/test_game_settings.gd`，覆盖默认值、范围裁剪、保存重载、恢复默认和实时应用。扩展 `tests/test_pause.gd`，从设置页真实操作滑块、恢复默认、保存并重新载入临时配置；测试文件放在 `.godot/` 下，不读写真实 `user://settings.cfg`。
+- 新增 `tests/test_traffic_signals.gd`，覆盖多岔路口识别、红黄绿边界、黄灯 7 米阈值、已进入路口放行、行人相位、确定性和 GLB 可加载。扩展 `tests/test_traffic.gd` 与 `tests/test_pedestrians.gd`，检查信号控制器创建、红灯等待、提交横穿、横穿中变灯不中断和结束后清理状态。CI 测试清单同步加入。
+
+**测试与校验：**
+
+- Godot 4.7.2 `--headless --path . --editor --quit` 退出码 0，没有脚本解析错误；路网为 91 节点、144 路段，城市为 764 地块/建筑、32 站点、141 出入口。
+- headless 下 `test_game_settings`、`test_traffic_signals`、`test_traffic`、`test_pause` 均输出 PASS、退出码 0。
+- `test_pedestrians` 在 headless 主场景渲染阶段触发既有 `RendererDummy/RID` 中断，没有打印断言失败；改用窗口渲染 1280×720 重跑输出 `PASS pedestrians`、退出码 0。
+- 本机仍无法写 `AppData` 下的 `user://`，出现日志和着色器缓存写入错误；这是既有环境限制。设置功能正式路径仍为 `user://settings.cfg`，自动测试使用 `.godot/` 临时文件规避该限制。
+
+**修改文件：** 新增 `scripts/core/game_settings.gd`、`scripts/traffic/traffic_signals.gd`、`tests/test_game_settings.gd`、`tests/test_traffic_signals.gd`；修改 `scripts/core/main.gd`、`scripts/core/pause_controller.gd`、`scripts/traffic/traffic_spawner.gd`、`scripts/traffic/traffic_car.gd`、`scripts/traffic/pedestrian.gd`、`scripts/traffic/pedestrian_spawner.gd`、`tests/test_pause.gd`、`tests/test_traffic.gd`、`tests/test_pedestrians.gd`、`.github/workflows/repository-integrity.yml`、`docs/TRAFFIC_STREAMING.md`、`docs/USER_GUIDE.md`、`docs/DEVELOPMENT_LOG.md`。
+
 ## 2026-10-29 17:10（Asia/Shanghai）接收新交接包、补完展览行为采集，导出方法统一到已合并文档
 
 本轮需求（原文）：“完成更新后：有新的交接包传入，读取后自动执行未完成项，同时我有一段时间无法直接操作服务器，请将如何导出后台数据记录的方法上传git，一边其他成员能够调取。”
@@ -1175,6 +1195,97 @@ PR #31 合并后，从 `origin/main` 的 `7c3d412` 起 `feature/jzy070407-menu-r
 - 合并过程没有出现无法判断的冲突，也没有权限问题。
 
 本条记录随 `feature/jzy070407-exhibition-qr` 分支提交、推送并更新 PR。
+
+## 2026-10-29 17:25（Asia/Shanghai）接入免费橡皮泥风格行人模型
+
+本轮需求（原文）：“你可不可以上网去找一个免费的简单的橡皮泥小人模型然后载入”。
+
+- 从 Poly Pizza 选取 Zsky 的 Stylized Character。作品页为 `https://poly.pizza/m/tVqkTeQhCO`，许可为 CC BY 3.0；原始 GLB 保存到 `assets/models/人物模型/zsky_stylized_character.glb`，并在同目录新增 `ATTRIBUTION.md`，记录作者、作品页、许可、下载日期、原始 SHA-256 和运行时修改说明。
+- `Pedestrian._build_visuals()` 从胶囊改为实例化 GLB。模型统一缩放为 0.11，按骨架脚底位置上移 0.8635 米贴地，并旋转 180° 对齐现有 `TrafficRoute.yaw_from_direction()` 的 `-Z` 正面；播放自带的 `Armature|Walk` 动画，动画速度随行人速度在 0.7～1.5 倍之间调整。
+- 保留原胶囊碰撞、路径、横穿、信号等待和公开接口。GLB 缺失或实例化失败时自动回退到原有胶囊视觉，避免单个资源异常破坏整个交通系统；行人仍然不会触发车辆命中或订单失败。
+- 扩展 `tests/test_pedestrians.gd`，除原有生成、行走、横穿、信号、回收与上限检查外，验证 `PedestrianModel` 下的 GLB 人形节点、缩放、接地偏移、正面旋转和步行动画。
+- `README.md`、`docs/ROADMAP.md`、`docs/USER_GUIDE.md` 和 `docs/TRAFFIC_STREAMING.md` 已移除“胶囊占位行人/正式模型未完成”的过时描述，并加入模型来源与许可指引。
+
+**测试与校验：**
+
+- 窗口渲染 1280×720 对比了 0.095、0.105、0.11、0.115 四档比例，最终选用 0.11，约 1.7 米高且脚底贴地；三套实际 `Pedestrian` 节点并排渲染，`Walk` 动画、朝向、头发、衣服、肤色和靴子材质均正常。
+- Godot 4.7.2 `--headless --path . --editor --quit` 退出码 0，模型导入和脚本注册没有解析错误。
+- `test_pedestrians` 在窗口渲染模式输出 `PASS pedestrians`、退出码 0；headless 模式仍在主场景渲染阶段触发本机既有 `RendererDummy/RID` 中断，没有打印断言失败。
+- `test_traffic` 和 `test_traffic_signals` 在 headless 模式均输出 PASS、退出码 0，说明行人模型接入没有破坏车辆、碰撞和信号行为。
+- GLB 的 SHA-256 校验结果为 `BB6CD1EC67CD60C3ECB26289750EB8F6A2FAF7C8D25C737C05C75966940F674B`，与记录文件一致；模型作品页在本轮联网时返回 HTTP 200。
+
+## 2026-10-29 18:10（Asia/Shanghai）主控强制红灯、行人步速与高密度交通
+
+`TrafficSignals` 新增独立的主控强制红覆盖层。玩家进入信号路口中心 42 米内时，机动车进口方向强制返回红灯，每次触发至少保持 22 秒；玩家持续接近会续期，离开后等待剩余时间结束再恢复原 50 秒周期。覆盖状态直接参与车辆停走、行人放行和灯面显示，已进入路口的车辆仍优先驶离，避免在冲突区域停车。此段最初误做成全向红灯，已在同日下一条记录中修正为按主控进口轴定向覆盖。
+
+`Pedestrian` 新增平滑运动接口 `advance_motion(delta, may_walk)`。基础步速从 1.4 提高到 1.8 m/s，行人以 2.4 m/s² 加速、以 4.8 m/s² 制动；红灯等待不会突然瞬停，已提交的横穿仍会走完，动画速度跟随实际步速。`PedestrianSpawner` 改为传入通行许可，不再直接按目标速度调用 `advance()`。
+
+玩家默认速度从 18 提高到 23 m/s；汽车主/次/支路基础速度从 12/9/7 提高到 15/11.25/8.75 m/s，最高限速从 45 提高到 60 km/h。默认交通密度从 1.0 提高到 1.45，车辆上限从 30 提高到 45，单路段补车上限调整为主干路 4、次干路 3、支路 2。
+
+验证：`test_traffic_signals.gd`、`test_traffic.gd`、`test_game_settings.gd` 和窗口模式 `test_pedestrians.gd` 均打印 PASS。随后运行 `test_traffic_streaming.gd`，确认高速、高密度配置下仍能流式补充、回收并实际移动。
+
+**修改文件：** 新增 `assets/models/人物模型/zsky_stylized_character.glb`、`.import`、`ATTRIBUTION.md`；修改 `scripts/traffic/pedestrian.gd`、`tests/test_pedestrians.gd`、`README.md`、`docs/ROADMAP.md`、`docs/USER_GUIDE.md`、`docs/TRAFFIC_STREAMING.md`、`docs/DEVELOPMENT_LOG.md`。
+
+## 2026-10-29 18:15（Asia/Shanghai）修正车辆模型前后朝向
+
+车辆 GLB 的原生车头朝向为 `+Z`，而道路行驶逻辑使用 Godot 的 `-Z` 作为前方，导致车身视觉与行进方向相反。`TrafficCar` 现在在模型容器上统一旋转 180°，并按旋转后的包围盒重新居中、贴地；路线选择、碰撞范围、速度、红绿灯停车和回收逻辑均未改变。
+
+验证：`test_traffic_streaming.gd` 覆盖全部 10 个车型的方向检查并通过，`test_traffic.gd` 通过。
+
+**修改文件：** `scripts/traffic/traffic_car.gd`、`tests/test_traffic_streaming.gd`、`docs/DEVELOPMENT_LOG.md`。
+
+## 2026-10-29（Asia/Shanghai）修正红灯远距离误停车
+
+车辆模型反向修正后出现的“车辆不动”不是路线或模型旋转问题。`TrafficSpawner` 会在 60 米信号识别范围内读取即将到达路口的相位，而 `TrafficSignals.should_vehicle_stop()` 原来只要遇到红灯就返回停车，导致车辆在距路口几十米时也立即把目标速度设为零，并可能被流式系统当作长时间空闲车辆回收。
+
+现在红灯只控制距路口中心 30 米以内的制动区；黄灯只在距路口大于 7 米且不超过 30 米时要求停车，7 米以内或已进入路口的车辆继续通过。远处车辆保持正常巡航，接近停车线后才制动。车辆模型的 180° 视觉修正保持不变，路线、碰撞、跟车和回收逻辑均未改变。
+
+`tests/test_traffic_signals.gd` 增加远处红灯不停车和制动区停车断言；`tests/test_traffic.gd` 增加真实物理帧回归，强制信号变红后让车辆从距路口 45 米处继续行驶，防止再次把 60 米识别半径误当作制动半径。实际 Seed 118 运行中，修复后第 2 秒 6 辆车全部移动，第 4 秒只有 1 辆在距红灯路口约 25.3 米处正常等待。
+
+**验证：** `test_traffic_signals`、`test_traffic`、`test_traffic_streaming` 均通过。
+
+**修改文件：** `scripts/traffic/traffic_signals.gd`、`tests/test_traffic_signals.gd`、`tests/test_traffic.gd`、`README.md`、`docs/TRAFFIC_STREAMING.md`、`docs/USER_GUIDE.md`、`docs/DEVELOPMENT_LOG.md`。
+
+## 2026-10-29（Asia/Shanghai）修正主控闯红灯的进口方向
+
+上一版把“主控强制红”实现成了整个路口全向红灯，视觉上并没有形成主控闯红灯。本轮改为按进口轴记录覆盖状态：玩家进入信号路口约 42 米范围后，从玩家当前朝向计算其即将驶入的进口组；该组及同轴对向显示红灯，冲突横向显示绿灯并继续通行。玩家转向时红灯组立即更新，每次触发仍至少保持 22 秒，行人横穿在该覆盖期间仍被禁止。
+
+`TrafficSignals` 的强制状态现在同时保存剩余时间和进口组，`get_vehicle_state()` 对主控组返回红、冲突组返回绿，不再让整口变红。信号灯头使用迎面进口方向刷新，确保主控看到的是自己方向的红灯。测试新增同轴双向红灯、横向双向绿灯、横向车辆不停车、玩家朝向前向识别和转向后的灯组检查；`test_traffic.gd` 的物理帧回归改为用车辆实际前向触发定向红灯。
+
+**验证：** `test_traffic_signals`、`test_traffic`、`test_traffic_streaming` 均通过。
+
+**修改文件：** `scripts/traffic/traffic_signals.gd`、`tests/test_traffic_signals.gd`、`tests/test_traffic.gd`、`README.md`、`docs/TRAFFIC_STREAMING.md`、`docs/USER_GUIDE.md`、`docs/DEVELOPMENT_LOG.md`。
+
+补充修正：每个可见路口从单一灯头改为两条相位轴各一个灯头。主控迎面轴显示红灯时，冲突轴灯头同时显示绿灯；窗口模式测试会读取两个灯头的实际发光材质，并与各自进口的 `get_vehicle_state()` 结果逐项比较，避免只修正逻辑而画面仍只有一个方向可读。
+
+## 2026-10-29（Asia/Shanghai）提高车流密度与主控周围车辆保底
+
+本轮需求是提高车辆密集度，让主控行驶时周围持续有三辆及以上活动车，并用真实高密度车流制造闯红灯的压迫感和较低存活率，同时仍保留穿行机会。
+
+- 根因是真实用户配置仍在 `user://settings.cfg` 中保存旧的 `traffic=1.0`，启动时会覆盖代码里已经提高的默认值。`GameSettings` 现在使用配置版本 2：读取无版本号或低于版本 2 的旧配置时，把低于 2.6x 的交通密度迁移到 2.6x 并写回版本号；迁移完成后玩家在设置页手动调整的密度仍会正常保存和恢复。
+- `TrafficSpawner` 保持 `traffic_density=2.6`、`max_vehicles=90`、每 0.25 秒更新和常规每次最多补 4 辆。主控周围 90 米内的补位目标从 3 辆提高到 4 辆，硬下限仍为 3 辆，多出的一辆车用于覆盖车辆驶离和两个更新周期之间的空档。
+- 补车半径从 220 米提高到 320 米，回收半径从 320 米提高到 420 米，让更大范围内的密集车流持续进入主控视野。主干、次干、支路单路段容量保持 7/5/3 辆，车辆间距保持 24 米、主控附近出生距离保持至少 26 米，避免靠碰撞免疫或贴身生成伪造难度。
+- 闯红灯逻辑未改：主控即将驶入的进口轴保持红灯，冲突横向保持绿灯，横向车辆继续真实通行；撞车仍立即判定失败。低存活率来自高密度真实车流，而不是随机免死或取消碰撞。
+- `tests/test_traffic.gd` 固定起点断言补到 4 辆缓冲目标，远端道路节点断言不少于 3 辆硬下限；`tests/test_main_scene.gd` 连续采样 2 秒，检查主场景车流不衰减且主控周围始终不少于 3 辆活动车。`tests/test_game_settings.gd` 覆盖旧 1.0x 配置迁移，以及迁移后手动设为 1.5x 再重载仍保留。
+
+**验证：** 窗口 GL Compatibility 模式下，`test_traffic`、`test_main_scene`、`test_traffic_signals`、`test_game_settings`、`test_pause`、`test_pedestrians`、`test_traffic_streaming` 全部打印 PASS、退出码 0。主场景连续 2 秒采样的最低值为周围 5 辆车、活动车 10 辆；流式测试的 Seed 118、1、42、2026 均通过真实物理帧移动、换区回收和对象池检查。
+
+**修改文件：** `scripts/core/game_settings.gd`、`scripts/traffic/traffic_spawner.gd`、`tests/test_game_settings.gd`、`tests/test_traffic.gd`、`tests/test_main_scene.gd`、`README.md`、`docs/TRAFFIC_STREAMING.md`、`docs/USER_GUIDE.md`、`docs/ROADMAP.md`、`docs/DEVELOPMENT_LOG.md`。
+
+## 2026-10-29 19:13（Asia/Shanghai）继续加密车流并加入行人碰撞代价
+
+本轮需求（原文）：“再增加车流量，让主控可以撞行人，但行人会对主控造成减速，主控可以压着行人过去，但撞一个行人赔一千”。
+
+- `TrafficSpawner` 默认交通密度提高到 3.0，活动车辆上限提高到 120；主控周围 120 米内以 6 辆为补位目标、4 辆为硬下限，出生距主控至少 22 米，车辆与车辆的最小参考间距缩短到 18 米。主干、次干、支路单路段容量同步提高到 9/7/4 辆，常规补车单轮最多 6 辆。
+- `GameSettings` 配置版本提高到 3，旧版本保存的低密度交通配置会迁移到 3.0x；迁移后玩家手动设置和保存的值仍会保留。
+- 主控碰撞遮罩不再包含行人，因此不会被人形胶囊物理挡住；新增只检测 `PEDESTRIAN` 层的前向 `Area3D`。主控以至少 1.5 m/s 的平面速度接触行人时，会压过对方并触发一次命中，同一名行人本次骑行只结算一次。
+- 每次有效命中立即把当前平面速度降到 42%，并在之后 2.5 秒维持 42% 速度倍率；每名行人通过 `pedestrian_hit` 结算 1000 赔偿，主场景将其接入 `EconomyHUD`，余额和累计赔偿同步更新。
+- 保留“静止贴住行人时不结算、起步后补结算”的边界处理：行人与命中区重叠时进入待处理集合，持续重叠期间按当前速度检查；离开命中区后移除。
+- 扩展 `test_pedestrians`、`test_traffic`、`test_game_settings`、`test_main_scene`，覆盖行人碰撞层、单次/多人赔偿、1000 金额、2.5 秒减速、经济 HUD 入账、贴近行人后起步结算、高密度补位和移动后车辆下限。
+
+**验证：** Godot 4.7.2 headless 编辑器解析退出码 0，没有脚本解析错误。窗口 GL Compatibility 模式下 `test_pedestrians`、`test_traffic`、`test_traffic_signals`、`test_traffic_streaming`、`test_main_scene`、`test_economy`、`test_game_settings`、`test_pause` 全部打印 PASS、退出码 0。主场景连续采样期间活动车为 11 辆、主控周围最低 7 辆、活动车最低 10 辆；四套种子均通过真实物理帧移动、换区回收和对象池检查。退出时仍有本机既有 GLES 资源泄漏警告，不影响测试断言和退出码。
+
+**修改文件：** `scripts/player/player_controller.gd`、`scripts/core/collision_layers.gd`、`scripts/core/main.gd`、`scripts/economy/economy_hud.gd`、`scripts/traffic/traffic_spawner.gd`、`scripts/core/game_settings.gd`、`tests/test_pedestrians.gd`、`tests/test_traffic.gd`、`tests/test_game_settings.gd`、`tests/test_main_scene.gd`、`README.md`、`docs/TRAFFIC_STREAMING.md`、`docs/USER_GUIDE.md`、`docs/ROADMAP.md`、`docs/DEVELOPMENT_LOG.md`。
 
 ## 2026-10-29 19:55（Asia/Shanghai）去掉地面路线指引，改成摩托车式骑行
 
@@ -1234,3 +1345,44 @@ PR #31 合并后，从 `origin/main` 的 `7c3d412` 起 `feature/jzy070407-menu-r
 - `test_input_actions` 退出码 0，打印 `PASS input actions count=9`。
 
 本条记录随同一分支追加提交。
+
+## 2026-10-29 20:35（Asia/Shanghai）整合第四个交接包：交通、行人、信号灯、经济与输入自检
+
+本轮需求（原文）：“仓库当前没有 Actions secrets，需要添加：TCB_SECRET_ID TCB_SECRET_KEY直接帮我操作，同时有新交接包进入”。同时继续遵守此前约束（原文）：“npc汽车行进方向，人类模型，调整了一下车流量和速度，细化了撞到人的判定均已更新，正等待更新包，不要动这方面的内容”，以及“人行道和马路贴图红绿灯系统也算在内”。
+
+**基线确认：**
+
+- 交接包基于 `origin/main` 的 `16569b9`（2026-10-29 15:31，PR #34）。整包覆盖会丢掉本端已经合并的 telemetry、行为数据导出、#38 骑行手感和右上角面板，因此按三方合并处理：base 取 `git show 16569b9:<文件>`，ours 取当前 `origin/main`（`f94a1cc`），theirs 取交接包。
+- 27 个重叠文本文件逐一比对合并；新增文件按“能否编译、能否接线”筛选，引用了不存在 API 的半成品不纳入。
+
+**按交接包原样采纳：**
+
+- `TrafficSignals` 信号控制器、车辆喇叭、18 m/s 车流、行人 GLB 与步行动画、车模前后朝向修正、车流密度 3.0 与车辆上限 120。
+- 人行道与马路贴图 `sidewalk_concrete_pavement_02_diff_1k.jpg`、`road_asphalt_02_diff_1k.jpg`，`CityBuilder` 与 `RoadBuilder` 用 triplanar 铺贴。
+- `EconomyHUD`、`GameSettings`、`InputDiagnosticsHUD`、`InputActivationOverlay`、事故记录面板 `accident_research_panel.gd`。
+
+**本端合并与补线：**
+
+- `player_controller.gd` 保留本端的加速度模型、A/D 车把转向和视角与前进解绑，接入交接包的撞行人判定：跟随玩家的 `Area3D` 判定盒、每名行人只结算一次、车速压到 42% 并持续 2.5 秒、赔偿 1000。最高车速提到 23 m/s，`acceleration` 20、`brake_deceleration` 26，使满油门四秒能跑到九成车速。
+- `order_manager.gd` 删掉本端已移除的 `RouteGuide` 调用，保留 `get_customer_hit_count()`，新增 `game_started` 信号和 `start_game()`；`main.gd` 把 `pedestrian_hit`、`game_started`、`order_started`、`order_finished` 接到经济面板，成功送达按取餐段与送餐段路程之和结算。
+- `main.gd` 新增 `_setup_input_layers()` 与 `_setup_economy()`，在代码里创建右上角两块面板，不改 `main.tscn`。`pause_controller.gd` 的设置页接入 `GameSettings` 的音量、灵敏度、交通密度和全屏。
+- `collision_layers.gd` 的 `PLAYER_MASK` 去掉行人层，主控可以压着行人通过，行人不再挡住车。
+- `input_diagnostics_hud.gd` 交接包调用了不存在的 `is_dead()`、`get_roll_degrees()`，改为读 `controls_enabled` 和新增的公开接口 `get_current_speed_mps()`、`get_heading_degrees()`。
+- `tests/test_player_handling.gd` 的滑行检查由 180 步延长到 420 步，配合更高的最高车速。
+
+**未纳入的文件：**
+
+- `navigation_minimap.gd`、`traffic_agent.gd`、`route_guidance.gd`、`test_player_impact.gd` 及对应 `.uid`：引用了 `NavigationService.AgentKind`、`PlayerController.is_dead/get_roll_degrees/get_motorcycle_visual` 等不存在的成员，属未完成 WIP。
+- 仓库根目录的验证截图、录屏残留和 `run_game.cmd`，不进入提交。
+
+**测试与校验：**
+
+- Godot 4.7.2 `--headless --path . --import` 退出码 0；路网 91 节点、144 路段，城市 764 地块/建筑、32 站点、141 出入口。
+- headless 退出码 0 并打印 PASS：`test_road_network`、`test_contracts`、`test_input_actions`、`test_player_handling`、`test_city_catalog`、`test_menu_ui`、`test_game_settings`、`test_economy`、`test_accident_research`、`test_traffic_signals`、`test_touch_controls`。
+- 窗口渲染模式退出码 0 并打印 PASS：`test_navigation_queries`、`test_god_view`、`test_phone_orders`、`test_traffic_streaming`、`test_city_population`、`test_city_streaming`、`test_telemetry`、`test_main_scene`、`test_orders`、`test_pause`、`test_traffic`、`test_pedestrians`、`test_city`、`test_site_readability`。
+- `test_navigation_queries`、`test_city`、`test_site_readability` 在 headless 下退出阶段出现既有访问冲突 139 或只打印部分 PASS，改用窗口模式复跑后全部退出码 0，没有断言失败。
+- `.github/workflows/repository-integrity.yml` 的测试清单取两边并集，新增 `test_economy`、`test_accident_research`、`test_traffic_signals`、`test_game_settings`。
+
+**修改文件：** 新增 `scripts/economy/economy_hud.gd`、`scripts/core/game_settings.gd`、`scripts/core/input_activation_overlay.gd`、`scripts/core/input_diagnostics_hud.gd`、`scripts/dev/accident_research_panel.gd`、`scripts/traffic/traffic_signals.gd`、`scripts/player/rider_status_hud.gd`、`tests/test_economy.gd`、`tests/test_game_settings.gd`、`tests/test_accident_research.gd`、`tests/test_traffic_signals.gd`、`assets/models/人物模型/zsky_stylized_character.glb`、`assets/textures/road_asphalt_02_diff_1k.jpg`、`assets/textures/sidewalk_concrete_pavement_02_diff_1k.jpg`、`assets/audio/traffic_horn.ogg` 及两份 `ATTRIBUTION.md`；修改 `scripts/core/main.gd`、`scripts/core/pause_controller.gd`、`scripts/core/collision_layers.gd`、`scripts/orders/order_manager.gd`、`scripts/orders/order_hud.gd`、`scripts/player/player_controller.gd`、`scripts/traffic/traffic_car.gd`、`scripts/traffic/traffic_spawner.gd`、`scripts/traffic/pedestrian.gd`、`scripts/traffic/pedestrian_spawner.gd`、`scripts/world/city_builder.gd`、`scripts/world/road_builder.gd`、`tests/` 下 12 个测试、`.github/workflows/repository-integrity.yml`、`README.md`、`docs/USER_GUIDE.md`、`docs/ROADMAP.md`、`docs/TRAFFIC_STREAMING.md`、`docs/DEVELOPMENT_LOG.md`。
+
+本条记录随 `feature/jzy070407-handoff-package-4` 分支提交、推送并建 PR。PR #40 的“配送收支 / 输入自检”面板已由本交接包内的实现取代，本分支已接线上线。

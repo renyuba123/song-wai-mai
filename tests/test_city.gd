@@ -4,6 +4,10 @@ extends SceneTree
 
 const Generator = preload("res://scripts/world/road_generator.gd")
 const WIDTHS := Vector3(40.0, 30.0, 18.0)
+const ROAD_TEXTURE := preload("res://assets/textures/road_asphalt_02_diff_1k.jpg")
+const SIDEWALK_TEXTURE := preload(
+	"res://assets/textures/sidewalk_concrete_pavement_02_diff_1k.jpg"
+)
 
 var _failed := false
 
@@ -253,9 +257,18 @@ func _check_main_scene() -> void:
 	_expect(bool(world.city_report.get("valid", false)), "主场景城市报告未通过")
 	var city_builder := main.get_node_or_null("World/CityBuilder")
 	_expect(city_builder != null and city_builder.get_child_count() > 0, "CityBuilder 没有生成节点")
+	var road_builder := main.get_node_or_null("World/RoadBuilder")
 	var road_body := main.get_node_or_null("World/RoadBuilder/RoadCollision") as StaticBody3D
 	var building_body := main.get_node_or_null("World/CityBuilder/BuildingCollision") as StaticBody3D
 	var sidewalk_body := main.get_node_or_null("World/CityBuilder/SidewalkCollision") as StaticBody3D
+	_expect(
+		road_builder != null and _has_textured_mesh(road_builder, ROAD_TEXTURE),
+		"道路应使用带三平面映射的沥青贴图"
+	)
+	_expect(
+		city_builder != null and _has_textured_mesh(city_builder, SIDEWALK_TEXTURE),
+		"人行道应使用带三平面映射的混凝土铺装贴图"
+	)
 	_expect(road_body != null and road_body.is_in_group(CollisionLayers.NAVIGATION_SOURCE_GROUP), "道路碰撞体应在导航源组")
 	_expect(building_body != null and not building_body.is_in_group(CollisionLayers.NAVIGATION_SOURCE_GROUP), "建筑碰撞体不应在导航源组")
 	_expect(sidewalk_body != null and sidewalk_body.is_in_group(CollisionLayers.NAVIGATION_SOURCE_GROUP), "人行道碰撞体应在导航源组")
@@ -340,6 +353,19 @@ func _spawn_signatures(starts: Array[SpawnPoint]) -> Array:
 	for spawn in starts:
 		result.append(_spawn_signature(spawn))
 	return result
+
+
+func _has_textured_mesh(parent: Node, texture: Texture2D) -> bool:
+	for child in parent.get_children():
+		if child is MeshInstance3D:
+			var material := child.material_override as StandardMaterial3D
+			if (
+				material != null
+				and material.albedo_texture == texture
+				and material.uv1_triplanar
+			):
+				return true
+	return false
 
 
 func _point_in_building(point: Vector2, city: CityContent) -> bool:

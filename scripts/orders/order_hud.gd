@@ -21,6 +21,9 @@ const OFFER_TEXT_COLOR := Color(0.98, 0.90, 0.72, 1.0)
 const MUTED_COLOR := Color(0.72, 0.78, 0.86, 1.0)
 const ACCENT_COLOR := Color(1.0, 0.72, 0.28, 1.0)
 const ERROR_COLOR := Color(1.0, 0.45, 0.38, 1.0)
+const TOAST_BG := Color(0.12, 0.035, 0.035, 0.94)
+const TOAST_BORDER := Color(1.0, 0.45, 0.34, 0.92)
+const TOAST_TEXT := Color(1.0, 0.92, 0.82, 1.0)
 
 const GOLD := Color(1.0, 0.72, 0.30, 1.0)
 const GOLD_BRIGHT := Color(1.0, 0.83, 0.50, 1.0)
@@ -40,6 +43,9 @@ var _arrow_label: Label
 var _hint_label: Label
 var _prompt_label: Label
 var _error_label: Label
+var _toast_panel: PanelContainer
+var _toast_label: Label
+var _toast_timer: Timer
 
 var _start_layer: Control
 var _start_backdrop: MenuBackdrop
@@ -86,6 +92,7 @@ func _ready() -> void:
 
 
 func show_start_menu(city_seed: int) -> void:
+	hide_toast()
 	_offer_active = false
 	_offer_text = ""
 	_set_offer_panel(false)
@@ -113,6 +120,7 @@ func show_offer(order: DeliveryOrder, time_limit: float) -> void:
 	## 接单详情在三维手机屏幕上；HUD 只保留左上角的新订单提醒。
 	if order == null:
 		return
+	hide_toast()
 	_offer_active = true
 	_offer_text = OrderPhone.format_offer_text(order, time_limit)
 	_set_offer_panel(true)
@@ -134,6 +142,7 @@ func hide_offer() -> void:
 
 
 func show_waiting(text: String = "正在生成订单…") -> void:
+	hide_toast()
 	_offer_active = false
 	_set_offer_panel(false)
 	_set_menu_visible(false, false)
@@ -151,6 +160,7 @@ func show_waiting(text: String = "正在生成订单…") -> void:
 
 
 func show_active(order: DeliveryOrder, session: OrderSession) -> void:
+	hide_toast()
 	_offer_active = false
 	_set_offer_panel(false)
 	_set_menu_visible(false, false)
@@ -198,6 +208,7 @@ func update_active(
 func show_result(order: DeliveryOrder, session: OrderSession) -> void:
 	if order == null or session == null:
 		return
+	hide_toast()
 	_offer_active = false
 	_set_offer_panel(false)
 	_set_menu_visible(false, true)
@@ -259,6 +270,7 @@ func show_result(order: DeliveryOrder, session: OrderSession) -> void:
 
 
 func show_error(text: String) -> void:
+	hide_toast()
 	_offer_active = false
 	_set_offer_panel(false)
 	_set_menu_visible(false, false)
@@ -278,6 +290,31 @@ func show_error(text: String) -> void:
 func clear_error() -> void:
 	_error_label.text = ""
 	_error_label.visible = false
+
+
+func show_toast(text: String, duration := 2.5) -> void:
+	if _toast_panel == null or _toast_label == null or text.is_empty():
+		return
+	_toast_label.text = text
+	_toast_panel.visible = true
+	_toast_panel.move_to_front()
+	if _toast_timer != null:
+		_toast_timer.start(maxf(duration, 0.1))
+
+
+func hide_toast() -> void:
+	if _toast_timer != null:
+		_toast_timer.stop()
+	if _toast_panel != null:
+		_toast_panel.visible = false
+
+
+func get_toast_text() -> String:
+	return _toast_label.text if _toast_label != null else ""
+
+
+func is_toast_visible() -> bool:
+	return _toast_panel != null and _toast_panel.visible
 
 
 func get_objective_text() -> String:
@@ -467,6 +504,7 @@ func _build() -> void:
 
 	_build_start_layer()
 	_build_result_layer()
+	_build_toast()
 	show_waiting()
 
 
@@ -748,6 +786,41 @@ func _build_result_layer() -> void:
 	box.add_child(_result_hint)
 
 
+func _build_toast() -> void:
+	_toast_panel = PanelContainer.new()
+	_toast_panel.name = "Toast"
+	_toast_panel.anchor_left = 0.5
+	_toast_panel.anchor_right = 0.5
+	_toast_panel.offset_left = -260.0
+	_toast_panel.offset_right = 260.0
+	_toast_panel.offset_top = 28.0
+	_toast_panel.offset_bottom = 92.0
+	_toast_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_toast_panel.add_theme_stylebox_override("panel", _toast_style())
+	_toast_panel.visible = false
+	_root.add_child(_toast_panel)
+
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 24)
+	margin.add_theme_constant_override("margin_right", 24)
+	margin.add_theme_constant_override("margin_top", 13)
+	margin.add_theme_constant_override("margin_bottom", 13)
+	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_toast_panel.add_child(margin)
+
+	_toast_label = _make_label(21, TOAST_TEXT, true, 3)
+	_toast_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_toast_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_toast_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	margin.add_child(_toast_label)
+
+	_toast_timer = Timer.new()
+	_toast_timer.name = "ToastTimer"
+	_toast_timer.one_shot = true
+	_toast_timer.timeout.connect(hide_toast)
+	_root.add_child(_toast_timer)
+
+
 func _add_control_row(caption: String, keys: String) -> void:
 	var caption_label := _make_label(14, MUTED_UI)
 	caption_label.text = caption
@@ -863,6 +936,14 @@ func _apply_responsive_layout() -> void:
 	_result_route.add_theme_font_size_override("font_size", 14 if narrow else (16 if compact else 17))
 	_result_badge.custom_minimum_size = Vector2(60, 60) if compact else Vector2(72, 72)
 	_result_icon.add_theme_font_size_override("font_size", 30 if compact else 38)
+	if _toast_panel != null:
+		var toast_width := minf(520.0, viewport.x - 36.0)
+		_toast_panel.offset_left = -toast_width * 0.5
+		_toast_panel.offset_right = toast_width * 0.5
+		_toast_panel.offset_top = 18.0 if compact else 28.0
+		_toast_panel.offset_bottom = 82.0 if compact else 92.0
+	if _toast_label != null:
+		_toast_label.add_theme_font_size_override("font_size", 17 if narrow else 21)
 
 
 func _set_margin(container: MarginContainer, left: int, right: int, top: int, bottom: int) -> void:
@@ -984,6 +1065,18 @@ func _result_panel_style() -> StyleBoxFlat:
 	style.shadow_color = Color(0.0, 0.0, 0.0, 0.50)
 	style.shadow_size = 28
 	style.shadow_offset = Vector2(0, 12)
+	return style
+
+
+func _toast_style() -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = TOAST_BG
+	style.border_color = TOAST_BORDER
+	style.set_border_width_all(2)
+	style.set_corner_radius_all(10)
+	style.shadow_color = Color(0.0, 0.0, 0.0, 0.42)
+	style.shadow_size = 12
+	style.shadow_offset = Vector2(0, 4)
 	return style
 
 

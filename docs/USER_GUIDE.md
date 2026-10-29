@@ -65,10 +65,16 @@ godot --headless --path . --script res://tests/test_orders.gd
 godot --headless --path . --script res://tests/test_menu_ui.gd
 godot --headless --path . --script res://tests/test_phone_orders.gd
 godot --headless --path . --script res://tests/test_site_readability.gd
+godot --headless --path . --script res://tests/test_game_settings.gd
+godot --headless --path . --script res://tests/test_economy.gd
+godot --headless --path . --script res://tests/test_accident_research.gd
 godot --headless --path . --script res://tests/test_traffic.gd
+godot --headless --path . --script res://tests/test_traffic_signals.gd
+godot --headless --path . --script res://tests/test_pause.gd
+godot --headless --path . --script res://tests/test_pedestrians.gd
 ```
 
-前两条检查路网生成、校验、寻路和主场景启动；中间三条分别检查共享数据契约、输入映射与玩家移动、导航查询接口；`test_city` 检查城市确定性、反向数据、主场景城市装配和站点可达性；`test_city_catalog` 检查模型目录可加载、包围盒有效、分类数量和种子 118 的模型多样性；`test_god_view` 检查测试用上帝视角只在调试构建创建、开关时相机和玩家状态正确切换并恢复；`test_orders` 检查订单生成、状态机、开始/接单/结算界面和撞车失败语义；`test_menu_ui` 单独挂载订单 HUD，检查开始界面的标题、副标题、种子和按钮，以及成功/失败结算页面的取送路线、总路程、用时、剩余时间、收入和卡片是否超出可视区域；`test_phone_orders` 检查三维手机的挂载位置、屏幕内容、倒计时、Y/N、点击接单/拒单、配送中常驻和主菜单隐藏；`test_site_readability` 检查站点店名确定性、三维店名牌、当前目标星标以及接单/取餐/送达时的 HUD 与信标文本；`test_traffic` 检查车道数学、确定性车流、出生安全、命中 Area3D 和主场景撞车信号链。新增脚本后先执行一次 `godot --headless --path . --import`，让 Godot 注册 `class_name` 并生成 `.gd.uid`。
+前两条检查路网生成、校验、寻路和主场景启动；中间三条分别检查共享数据契约、输入映射与玩家移动、导航查询接口；`test_city` 检查城市确定性、反向数据、主场景城市装配和站点可达性；`test_city_catalog` 检查模型目录可加载、包围盒有效、分类数量和种子 118 的模型多样性；`test_god_view` 检查测试用上帝视角只在调试构建创建、开关时相机和玩家状态正确切换并恢复；`test_orders` 检查订单生成、状态机、开始/接单/结算界面和撞车失败语义；`test_menu_ui` 单独挂载订单 HUD，检查开始界面的标题、副标题、种子和按钮，以及成功/失败结算页面的取送路线、总路程、用时、剩余时间、收入和卡片是否超出可视区域；`test_phone_orders` 检查三维手机的挂载位置、屏幕内容、倒计时、Y/N、点击接单/拒单、配送中常驻和主菜单隐藏；`test_site_readability` 检查站点店名确定性、三维店名牌、当前目标星标以及接单/取餐/送达时的 HUD 与信标文本；`test_game_settings` 检查设置默认值、范围裁剪、保存重载和实时应用；`test_economy` 检查配送收入公式、行人赔偿和账户重置；`test_accident_research` 检查事故记录面板的统计、触发和 JSONL 记录；`test_traffic` 检查车道数学、确定性车流、出生安全、命中 Area3D 和主场景撞车信号链；`test_traffic_signals` 检查信号路口识别、相位边界、车辆停车规则和信号灯模型资源；`test_pause` 检查暂停菜单、设置页、临时配置持久化和恢复流程；`test_pedestrians` 检查人行道行走、信号等待、横穿提交和横穿途中不中断。新增脚本后先执行一次 `godot --headless --path . --import`，让 Godot 注册 `class_name` 并生成 `.gd.uid`。
 
 ## 2. 所有人：日常操作流程
 
@@ -271,18 +277,19 @@ scenes/traffic/
 
 ### 4.3 交通与行人
 
-当前已实现第一版背景车流和胶囊占位行人：
+当前已实现局部流式背景车流、信号灯约束和带动画 GLB 人形行人：
 
-- `TrafficSpawner.build(network, city)` 从同一份 `RoadNetwork` 生成方块占位汽车，`max_vehicles` 默认上限 256；每个路段一辆，当前 2400 米地图的 214 条路段都会出车。同一城市种子结果一致（`network.seed_value ^ RNG_SALT`，只用局部 `RandomNumberGenerator`）。
-- 每个路段最多一辆车，距路口至少 20 米，距玩家起点和所有站点出生点至少 15 米；车辆沿右侧车道行驶，速度按道路等级区分。
+- `TrafficSpawner.build(network, city)` 从同一份 `RoadNetwork` 生成交通，`traffic_density` 默认 3.0，按玩家附近道路长度补充车辆，`max_vehicles` 默认上限 120；默认补车半径为 320 米、回收半径为 420 米，换区时优先复用对象池。每次补车后检查主控周围 120 米内的活动车辆，按 6 辆目标补位，绝不低于 4 辆，同时保持距主控至少 22 米、距现有车辆至少 18 米。同一城市种子结果一致，只用局部 `RandomNumberGenerator`。旧版本保存的低密度配置会自动迁移到 3.0x，迁移后玩家手动设置的值会正常保留。玩家进入信号路口约 42 米内会按当前朝向触发至少 22 秒的进口红灯：主控迎面方向为红，冲突横向为绿；玩家转向时红灯轴随之更新，离开后恢复原周期。
+- 车辆从 `assets/models/汽车模型` 的 11 个 GLB 中确定性选型，并按包围盒缩放到单车道；物理碰撞和玩家命中 Area 使用简化 `BoxShape3D`。出生点避开车道占用、玩家起点和站点，跟车与出生最小参考间距为 18 米。
 - `TrafficRoute` 负责车道偏移、邻接表和路口转向；车在路口不会原地掉头，没有直行候选时才掉头。
-- `TrafficCar` 是 `AnimatableBody3D`：车身/车厢/轮子全部用 `BoxMesh` 代码生成，碰撞层 `VEHICLE`、掩码 `PLAYER`；子节点 `Area3D` 掩码 `PLAYER` 负责命中玩家，通过 `player_entered` → `TrafficSpawner.player_hit` 上报。
+- `TrafficCar` 是 `AnimatableBody3D`，碰撞层 `VEHICLE`、掩码 `PLAYER`；子节点 `Area3D` 掩码 `PLAYER` 负责命中玩家，通过 `player_entered` → `TrafficSpawner.player_hit` 上报。
 - 车辆不加入 `navigation_source`，也不使用 `WORLD_STATIC`；交通在世界和导航烘焙完成后才生成。
-- 车辆之间、车辆与建筑之间不做碰撞，避免车流卡死；路口外形重叠、无交通灯和避让属于当前已知限制。
-- 行人第一版已接入：`PedestrianSpawner` 由 `TrafficSpawner.build()` 在代码里创建，`max_pedestrians` 默认 24；只在玩家/角色附近的人行道上生成，距离过远时回收，数量不超过上限；同一城市种子生成位置一致（使用独立的 RNG 盐，不与车辆共用）。行人沿人行道行走，到路口按 `crossing_chance`（默认 0.35）横穿到对侧，横穿结束回到人行道。交叉口目前没有斑马线几何，横穿段是路口平铺区内的一条直线，属于占位阶段的已知表现。
-- 行人是 `AnimatableBody3D` + `CapsuleMesh` 占位，碰撞层 `PEDESTRIAN`、掩码 0，不会触发车辆命中，也不会让订单失败。正式人形模型到位后只替换 `Pedestrian._build_visuals()`，路线、碰撞和公开接口不变；行人数量增多后应再考虑 `MultiMesh` 或实例化池。
+- 车辆之间、车辆与建筑之间不做物理碰撞，靠跟车距离和路口规则调速，避免车流卡死。超过三个分支的路口由 `TrafficSignals` 管理：A/B 两组各 12 秒绿、3 秒黄、2 秒全红，最后 16 秒为行人相位。车辆在路口中心前 60 米识别信号，红灯只在 30 米制动区内停车，黄灯在距路口大于 7 米且不超过 30 米时停车；已进入路口的车辆继续驶离。无信号路口仍使用冲突点让行规则。
+- `PedestrianSpawner` 由 `TrafficSpawner.build()` 在代码里创建，`max_pedestrians` 默认 24；只在玩家/角色附近的人行道上生成，距离过远时回收，数量不超过上限；同一城市种子生成位置一致（使用独立的 RNG 盐，不与车辆共用）。行人沿人行道行走，到路口按 `crossing_chance`（默认 0.35）横穿到对侧；信号路口必须先等待行人相位，开始横穿后不会因变灯中断。交叉口目前没有斑马线几何，横穿段是路口平铺区内的一条直线。
+- 行人是 `AnimatableBody3D`，使用 Zsky 的 Stylized Character GLB 和胶囊碰撞，碰撞层 `PEDESTRIAN`、掩码 0，不会触发车辆命中，也不会让订单失败。模型统一缩放到约 1.7 米、脚底贴地并旋转到运动方向，播放自带的 `Armature|Walk` 动画；GLB 加载失败时会回退到胶囊视觉。模型许可与来源见 `assets/models/人物模型/ATTRIBUTION.md`；行人数量继续增多后应再考虑模型实例化池与动画可见距离。
+- 玩家的碰撞掩码不包含 `PEDESTRIAN`，因此行人胶囊不会从物理上挡住主控。玩家前方 `PedestrianHitArea` 首次检测到一名行人且平面速度至少为 1.5 m/s 时，当前速度降到 42%，随后 2.5 秒保持减速，并发出 1000 赔偿事件。同一名行人本次骑行只结算一次，不同行人分别结算；撞行人不会直接结束订单，主控仍可继续压过去。
+- 信号灯使用 `assets/models/装饰模型/红绿灯.glb`。可见模型只在有渲染窗口时创建，限制在玩家附近 260 米、最多同时显示 8 个；逻辑相位不受可见数量影响。
 - 命中信号链：`TrafficCar.player_entered` → `TrafficSpawner.player_hit` → `main.gd` → `OrderManager.notify_player_hit()`。只有活动订单会失败，菜单、接单、结算和上帝视角下忽略。
-- 换成正式汽车模型时替换 `TrafficCar._build_visuals()`，保留路线、碰撞和命中逻辑；不要修改 `player.tscn` 或 `navigation_system.tscn`。
 
 ### 4.4 场景与测试
 
@@ -340,12 +347,25 @@ project.godot
 | `interact` | E | 开始游戏、取餐、送达；待接订单时作为接单兼容键 |
 | `order_accept` | Y | 在手机上接单 |
 | `order_reject` | N | 在手机上拒单，立即生成下一单 |
-| `pause` | Esc | 配送中暂停/继续；暂停层显示城市与订单种子，可重开本单或返回主菜单 |
+| `pause` | Esc | 配送中暂停/继续；暂停层显示城市与订单种子，可进入设置、重开本单或返回主菜单 |
 | `restart` | R | 开始游戏、接单、重开本单或生成下一单 |
+| `F9`（不进 InputMap） | F9 | 隐藏 / 显示右上角“输入自检 v3”面板 |
+| `F8`（不进 InputMap） | F8 | 事故记录面板开关；该面板已随交接包接入源码，主场景尚未创建 |
 
 输入使用 `Input.get_vector("move_left", "move_right", "move_forward", "move_back")`，不要退回 `Input.is_physical_key_pressed`。前进后退是油门/刹车，左右是车把转向：`PlayerController` 用“加速度随车速衰减、滑行按滚阻加风阻减速”的模型算车速（`acceleration`、`brake_deceleration`、`coast_deceleration`、`coast_drag`），再按车速换算整车转率，车速为零时不能原地转身；车模的 `Empty` 车把节点跟着 A/D 转，改转向手感调 `max_steer_angle`、`steer_speed`、`max_turn_rate` 和 `steer_full_speed` 四个导出参数。鼠标和触屏视角只转相机（`camera.rotation`），不改车头朝向和前进方向，低头时车模也保持可见。地面不再画路线指引条带，方向交给 HUD 箭头和小地图。
 
-### 5.3 测试用上帝视角
+暂停页的“设置”子页支持主音量、鼠标灵敏度、交通密度和全屏四项。滑块即时应用，返回暂停首页或恢复游戏时保存到 `user://settings.cfg`；“恢复默认”也会保存。测试通过 `GameSettings.config_path` 指向 `.godot/` 下的临时文件，不会覆盖真实玩家设置。
+
+### 5.3 右上角面板
+
+右上角常驻两块代码创建的面板，都不改 `main.tscn`：
+
+- **配送收支**（`scripts/economy/economy_hud.gd`）：初始余额 500。成功送达按 `180 + 路程 × 1.2 + 剩余秒数 × 0.8` 入账，路程是取餐段与送餐段之和；撞到行人由 `PlayerController.pedestrian_hit` 上报，每名新行人赔 1000。回到主菜单再开始会调用 `reset_economy()` 重置账户。单价写在 `economy_hud.gd` 顶部常量里，改数值只改常量，测试见 `tests/test_economy.gd`。
+- **输入自检 v3**（`scripts/core/input_diagnostics_hud.gd`）：显示窗口焦点、输入激活状态、最近按键和角色速度/车头角度，按 **F9** 隐藏或显示。浏览器或窗口丢失焦点后先由 `scripts/core/input_activation_overlay.gd` 显示“点击画面开始”，点击画面或按任意键把键盘交回游戏。
+
+两个面板由 `main.gd` 的 `_setup_economy()` 和 `_setup_input_layers()` 创建并接线；不要在 `main.tscn` 里重复实例化，也不要让面板直接读 `PlayerController` 的私有字段，需要的数据用 `get_current_speed_mps()`、`get_heading_degrees()` 这类公开接口拿。
+
+### 5.4 测试用上帝视角
 
 `scripts/dev/test_god_view.gd` 提供只在调试/测试构建启用的俯视相机，用来快速检查地块、建筑和站点分布：
 
@@ -354,7 +374,7 @@ project.godot
 - 入口是 `TestGodView.is_test_only_enabled()`（当前基于 `OS.is_debug_build()`），`main.gd` 只在返回 `true` 时动态创建节点。正式导出不创建该节点，也不往 `project.godot` 增加 F3 输入动作。
 - 相机和提示 UI 都由脚本创建，不改 `main.tscn`；测试见 `tests/test_god_view.gd`。不要把调试功能改成正式快捷键，也不要绕过 `is_test_only_enabled()` 在发布场景里直接实例化。
 
-### 5.4 主场景装配
+### 5.5 主场景装配
 
 `scenes/main/main.tscn` 只做装配：
 
@@ -370,13 +390,13 @@ Main
 
 1. 世界生成路网和 `CityContent`，校验并绘制道路、人行道、建筑和站点标记，然后发出 `world_generated(network)`。
 2. 导航接收同一份 `RoadNetwork` 并烘焙；阶段一只把车行道碰撞体作为导航源。
-3. 交通接收同一份 `RoadNetwork` 和 `CityContent`，按每路段一辆生成方块汽车（默认上限 256，当前地图 214 辆）；车辆只走车道，不加入导航源。
+3. 交通接收同一份 `RoadNetwork` 和 `CityContent`，按玩家附近道路流式补充车辆和行人；交通只走车道/人行道，不加入导航源。
 4. `main.gd` 在世界生成后把 `$Player` 放到 `world.city.player_start`，并清零速度。
 5. `main.gd` 把 `traffic.player_hit` 接到 `orders.notify_player_hit()`，撞车失败仍由订单系统统一结算。
 
 不要把业务逻辑写进 `main.gd`；它只负责接线。新增模块时，先在模块内部提供入口场景和信号，再在 `main.tscn` 里实例化。`World` 场景内 `RoadBuilder` 与 `CityBuilder` 是兄弟节点，`CityBuilder` 只清理自己的子节点，不删除道路。
 
-### 5.5 整合者职责
+### 5.6 整合者职责
 
 - 维护 `project.godot`、输入映射、碰撞层、`main.tscn`、`.gitattributes`、`.gitignore`。
 - 审核 PR：是否只改自己负责的目录、是否夹带调试残留、是否更新日志。
