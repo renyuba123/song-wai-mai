@@ -1731,3 +1731,24 @@ PR #31 合并后，从 `origin/main` 的 `7c3d412` 起 `feature/jzy070407-menu-r
 **修改文件：** `scripts/core/game_seeds.gd`、`scripts/core/main.gd`、`scripts/orders/order_manager.gd`、`scripts/orders/order_hud.gd`、`tests/test_game_seeds.gd`、`tests/test_menu_ui.gd`、`README.md`、`docs/USER_GUIDE.md`、`docs/BEHAVIOR_DATA_EXPORT.md`、`docs/DEVELOPMENT_LOG.md`。
 
 本条记录随 `feature/jzy070407-seed-randomization` 分支提交、推送并建 PR。
+## 2026-10-29 22:58（Asia/Shanghai）检查远端更新：main 已合入 #46–#49，服务器同步到最新版本
+
+本轮需求（原文）：“检查 song-wai-mai 仓库的远端更新：进入 E:/Project/Game Work Team/song-wai-mai，先确认工作区状态，再执行 git fetch origin --prune。如果 origin/main 或 origin/refactor/modular-base 有新提交，按 CONTRIBUTING.md 和每轮工作规则安全整合（有未提交改动时先保留或提交，不覆盖），运行相关 Godot 测试，把本轮同步和测试结果追加到 docs/DEVELOPMENT_LOG.md，提交并推送；若出现冲突或权限问题，停止并向用户说明，不要强推。”随后用户补充：“服务器更新至最新版本”。
+
+**远端检查：**
+
+- `song-wai-mai/` 主检出停在 `feature/jzy070407-traffic-cars`（`f392124`），工作区干净，没有未提交改动；按工作区规则不在主检出上切分支、不改写它的分支引用，本轮只在 `worktrees/lead` 操作，本地 `main` 分支引用保持原样（仍落后远端、未检出，不影响任何工作）。
+- `git fetch origin --prune` 后，`origin/main` 由上一轮记录的 `b2901e2` 前进到 `01b45f3`，共 11 个提交：PR #46（Web 部署上传到托管根目录，不带前导斜杠）、#48（修复 CDN 校验误报导致 CloudBase 整站回滚）、#47（桌面版加 `--record` 本地行为记录开关）、#49（每局随机城市与订单种子，即本终端上一轮的 `feature/jzy070407-random-seeds`）。`origin/refactor/modular-base` 在远端不存在，没有可对比的分支。
+- 上一轮的分支已通过 PR #49 合进 main，本地没有需要再合并的代码；从 `origin/main` 新建 `docs/jzy070407-sync-20261029-f`，只追加本记录。合并过程无冲突，也没有权限问题。
+
+**测试与校验（Godot 4.7.2，代码为 `origin/main` 的 `01b45f3`）：**
+
+- `--headless --path . --import` 退出码 0，没有脚本解析错误；路网校验通过（节点 91、路段 144），城市生成通过（地块 764、建筑 764、站点 32、出入口 141）。
+- headless 退出码 0 且打印 PASS：`test_telemetry`、`test_game_seeds`、`test_contracts`、`test_input_actions`、`test_road_network`、`test_game_settings`、`test_touch_controls`、`test_economy`、`test_traffic_signals`。
+- `test_orders`、`test_city` 在 headless 下已打印 PASS，退出阶段出现已知的 139 访问冲突（`RendererDummy` / RID 清理报错），按环境问题记录。
+- `test_main_scene`、`test_navigation_queries`、`test_god_view`、`test_traffic` 在 headless 下于导航网格烘焙、创建网格阶段崩溃（尚未打印结果），改窗口渲染模式重跑全部退出码 0 并打印 PASS：main scene（nodes=91、lots=764、sites=32、vehicles=11、order_seed=1）、navigation queries、god view、traffic。
+- 本轮新增的 #47 只改 `scripts/core/telemetry_client.gd` 并补 `tests/test_telemetry.gd`，该测试 PASS；#46、#48 只改 `.github/workflows/deploy-web.yml` 和文档，不影响 GDScript。
+
+**修改文件：** `docs/DEVELOPMENT_LOG.md`。
+
+本条记录随 `docs/jzy070407-sync-20261029-f` 分支提交、推送并建 PR。
