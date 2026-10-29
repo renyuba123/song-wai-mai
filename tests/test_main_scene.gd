@@ -20,6 +20,7 @@ func _run() -> void:
 	var player := main.get_node_or_null("Player") as PlayerController
 	var orders := main.get_node_or_null("OrderSystem") as OrderManager
 	var traffic := main.get_node_or_null("TrafficSystem") as TrafficSpawner
+	var telemetry := main.get_node_or_null("Telemetry") as TelemetryClient
 	var city_builder := main.get_node_or_null("World/CityBuilder")
 	var world_environment := main.get_node_or_null("World/WorldEnvironment") as WorldEnvironment
 	var sky_ready := (
@@ -31,6 +32,7 @@ func _run() -> void:
 		world != null and world.network != null and world.city != null
 		and navigation != null and player != null and orders != null
 		and traffic != null and traffic.get_vehicle_count() > 0 and traffic.get_vehicle_count() <= traffic.max_vehicles
+		and telemetry != null and not telemetry.active and not telemetry.get_pending_events().is_empty()
 		and city_builder != null and city_builder.get_child_count() > 0
 		and sky_ready
 		and bool(world.city_report.get("valid", false))

@@ -1,0 +1,19 @@
+{
+  "$schema": "https://static.cloudbase.net/cli/cloudbaserc.schema.json",
+  "envId": "passive-sailfish-d0e1nvt8175333a",
+  "functionRoot": "..",
+  "functions": [
+    {
+      "name": "behavior-log",
+      "type": "HTTP",
+      "runtime": "Nodejs20.19",
+      "handler": "index.main",
+      "timeout": 10,
+      "memorySize": 256,
+      "description": "展览行为数据采集",
+      "envVariables": {
+        "LOG_TOKEN": "1355f19d6d7fad23e8701d45"
+      }
+    }
+  ]
+}

@@ -10,6 +10,7 @@ extends Node3D
 @onready var orders: OrderManager = $OrderSystem
 
 var _pause_menu: PauseController = null
+var _telemetry: TelemetryClient = null
 
 
 func _ready() -> void:
@@ -21,6 +22,7 @@ func _ready() -> void:
 	orders.setup(world, navigation, player)
 	_setup_pause_menu()
 	_setup_touch_controls()
+	_setup_telemetry()
 	_setup_test_god_view()
 
 
@@ -59,6 +61,18 @@ func _setup_touch_controls() -> void:
 	controls.name = "TouchControls"
 	add_child(controls)
 	controls.setup(player)
+
+
+func _setup_telemetry() -> void:
+	## 行为采集随主场景创建；是否真正联网由 TelemetryClient 按 Web 导出判断。
+	_telemetry = TelemetryClient.new()
+	_telemetry.name = "Telemetry"
+	add_child(_telemetry)
+	_telemetry.setup(orders, player)
+
+
+func get_telemetry() -> TelemetryClient:
+	return _telemetry
 
 
 func _setup_test_god_view() -> void:

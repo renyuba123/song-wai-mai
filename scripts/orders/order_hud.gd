@@ -355,7 +355,7 @@ func _build() -> void:
 
 
 func _build_start_layer() -> void:
-	var modal := _build_modal(Vector2(620, 430), 40, ACCENT_COLOR)
+	var modal := _build_modal(Vector2(620, 470), 40, ACCENT_COLOR)
 	_start_layer = modal["layer"]
 	var box: VBoxContainer = modal["box"]
 	var title: Label = modal["title"]
@@ -368,6 +368,12 @@ func _build_start_layer() -> void:
 		if TouchControls.is_touch_device()
 		else "WASD 移动 · 鼠标视角 · E 取餐/送达 · R 重新开始"
 	)
+	if TelemetryClient.is_web_build():
+		var notice := _make_label(13, MUTED_COLOR)
+		notice.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		notice.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		notice.text = "本体验会匿名记录游玩过程数据，仅用于展览效果分析，不含姓名与账号。"
+		box.add_child(notice)
 	_start_seed_label = _make_label(15, MUTED_COLOR)
 	_start_seed_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(_start_seed_label)
