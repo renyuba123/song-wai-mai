@@ -759,3 +759,5 @@ GitHub Actions 报 `resident count grows after revisit`。实测首次访问商�
 测试：`--headless --path . --import` 退出码 0；`test_input_actions`、`test_pause`、`test_main_scene`、`test_traffic`、`test_traffic_streaming`、`test_god_view` 全部 PASS。`test_orders` 打印 `PASS orders` 后退出码 -1073741819（Windows 访问冲突，等价 exit 139），日志显示建筑与装饰 GLB 加载失败，按任务约定记为 99 个 GLB 仍是 LFS pointer 的环境阻塞。无界面环境没有人工检查暂停层实际排版和鼠标可用性。
 
 提交与推送：`d5e2f2c feat(core): add pause menu with seed display`；本条日志单独提交。推送和 PR 见本轮 status 记录。
+
+同步最新 main：PC 侧 `origin/main` 已前进到 `b872b50`（PR #18 合并人行道导航），本分支按协作规则合并 `origin/main`，解决 `docs/DEVELOPMENT_LOG.md` 追加位置的冲突（两条记录都保留，按时间排序），合并提交 `91f6062`。合并后重新 `--import` 并运行 `test_pause`、`test_input_actions`、`test_main_scene`、`test_navigation_queries`、`test_city`、`test_traffic`、`test_god_view`，全部 PASS、退出码 0；`test_orders` 仍是同样的 LFS pointer 环境阻塞。
