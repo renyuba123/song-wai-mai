@@ -840,3 +840,39 @@ Godot 4.7.2 headless 导入退出码 0，路网校验 150 个节点、214 条路
 Godot 4.7.2 `--headless --path . --import` 退出码 0，路网 150 个节点、214 条路段通过，城市 1637 个地块、1637 栋建筑、32 个站点通过。测试：`test_traffic_streaming`、`test_main_scene`、`test_contracts`、`test_pause`、`test_route_guidance` 退出码 0；`test_pedestrians`、`test_traffic`、`test_navigation_queries`、`test_orders` 都先打印 PASS，但部分运行在退出阶段以 Windows 访问冲突（退出码 139）结束，重复运行会在 0 和 139 之间变化，日志同批出现 3 到 5 条 `Failed loading resource`，仍是 99 个城市 GLB 为 LFS pointer 的既有环境问题，不是本次重建引入的断言失败。
 
 分发暂停：按用户要求，暂停向其他终端派发新任务，等待下一次声明。本条记录随新分支提交、推送并建 PR。
+
+## 2026-10-29 12:45（Asia/Shanghai）展览三个二维码、游戏 Web 版与手机触屏
+
+本轮需求（原文）：“目前项目展览有一个要求：设置三个二维码，实现：1# 扫描后打开游戏本体 #2扫描后打开游戏演示视频 #3扫描后打开游戏中用户行为分析数据，请帮我处理一下”。追问确认：1 号尝试国内静态托管，2 号演示视频和 3 号行为分析暂时留占位；交付物只要三张二维码；手机端加简易触屏控制；部署由用户登录、我来执行。随后用户又问“国内部署能不能部署到微信小程序上？”。
+
+**做了什么：**
+
+- 新增 `exhibition/qr/links.json`，集中存放三个二维码对应的标题、链接和占位标记；`exhibition/qr/generate_qr.py` 读取该文件，用纠错等级 H、`box_size=16`、4 个模块静区生成 720×720 的纯黑白 PNG，输出到 `exhibition/qr/output/`。
+- 当前三张占位二维码已生成：`qr-1-game.png`、`qr-2-video.png`、`qr-3-analytics.png`。正式链接到位后只改 `links.json` 再运行脚本即可，文件名保持不变。
+- 新增 `exhibition/README.md`，写明二维码表、重新生成命令、Web 导出步骤、触屏操作、字体授权、CloudBase 部署流程和待办。
+- 新增 `export_presets.cfg` 的 Web 预设：`export_filter="all_resources"`，排除 `tests/*`、`docs/*`、`exhibition/*`；关闭线程支持，使用 `web_nothreads_*` 模板，不依赖 SharedArrayBuffer，普通静态托管和微信内置浏览器都能直接打开；画布按窗口自适应，关闭 PWA。
+- 中文字体：Web 构建没有系统字体，中文会显示成方块。引入 Noto Sans SC（SIL Open Font License 1.1，授权文本 `assets/fonts/OFL.txt`），通过 `project.godot` 的 `gui/theme/custom_font` 设为全局默认字体。字体走 Git LFS。
+- 触屏控制：新增 `scripts/ui/touch_controls.gd`（`TouchControls`），只在手机浏览器或触屏设备创建，包含左下虚拟摇杆、右半屏拖动转视角、右下 `E` 取餐/送达、`R` 重新开始、`Ⅱ` 暂停三个按钮；摇杆带死区和半径截断，通过 `Input.action_press/release` 复用现有 7 个输入动作，按钮通过 `InputEventAction` 触发。触屏层只在玩家可操作时显示，开始菜单、接单和结算仍用界面按钮。
+- `scripts/player/player_controller.gd` 把视角处理拆成 `apply_look()`，鼠标和触屏共用；触屏设备不抢鼠标锁定，新增 `set_controls_enabled()` 统一开关控制。
+- `scripts/core/main.gd` 在触屏设备上创建触屏层；`scripts/orders/order_hud.gd` 和 `scripts/core/pause_controller.gd` 的提示文字按设备切换，手机显示“左侧摇杆移动 · 右侧拖动视角 · E 取餐/送达”和“点‘继续’返回游戏”，桌面端文案不变。
+- 新增 `tests/test_touch_controls.gd`，覆盖摇杆轴向换算、死区、超半径截断，以及 `apply_look` 的偏航、俯仰和关闭控制后的行为；已加入 `.github/workflows/repository-integrity.yml` 的测试清单。
+- `.gitignore` 增加 `build/`；`.gitattributes` 把 `exhibition/qr/output/*.png` 排除出 LFS，二维码作为普通二进制提交，方便直接下载打印；`exhibition/` 放 `.gdignore`，避免 Godot 导入二维码图片生成多余资源。
+- 环境记录：本机只有 .NET（mono）版 Godot，不能导出 Web；导出使用缓存的 4.7.2 标准版 `Godot_v4.7.2-stable_win64_console.exe`，模板为 `4.7.2.stable` 的 `web_nothreads_release.zip` / `web_nothreads_debug.zip`。
+
+**校验：**
+
+- Godot 4.7.2 `--headless --path . --import` 退出码 0；路网校验 150 个节点、214 条路段通过，城市生成 1637 个地块、1637 栋建筑、32 个站点、98 个出入口通过。
+- `test_touch_controls` 输出 `PASS touch controls`、退出码 0；`test_orders`、`test_pause`、`test_input_actions`、`test_main_scene`、`test_route_guidance` 均 PASS、退出码 0。
+- Web 导出成功，`build/web/` 共约 66 MB：`index.wasm` 约 39.5 MB，`index.pck` 约 28.5 MB。
+- 用 Edge 无头浏览器加 CDP 手机模拟（390×844、Android UA、5 点触控）加载新构建：开始界面显示触屏文案；点“开始游戏”、点“接单”后摇杆和 `E`/`R`/`Ⅱ` 按钮出现；左下拖动摇杆后目标距离从 502 m 变为 497 m；右侧拖动后视角转动。截图在 `.cache/mobile-*.png`。
+
+**部署与微信小程序：**
+
+- 国内静态托管试过 EdgeOne Pages，单文件上限 25 MiB，放不下 39.5 MB 的 `index.wasm`，已排除。改用腾讯云 CloudBase 静态托管，命令行上传没有这个单文件限制，`@cloudbase/cli` 已通过 npmmirror 安装。
+- 目前卡在账号登录：需要用户执行 `tcb login` 并选择或新建环境，之后运行 `tcb hosting deploy build/web / -e <环境 ID>` 得到访问地址，再回填 `links.json` 并重新生成 1 号二维码。
+- 微信小程序评估：Godot 没有官方小游戏导出，主包 4 MB、分包总量 30 MB 与我们 39.5 MB 的 wasm 差距太大，不采用。可行路线是认证企业小程序用 `web-view` 套 H5，但需要企业主体、ICP 备案域名和业务域名校验文件，二维码还得用小程序码才能扫码直进。结论是先以 H5 为主方案，微信内置浏览器可以直接运行；若主办方强制要求小程序入口，再补 `web-view` 页面骨架。
+
+**待办：**
+
+- CloudBase 登录、创建环境并部署，回填 1 号二维码正式链接。
+- 2 号演示视频、3 号行为分析页面地址到位后替换占位链接并重新生成。

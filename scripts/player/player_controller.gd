@@ -40,7 +40,7 @@ func _ready() -> void:
 	collision_mask = CollisionLayers.PLAYER_MASK
 
 	if controls_enabled:
-		Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
+		_capture_mouse_if_supported()
 
 	if steering_pivot:
 		_steer_base_y = steering_pivot.rotation.y
@@ -51,10 +51,17 @@ func _ready() -> void:
 func set_controls_enabled(enabled: bool) -> void:
 	controls_enabled = enabled
 	if enabled:
-		Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
+		_capture_mouse_if_supported()
 	else:
 		Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 		_steer_target = 0.0
+
+
+## 触屏设备没有可捕获的鼠标，保持可见指针，视角交给 TouchControls。
+func _capture_mouse_if_supported() -> void:
+	if DisplayServer.is_touchscreen_available():
+		return
+	Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -62,31 +69,38 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event is InputEventMouseMotion \
 	and Input.get_mouse_mode() == Input.MOUSE_MODE_CAPTURED:
+		apply_look(event.relative)
 
-		# 1. 原来的第一人称水平视角控制
-		var yaw_delta: float = (
-			-event.relative.x * mouse_sensitivity
-		)
 
-		rotate_y(yaw_delta)
+## 鼠标和触屏共用的视角入口；参数为像素位移。
+func apply_look(relative: Vector2) -> void:
+	if not controls_enabled or relative == Vector2.ZERO:
+		return
 
-		# 2. 原来的上下视角控制
-		_pitch = clampf(
-			_pitch - event.relative.y * mouse_sensitivity,
-			deg_to_rad(-89.0),
-			deg_to_rad(89.0)
-		)
+	# 1. 第一人称水平视角控制
+	var yaw_delta: float = (
+		-relative.x * mouse_sensitivity
+	)
 
-		camera.rotation.x = _pitch
+	rotate_y(yaw_delta)
 
-		# 3. 根据鼠标左右移动控制车头
-		_steer_target += yaw_delta * steer_response
+	# 2. 上下视角控制
+	_pitch = clampf(
+		_pitch - relative.y * mouse_sensitivity,
+		deg_to_rad(-89.0),
+		deg_to_rad(89.0)
+	)
 
-		_steer_target = clampf(
-			_steer_target,
-			deg_to_rad(-max_steer_angle),
-			deg_to_rad(max_steer_angle)
-		)
+	camera.rotation.x = _pitch
+
+	# 3. 根据视角左右移动控制车头
+	_steer_target += yaw_delta * steer_response
+
+	_steer_target = clampf(
+		_steer_target,
+		deg_to_rad(-max_steer_angle),
+		deg_to_rad(max_steer_angle)
+	)
 
 
 func _process(delta: float) -> void:
