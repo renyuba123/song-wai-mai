@@ -62,12 +62,13 @@ godot --headless --path . --script res://tests/test_city.gd
 godot --headless --path . --script res://tests/test_city_catalog.gd
 godot --headless --path . --script res://tests/test_god_view.gd
 godot --headless --path . --script res://tests/test_orders.gd
+godot --headless --path . --script res://tests/test_menu_ui.gd
 godot --headless --path . --script res://tests/test_phone_orders.gd
 godot --headless --path . --script res://tests/test_site_readability.gd
 godot --headless --path . --script res://tests/test_traffic.gd
 ```
 
-前两条检查路网生成、校验、寻路和主场景启动；中间三条分别检查共享数据契约、输入映射与玩家移动、导航查询接口；`test_city` 检查城市确定性、反向数据、主场景城市装配和站点可达性；`test_city_catalog` 检查模型目录可加载、包围盒有效、分类数量和种子 118 的模型多样性；`test_god_view` 检查测试用上帝视角只在调试构建创建、开关时相机和玩家状态正确切换并恢复；`test_orders` 检查订单生成、状态机、开始/接单/结算界面和撞车失败语义；`test_phone_orders` 检查三维手机的挂载位置、屏幕内容、倒计时、Y/N、点击接单/拒单、配送中常驻和主菜单隐藏；`test_site_readability` 检查站点店名确定性、三维店名牌、当前目标星标以及接单/取餐/送达时的 HUD 与信标文本；`test_traffic` 检查车道数学、确定性车流、出生安全、命中 Area3D 和主场景撞车信号链。新增脚本后先执行一次 `godot --headless --path . --import`，让 Godot 注册 `class_name` 并生成 `.gd.uid`。
+前两条检查路网生成、校验、寻路和主场景启动；中间三条分别检查共享数据契约、输入映射与玩家移动、导航查询接口；`test_city` 检查城市确定性、反向数据、主场景城市装配和站点可达性；`test_city_catalog` 检查模型目录可加载、包围盒有效、分类数量和种子 118 的模型多样性；`test_god_view` 检查测试用上帝视角只在调试构建创建、开关时相机和玩家状态正确切换并恢复；`test_orders` 检查订单生成、状态机、开始/接单/结算界面和撞车失败语义；`test_menu_ui` 单独挂载订单 HUD，检查开始界面的标题、副标题、种子和按钮，以及成功/失败结算页面的取送路线、总路程、用时、剩余时间、收入和卡片是否超出可视区域；`test_phone_orders` 检查三维手机的挂载位置、屏幕内容、倒计时、Y/N、点击接单/拒单、配送中常驻和主菜单隐藏；`test_site_readability` 检查站点店名确定性、三维店名牌、当前目标星标以及接单/取餐/送达时的 HUD 与信标文本；`test_traffic` 检查车道数学、确定性车流、出生安全、命中 Area3D 和主场景撞车信号链。新增脚本后先执行一次 `godot --headless --path . --import`，让 Godot 注册 `class_name` 并生成 `.gd.uid`。
 
 ## 2. 所有人：日常操作流程
 
