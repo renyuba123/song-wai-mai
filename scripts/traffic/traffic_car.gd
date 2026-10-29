@@ -262,7 +262,7 @@ func _set_model(choice: int) -> void:
 	var model_rotation := Basis(Vector3.UP, MODEL_VISUAL_YAW)
 	var rotated_box := Transform3D(model_rotation, Vector3.ZERO) * box
 	# Bounds include imported root transforms. Scale uniformly and rest the lowest vertex on the road.
-	var factor := minf(1.9 / box.size.x, 4.2 / box.size.z)
+	var factor := minf(1.9 / box.size.x, 4.2 / box.size.z) * 1.6
 	var origin := -rotated_box.get_center() * factor
 	origin.y = -rotated_box.position.y * factor + 0.025
 	_model.transform = Transform3D(
