@@ -96,8 +96,29 @@ tcb hosting deploy build/web / -e <环境 ID>
 `behavior_events` 表里。取数、导成 CSV 和常用查询见
 [docs/BEHAVIOR_DATA_EXPORT.md](../docs/BEHAVIOR_DATA_EXPORT.md)。
 
+## 行为分析页
+
+`analytics/` 是 3 号二维码的静态页面，不需要构建，直接打开
+`analytics/index.html` 就能看：
+
+- 城市路网底图和本单的起点、取餐点、送达点；
+- 玩家轨迹，按采样时的速度着色，热力直接叠在轨迹上；
+- 每 30 秒一个计时点及玩家当时的位置；
+- 玩家经过路段的 NPC 拥挤度（每百米车辆数）。
+
+页面默认载入 `analytics/data/sample-data.js` 里的演示轨迹，顶部标着
+“示例数据”，不是真实访客。真实数据先用 `tools/export_behavior_data.py`
+导出 CSV，再用 `tools/build_behavior_page_data.py` 转成页面 JSON，
+在页面上点「载入数据」打开；完整步骤见
+[docs/BEHAVIOR_DATA_EXPORT.md](../docs/BEHAVIOR_DATA_EXPORT.md#生成分析页数据)。
+
+部署时把整个 `exhibition/analytics/` 目录作为静态站点上传（CloudBase 静态托管），
+再把正式地址填进 `qr/links.json` 的 `analytics.url`、把 `placeholder`
+改成 `false`，重新生成 3 号二维码。页面上的下载按钮导出的 JSON、CSV 和
+PNG 属于内部资料，不要提交进仓库或贴到公开群。
+
 ## 待办
 
 - 1 号码等 CloudBase 部署完成后替换链接。
 - 2 号码等演示视频上传后替换链接。
-- 3 号码等用户行为分析页面做好后替换链接。
+- 3 号码等分析页部署到静态托管后替换链接。

@@ -1,8 +1,9 @@
 # 展览行为采集函数
 
-游戏页把关键事件和两秒一次的位置采样批量 POST 到这个 HTTP 云函数，
-函数清洗后写入 CloudBase PostgreSQL 的 `behavior_events` 表。
+游戏页把关键事件、两秒一次的位置采样和每 30 秒的计时点批量 POST 到这个
+HTTP 云函数，函数清洗后写入 CloudBase PostgreSQL 的 `behavior_events` 表。
 客户端只带随机生成的会话 ID，不采集姓名、账号、设备标识，服务端也不存 IP。
+页面关闭时客户端会用 `navigator.sendBeacon` 补发队列里没来得及上报的事件。
 
 - 地址：`https://passive-sailfish-d0e1nvt8175333a.service.tcloudbase.com/log`
 - 环境：`passive-sailfish-d0e1nvt8175333a`（PostgreSQL 版，体验版）
@@ -60,12 +61,20 @@ CloudBase CLI 或控制台。
 
 | 事件 | 含义 | 属性 |
 | --- | --- | --- |
-| `session` | 页面加载 | `w`/`h` 视口、`touch` 是否触屏 |
-| `offer` | 生成待接订单 | `seed`、`pick` 取餐路程、`drop` 送达路程 |
-| `start` | 接单开始 | `seed` |
-| `pickup` | 取到餐 | `sec` 已用秒数 |
-| `pos` | 位置轨迹（每 2 秒） | `x`/`z` 坐标、`yaw` 朝向、`d` 距目标、`left` 剩余秒 |
-| `finish` | 订单结算 | `ok`、`why`（`timeout`/`hit`）、`sec` |
+| `session` | 页面加载 | `w`/`h` 视口、`touch` 是否触屏、`city` 地图种子、`mapw`/`maph` 地图尺寸、`traffic` 交通密度、`cars` 车辆数 |
+| `offer` | 生成待接订单 | `seed`、`city`、`pick` 取餐路程、`drop` 送达路程 |
+| `start` | 接单开始 | `seed`、`city`、`sx`/`sz` 起点、`px`/`pz` 取餐点、`dx`/`dz` 送达点、`limit` 限时秒 |
+| `pickup` | 取到餐 | `sec` 已用秒数、`x`/`z`、`speed`，以及 `road`/`rk`/`cars`/`peds`/`near` |
+| `pos` | 位置轨迹（每 2 秒） | `x`/`z` 坐标、`yaw` 朝向、`d` 距目标、`left` 剩余秒、`speed` 平面速度，以及 `road`/`rk`/`cars`/`peds`/`near` |
+| `checkpoint` | 计时点（每 30 秒） | `i` 序号、`sec`、`x`/`z`、`speed`、`left`，以及 `road`/`rk`/`cars`/`peds`/`near` |
+| `reject` | 拒绝或重新生成订单 | `seed`、`city`、`x`/`z`、`speed`，以及 `road`/`rk`/`cars`/`peds`/`near` |
+| `hit` | 被车撞 | `x`/`z`、`speed`，以及 `road`/`rk`/`cars`/`peds`/`near` |
+| `finish` | 订单结算 | `ok`、`why`（`timeout`/`hit`）、`sec`、`x`/`z`、`speed`，以及 `road`/`rk`/`cars`/`peds`/`near` |
+
+`road` 是 `city-118.json` 里的路段编号，`rk` 是等级（0 主干路、1 次干路、
+2 支路），`cars`/`peds` 是同路段的车辆和行人，`near` 是玩家 80 米内的车辆。
+分析页把这些字段画成轨迹速度热力和道路 NPC 拥挤度，见
+[`exhibition/analytics/`](../../exhibition/analytics/)。
 
 常用查询：
 

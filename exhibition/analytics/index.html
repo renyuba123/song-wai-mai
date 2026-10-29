@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0d1721">
+<title>用户行为记录 · 外卖骑行</title>
+<link rel="stylesheet" href="analytics.css">
+</head>
+<body>
+<header class="top">
+  <div class="titles">
+    <p class="eyebrow">展览行为记录</p>
+    <h1>用户行为记录 <span id="demoBadge" class="badge" hidden>示例数据</span></h1>
+    <p class="sub" id="metaLine">正在载入…</p>
+  </div>
+  <div class="actions">
+    <label class="fileButton">
+      载入数据
+      <input id="fileInput" type="file" accept=".json,application/json">
+    </label>
+    <button id="downloadJson" type="button">下载 JSON</button>
+    <button id="downloadCsv" type="button">下载 CSV</button>
+    <button id="downloadPng" type="button">下载地图 PNG</button>
+  </div>
+</header>
+
+<main>
+  <section class="toolbar">
+    <label class="field">
+      <span>会话</span>
+      <select id="sessionSelect"></select>
+    </label>
+    <label class="switch"><input id="toggleCrowd" type="checkbox" checked> 道路 NPC 拥挤度</label>
+    <label class="switch"><input id="toggleCheckpoints" type="checkbox" checked> 计时点位置</label>
+  </section>
+
+  <section class="stage">
+    <div class="canvasWrap" id="canvasWrap">
+      <canvas id="map" aria-label="玩家轨迹地图"></canvas>
+      <div class="tooltip" id="tooltip" hidden></div>
+    </div>
+
+    <aside class="panel">
+      <h2>本单概况</h2>
+      <dl class="stats" id="stats"></dl>
+
+      <h2>图例</h2>
+      <div class="legend">
+        <div class="legendRow">
+          <span class="legendTitle">轨迹速度</span>
+          <span class="gradient speed"></span>
+          <span class="legendHint">慢 → 快</span>
+        </div>
+        <div class="legendRow">
+          <span class="legendTitle">道路拥挤度</span>
+          <span class="gradient crowd"></span>
+          <span class="legendHint">空旷 → 拥挤</span>
+        </div>
+        <div class="legendRow">
+          <span class="marker start"></span><span>任务起点</span>
+          <span class="marker pickup"></span><span>取餐点</span>
+          <span class="marker drop"></span><span>送达点</span>
+        </div>
+        <div class="legendRow">
+          <span class="marker checkpoint"></span><span>计时点（每 30 秒）</span>
+        </div>
+      </div>
+
+      <h2>当前道路</h2>
+      <p class="roadInfo" id="roadInfo">点击计时点或轨迹上的位置查看。</p>
+    </aside>
+  </section>
+
+  <section class="note">
+    <p>轨迹颜色表示采样时的平面速度；路网底色表示玩家经过该路段时记下的
+      NPC 车辆密度（每百米车辆数）。计时点每 30 秒记录一次，取餐和送达也会单独标注。</p>
+    <p id="dataNote"></p>
+  </section>
+</main>
+
+<script src="data/sample-data.js"></script>
+<script src="analytics.js"></script>
+</body>
+</html>

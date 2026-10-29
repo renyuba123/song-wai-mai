@@ -8,8 +8,10 @@
   2027-04-29 到期）
 - 数据表：`public.behavior_events`
 - 写入入口：`https://passive-sailfish-d0e1nvt8175333a.service.tcloudbase.com/log`
-- 采集内容：页面加载、待接订单、接单、取餐、每两秒一次的位置、订单结算；
+- 采集内容：页面加载、待接订单、接单（含起止点）、取餐、每两秒一次的位置与速度、
+  每 30 秒一个计时点、当前道路的 NPC 数量和拥挤度、被车撞、拒绝订单和订单结算；
   客户端只带随机会话 ID，不采集姓名、账号或设备标识，服务端也不存 IP。
+  页面关闭时用 `navigator.sendBeacon` 补发尚未上传的事件，减少中途退出造成的缺漏。
 
 ## 先解决权限
 
@@ -151,16 +153,64 @@ CREATE TABLE IF NOT EXISTS behavior_events (
 
 | 事件 | 含义 | 属性 |
 | --- | --- | --- |
-| `session` | 页面加载 | `w`/`h` 视口、`touch` 是否触屏 |
-| `offer` | 生成待接订单 | `seed`、`pick` 取餐路程、`drop` 送达路程 |
-| `start` | 接单开始 | `seed` |
-| `pickup` | 取到餐 | `sec` 已用秒数 |
-| `pos` | 位置轨迹（每 2 秒） | `x`/`z` 坐标、`yaw` 朝向、`d` 距目标、`left` 剩余秒 |
-| `finish` | 订单结算 | `ok`、`why`（`timeout`/`hit`）、`sec` |
+| `session` | 页面加载 | `w`/`h` 视口、`touch` 是否触屏、`city` 地图种子、`mapw`/`maph` 地图尺寸、`traffic` 交通密度、`cars` 车辆数 |
+| `offer` | 生成待接订单 | `seed`、`city`、`pick` 取餐路程、`drop` 送达路程 |
+| `start` | 接单开始 | `seed`、`city`、`sx`/`sz` 起点、`px`/`pz` 取餐点、`dx`/`dz` 送达点、`limit` 限时秒 |
+| `pickup` | 取到餐 | `sec` 已用秒数、`x`/`z`、`speed`，以及 `road`/`rk`/`cars`/`peds`/`near` |
+| `pos` | 位置轨迹（每 2 秒） | `x`/`z`、`yaw` 朝向、`d` 距目标、`left` 剩余秒、`speed` 平面速度，以及 `road`/`rk`/`cars`/`peds`/`near` |
+| `checkpoint` | 计时点（每 30 秒） | `i` 序号、`sec` 已用秒数、`x`/`z`、`speed`、`left`，以及 `road`/`rk`/`cars`/`peds`/`near` |
+| `reject` | 拒绝或重新生成订单 | `seed`、`city`、`x`/`z`、`speed`，以及 `road`/`rk`/`cars`/`peds`/`near` |
+| `hit` | 被车撞 | `x`/`z`、`speed`，以及 `road`/`rk`/`cars`/`peds`/`near` |
+| `finish` | 订单结算 | `ok`、`why`（`timeout`/`hit`）、`sec`、`x`/`z`、`speed`，以及 `road`/`rk`/`cars`/`peds`/`near` |
 | `probe` | 部署时手工自检写入 | 测试用，分析玩家数据时排除 |
+
+道路属性说明：
+
+- `road`：玩家或车辆离最近路段在 `city-118.json` 里的编号。
+- `rk`：路段等级，`0` 主干路、`1` 次干路、`2` 支路。
+- `cars`：和玩家同一条路段上的 NPC 车辆数；`peds` 是同路段的行人。
+- `near`：玩家 80 米范围内的车辆数。分析页按 `cars ÷ 路段长度 × 100`
+  换算成“每百米车辆数”后涂到路网上。
+- `speed` 只算平面速度，忽略跳跃和重力分量，单位米/秒。
 
 `probe` 只出现在 2026-10-29 的联调记录里，不是玩家行为。下面的查询默认
 用 `session_id NOT LIKE 'probe%'` 把它排除。
+
+## 生成分析页数据
+
+3 号二维码背后的页面在 `exhibition/analytics/`，同一张图上会画：
+
+- 城市路网俯视示意图；
+- 本单的起点、取餐点和送达点；
+- 玩家轨迹，用颜色表示采样时的速度；
+- 每 30 秒一个计时点及玩家当时的位置；
+- 玩家经过路段的 NPC 拥挤度（每百米车辆数）叠在路网底色上。
+
+页面本身不连数据库，因为云函数的 `anon` 身份没有 SELECT 权限。先用方法一
+导出 CSV，再在仓库根目录转成页面数据：
+
+```bash
+python tools/build_behavior_page_data.py \
+  --csv exports/behavior-20261029/behavior_events_events.csv \
+  --out exports/behavior-20261029/analytics.json
+```
+
+打开 `exhibition/analytics/index.html`，点「载入数据」选择
+`analytics.json` 即可。页面上的「下载 JSON」「下载 CSV」「下载地图 PNG」
+可以把当前载入的数据和地图再保存下来，方便离线留档。
+
+页面默认带一份演示轨迹（`exhibition/analytics/data/sample-data.js`），
+标着“示例数据”，不是真实访客。地图底图 `data/city-118.json` 由
+`tools/export_city_map.gd` 从主场景使用的种子（`main.tscn` 里
+`World.seed = 118`）导出，种子或路网参数变了要一起重新生成：
+
+```bash
+Godot_v4.7.2-stable_win64_console.exe --headless --path . \
+  --script res://tools/export_city_map.gd
+python tools/build_behavior_page_data.py --demo \
+  --city exhibition/analytics/data/city-118.json \
+  --out exhibition/analytics/data/sample-data.js --js
+```
 
 ## 常用查询
 
@@ -225,6 +275,8 @@ GROUP BY 1 ORDER BY 2 DESC;
   某一次参观；导出文件按内部资料处理。
 - `exports/` 已加进 `.gitignore`，不要把导出的 CSV、JSON 或数据库备份提交
   进仓库，也不要贴到公开的二维码页面。需要共享时走网盘或私聊。
+  用 `tools/build_behavior_page_data.py` 生成的 `analytics.json` 和页面上
+  下载的 JSON/CSV/PNG 同理；仓库里只保留 `data/city-118.json` 和演示数据。
 - 云函数的 `anon` 账号只有 INSERT 权限，不要为了“让页面直接读数据”
   给它开 SELECT；二维码 3 号的页面如果要展示统计，应当另做只读接口，
   只返回聚合结果。

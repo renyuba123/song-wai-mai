@@ -1,7 +1,10 @@
 extends SceneTree
 
-## 行为采集测试：会话 ID、事件清洗、批量上限和上报载荷。
+## 行为采集测试：会话 ID、事件清洗、批量上限、上报载荷、
+## 道路与 NPC 拥挤度辅助函数，以及任务起止点字段。
 ## 非 Web 环境中 TelemetryClient 不会联网，测试只检查本地队列。
+
+const RoadGenerator = preload("res://scripts/world/road_generator.gd")
 
 var _failed := false
 
@@ -66,20 +69,74 @@ func _run() -> void:
 	_expect(not telemetry.active, "headless 环境不应开启联网上报")
 	_expect(telemetry.get_node_or_null("Http") == null, "未启用时不应创建 HTTPRequest")
 
-	# 订单关键事件：接单、开始、结算都应进入队列，属性与订单一致。
+	_expect(
+		is_equal_approx(TelemetryClient.planar_speed(Vector3(3.0, -9.8, 4.0)), 5.0),
+		"平面速度应忽略竖直分量"
+	)
+
+	# 道路辅助函数：用真实生成的路网检查最近路段和道路属性。
+	var network: RoadNetwork = RoadGenerator.generate(
+		Vector2(2400, 2400), 42, 0.5, Vector3(40, 30, 18)
+	)
+	var edge: Dictionary = network.edges[0]
+	var a: Vector2 = network.nodes[int(edge.a)]
+	var b: Vector2 = network.nodes[int(edge.b)]
+	var midpoint := a.lerp(b, 0.5)
+	var road := TelemetryClient.nearest_edge(Vector3(midpoint.x, 0.0, midpoint.y), network)
+	_expect(road >= 0 and road < network.edges.size(), "应能找到最近路段：%d" % road)
+	var found: Dictionary = network.edges[road]
+	var found_distance := Geometry2D.get_closest_point_to_segment(
+		midpoint, network.nodes[int(found.a)], network.nodes[int(found.b)]
+	).distance_to(midpoint)
+	var own_distance := Geometry2D.get_closest_point_to_segment(midpoint, a, b).distance_to(midpoint)
+	_expect(found_distance <= own_distance + 0.001, "最近路段应是距离最小的路段")
+	var context := TelemetryClient.get_road_context(
+		Vector3(midpoint.x, 0.0, midpoint.y), network, null
+	)
+	_expect(context.road >= 0 and context.rk >= 0 and context.rk <= 2, "道路属性应带路段和等级")
+	_expect(context.cars == 0 and context.peds == 0 and context.near == 0, "没有交通时应为 0")
+
+	# 订单关键事件：接单、开始、拒绝、结算都应进入队列，属性与订单一致。
 	var order := DeliveryOrder.new()
+	order.city_seed = 42
 	order.order_seed = 42
 	order.pickup_path_length_m = 120.4
 	order.delivery_path_length_m = 350.6
+	order.start = SpawnPoint.new()
+	order.start.kind = SpawnPoint.Kind.PLAYER_START
+	order.start.position = Vector3(12.0, 0.0, -8.0)
+	order.merchant = CitySite.new()
+	order.merchant.kind = CitySite.Kind.MERCHANT
+	order.merchant.spawn_point = SpawnPoint.new()
+	order.merchant.spawn_point.position = Vector3(100.0, 0.0, 50.0)
+	order.customer = CitySite.new()
+	order.customer.kind = CitySite.Kind.RESIDENTIAL
+	order.customer.spawn_point = SpawnPoint.new()
+	order.customer.spawn_point.position = Vector3(-40.0, 0.0, 210.0)
 	telemetry._on_order_offered(order)
 	telemetry._on_order_started(order)
+	telemetry._on_order_rejected(order)
 	telemetry._on_order_finished(true)
-	var tail := telemetry.get_pending_events().slice(-3)
+	var tail := telemetry.get_pending_events().slice(-4)
 	_expect(tail[0].n == "offer" and tail[0].p.seed == 42, "应记录 offer 事件")
 	_expect(tail[0].p.pick == 120 and tail[0].p.drop == 351, "offer 应带取餐与送达路程")
+	_expect(tail[0].p.city == 42, "offer 应带城市种子")
 	_expect(tail[1].n == "start" and tail[1].p.seed == 42, "应记录 start 事件")
 	_expect(
-		tail[2].n == "finish" and tail[2].p.ok == true and tail[2].p.why == "none",
+		tail[1].p.sx == 12.0 and tail[1].p.sz == -8.0,
+		"start 应带任务起点：%s" % [tail[1].p]
+	)
+	_expect(
+		tail[1].p.px == 100.0 and tail[1].p.pz == 50.0,
+		"start 应带取餐点：%s" % [tail[1].p]
+	)
+	_expect(
+		tail[1].p.dx == -40.0 and tail[1].p.dz == 210.0,
+		"start 应带送达点：%s" % [tail[1].p]
+	)
+	_expect(tail[2].n == "reject" and tail[2].p.seed == 42, "应记录 reject 事件")
+	_expect(
+		tail[3].n == "finish" and tail[3].p.ok == true and tail[3].p.why == "none",
 		"应记录 finish 事件及结果"
 	)
 
