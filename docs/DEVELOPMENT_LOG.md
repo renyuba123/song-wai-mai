@@ -1586,3 +1586,35 @@ PR #31 合并后，从 `origin/main` 的 `7c3d412` 起 `feature/jzy070407-menu-r
 **修改文件：** `docs/DEVELOPMENT_LOG.md`。
 
 本条记录随 `docs/jzy070407-sync-20261029-e` 分支提交、推送并建 PR。
+
+## 2026-10-29 22:08（Asia/Shanghai）重新上传 Web 版并修复部署回滚
+
+本轮需求（原文）：“打开一下网页端”，随后是“重新上传新版本”和“直接更新服务器”。
+
+**过程：**
+
+- 线上仍是 14:58 的旧构建。手动触发 `Deploy web build` 后，合并 #43、#44、#45 的推送又连续触发部署；工作流并发组取消旧任务，最后落在 main `6a5326c` 的运行 `40880026526`。
+- 该运行在 `tcb hosting deploy --safe --verify` 阶段上传完 8 个文件后报
+  `一致性校验失败：missing=/index.apple-touch-icon.png,...,/index.wasm`，触发安全回滚；
+  回滚没有恢复完整旧站，静态托管只剩 3 个 `.import` 文件，首页变成 404。
+- 新建 `fix/jzy070407-web-deploy-verify`，把部署命令改为
+  `--concurrency 5 --retry-count 5 --entry index.html`，去掉 `--safe --verify`，
+  并把探活扩展到 `index.pck` 和 `index.wasm`。在该分支手动运行工作流
+  `40884175865`，部署成功。
+- 本机 `tcb` 已登录，但本机只有 mono 版 Godot，无法导出 Web；尝试重新下载标准版
+  Godot 和 CI artifact 都因 GitHub 网络中断失败，因此没有走本地重传，等 CI 直接完成。
+
+**验证：**
+
+- 运行 `40884175865` 结论 success，工作流自带的页面、`index.pck`、`index.wasm` 探活均通过。
+- 线上首页 HTTP 200，`index.html` 5,450 字节、`index.pck` 32,061,440 字节、
+  `index.wasm` 39,514,754 字节，`Last-Modified` 均为 2026-10-29 13:42 UTC。
+- 下载线上 `index.pck`，按 PCK v4 目录取出 `scripts/core/telemetry_client.gdc`，
+  用 zstd 解出 39,544 字节；里面能查到 `checkpoint`、`sendBeacon`、`road`、`cars`、
+  `near`、`speed`、`left`、`pickup`、`finish`，确认线上已是记录位置、道路和计时点的新版本。
+- 重新打开线上网页端，页面正常加载。
+
+**修改文件：** `.github/workflows/deploy-web.yml`、`docs/WEB_DEPLOY.md`、
+`docs/DEVELOPMENT_LOG.md`。
+
+本条记录随 `fix/jzy070407-web-deploy-verify` 分支提交、推送并建 PR。
