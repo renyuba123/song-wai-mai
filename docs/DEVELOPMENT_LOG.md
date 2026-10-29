@@ -762,6 +762,36 @@ GitHub Actions 报 `resident count grows after revisit`。实测首次访问商�
 
 同步最新 main：PC 侧 `origin/main` 已前进到 `b872b50`（PR #18 合并人行道导航），本分支按协作规则合并 `origin/main`，解决 `docs/DEVELOPMENT_LOG.md` 追加位置的冲突（两条记录都保留，按时间排序），合并提交 `91f6062`。合并后重新 `--import` 并运行 `test_pause`、`test_input_actions`、`test_main_scene`、`test_navigation_queries`、`test_city`、`test_traffic`、`test_god_view`，全部 PASS、退出码 0；`test_orders` 仍是同样的 LFS pointer 环境阻塞。
 
+## 2026-10-29 10:45（Asia/Shanghai）地面路线指引
+
+**本轮需求（原文）：** “用 NavigationService.find_path() 从玩家当前位置到当前订单目标，沿路面画一条可见折线（ImmediateMesh 或细长 MeshInstance3D 条带均可），略微抬高避免与地面 z-fighting。玩家明显偏离路线（例如超出阈值距离）或订单目标变化时重算；重算做节流，不要每帧跑 A*。开始菜单、接单选择、结算界面、无活动订单时隐藏路线。保留现有 HUD 的距离/箭头，不改 HUD。”
+
+**实现内容：**
+
+- 新增 `scripts/orders/route_guide.gd`（`RouteGuide extends MeshInstance3D`），由 `OrderManager` 代码创建，不改 `main.tscn`。用 `NavigationService.find_path()` 取路径，清理非有限点和过短重复段，按每点 XZ 切线生成左右顶点，组成 0.8 米宽、抬高 0.06 米的三角条带；顶点直接使用世界坐标，节点 `top_level = true`。
+- 重算条件：强制重算、目标移动超过 0.5 米、单次玩家位移超过 12 米（传送/重开）、距上次重算超过 0.4 秒且玩家离当前路线超过 6 米。偏航重算还要求玩家相对上次重算位置移动至少 1 米，避免原地反复寻路；A* 只在这些条件下调用一次，`update_route()` 每帧只做距离判断。
+- `OrderManager` 在 `_ready()` / `setup()` 创建路线节点；活动订单的物理帧更新、接单、重开、取餐后切换目标时刷新；生成中、接单界面、结算、返回主菜单时隐藏。顺序上先重置玩家再强制重算，保证重开和接单后的路线从新位置出发。
+- 新增 `tests/test_route_guidance.gd`：线段偏航距离纯函数、开始/接单界面隐藏、接单后可见与首末点吸附、静止时不重算、原地重复更新不重算、偏航在节流窗口内不重算且窗口后重算一次、传送立即重算、目标切换立即重算、超时和返回主菜单后隐藏。
+- `README.md` 测试列表和命令、`.github/workflows/repository-integrity.yml` 测试循环加入 `test_route_guidance`。
+
+**修改文件：** 新增 `scripts/orders/route_guide.gd`、`tests/test_route_guidance.gd`；修改 `scripts/orders/order_manager.gd`、`README.md`、`.github/workflows/repository-integrity.yml`、`docs/DEVELOPMENT_LOG.md`。没有修改 `navigation_service.gd`、`order_hud.gd` 和 `scenes/main/main.tscn`。
+
+**测试与校验：**
+
+- Godot 4.7.2 `--headless --path . --import` 退出码 0，路网校验通过（节点 150、路段 214），城市生成通过（地块 1637、建筑 1637、站点 32、出入口 98）。
+- `test_route_guidance` 输出 `PASS route guidance`；首次运行进程退出码 0，重复运行时曾出现打印 PASS 后进程以 `-1073741819`（0xC0000005）退出的情况，日志同时报多个 `.glb` 加载失败，与 99 个模型仍是 LFS pointer 的环境阻塞一致，不放宽测试。
+- `test_navigation_queries` 输出 `PASS navigation queries`，退出码 0；`test_main_scene` 输出 `PASS main scene nodes=150 lots=1637 sites=32 starts=12 vehicles=11 order_seed=1 sky=true`，退出码 0。
+- `test_orders` 输出 `PASS orders starts=12 | PASS orders`，但进程在退出时以 `-1073741819`（0xC0000005）结束，同样归为 LFS pointer 模型的环境阻塞。
+- `--import` 顺带改写了 `assets/models/` 下多个 `.glb.import`（模型未展开导致的导入元数据变化），已全部还原，未纳入提交；`git diff --check` 通过。
+- 无 GPU 环境未人工确认条带贴地、门向和遮挡效果。
+
+**合并后复验：** 合并 `origin/main` `b872b50`（PR #18 人行道与地块导航基础）后，在合并提交 `b52018c` 上重跑相关测试：
+
+- `--headless --path . --import` 退出码 0；`test_navigation_queries`、`test_orders`、`test_main_scene`、`test_city` 全部 `exit=0`，其中主场景输出 `PASS main scene nodes=150 lots=1637 sites=32 starts=12 vehicles=11 order_seed=1 sky=true`，城市测试种子 42 `lots=1699`、种子 1 `lots=135`。
+- `test_route_guidance` 输出 `PASS route guidance`，进程退出码仍偶尔为 `-1073741819`（0xC0000005），与 99 个模型仍是 LFS pointer 的环境阻塞一致；`test_orders` 本次 `exit=0`，同一环境两次运行结果不同，说明退出码抖动来自资源加载而非本轮逻辑。
+- 合并只在 `docs/DEVELOPMENT_LOG.md` 产生冲突，按时间顺序保留本条记录和人行道导航记录（`10:13`），合并提交 `b52018c`。
+
+**提交与分支：** 从 `origin/main` `a25b008` 建立 `feature/jzy070407-route-guidance`；功能与日志提交 `d24d158 feat(orders): add ground route guidance`，随后合并 `origin/main` `b872b50` 得到 `b52018c`；推送后向 `main` 建 PR，不直接推送 `main`，不强推。
 ## 2026-10-29 10:57（Asia/Shanghai）远端同步检查
 
 本轮按要求检查 `song-wai-mai` 仓库的远端更新：“检查 song-wai-mai 仓库的远端更新：进入 E:/Project/Game Work Team/song-wai-mai，先确认工作区状态，再执行 git fetch origin --prune。如果 origin/main 或 origin/refactor/modular-base 有新提交，按 CONTRIBUTING.md 和每轮工作规则安全整合（有未提交改动时先保留或提交，不覆盖），运行相关 Godot 测试，把本轮同步和测试结果追加到 docs/DEVELOPMENT_LOG.md，提交并推送；若出现冲突或权限问题，停止并向用户说明，不要强推。”
