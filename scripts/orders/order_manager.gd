@@ -1,13 +1,22 @@
 extends Node3D
 class_name OrderManager
 
-## 订单运行时：等待导航就绪，生成订单，等待玩家接单，传送玩家，
-## 维护目标信标、HUD 和输入。状态机本身在 OrderSession 中；
-## 本节点只处理场景、输入和展示。
+## 订单运行时：等待导航就绪，生成首单，传送玩家，维护目标信标、HUD 和输入。
+## 状态机本身在 OrderSession 中；本节点只处理场景、输入和展示。
 
-signal order_offered(order: DeliveryOrder)
 signal order_started(order: DeliveryOrder)
 signal order_finished(success: bool)
+signal order_offered(order_data: Dictionary)
+signal phone_order_accepted(order_id: String)
+signal phone_order_rejected(order_id: String)
+
+# 未连接手机的旧消费者仍保持生成后立即开始订单。
+var phone_notifications_enabled := false
+var _phone_order: DeliveryOrder
+var _phone_offer: Dictionary = {}
+var _offer_serial := 0
+const ESTIMATED_BASE_PAY := 5.0
+const ESTIMATED_PAY_PER_KM := 2.5
 
 const NAV_READY_MAX_FRAMES := 120
 const NEXT_SEED_ATTEMPTS := 10
@@ -28,8 +37,6 @@ var _current_order: DeliveryOrder = null
 var _session: OrderSession = null
 var _order_seed := 1
 var _configured := false
-var _at_start_screen := true
-var _pending_offer := false
 var _pending_generation := false
 var _pending_seed := 1
 var _avoid_signature := ""
@@ -56,13 +63,7 @@ func setup(
 		_hud.show_error("订单系统缺少世界、导航或玩家")
 		return
 	_order_seed = initial_order_seed
-	_current_order = null
-	_session = null
-	_pending_offer = false
-	_pending_generation = false
-	_at_start_screen = true
-	_player.set_controls_enabled(false)
-	_hud.show_start_menu(_city_seed())
+	_begin_generation(_order_seed, "")
 
 
 func get_current_order() -> DeliveryOrder:
@@ -81,53 +82,6 @@ func get_hud() -> OrderHUD:
 	return _hud
 
 
-func is_start_screen_visible() -> bool:
-	return _at_start_screen and _hud != null and _hud.is_start_menu_visible()
-
-
-func is_offer_visible() -> bool:
-	return _pending_offer and _hud != null and _hud.is_offer_visible()
-
-
-func get_offer_text() -> String:
-	return _hud.get_offer_text() if _hud != null else ""
-
-
-func start_game() -> bool:
-	if not _configured or not _at_start_screen:
-		return false
-	_at_start_screen = false
-	_hud.hide_start_menu()
-	_begin_generation(_order_seed, "")
-	return true
-
-
-func accept_order() -> bool:
-	if not _configured or not _pending_offer or _current_order == null:
-		return false
-	_pending_offer = false
-	_hud.hide_offer()
-	_activate_order(_current_order)
-	return true
-
-
-func return_to_start_menu() -> bool:
-	if not _configured:
-		return false
-	_pending_generation = false
-	_pending_offer = false
-	_current_order = null
-	_session = null
-	_at_start_screen = true
-	_order_seed += 1
-	if _beacon != null:
-		_beacon.visible = false
-	if _player != null:
-		_player.set_controls_enabled(false)
-	_hud.show_start_menu(_city_seed())
-	return true
-
-
 func try_interact(player_position: Vector3) -> bool:
 	if _session == null:
 		return false
@@ -138,26 +92,12 @@ func try_interact(player_position: Vector3) -> bool:
 	return changed
 
 
-func notify_player_hit(_position: Vector3 = Vector3.ZERO) -> bool:
-	## 交通模块只报告“碰到玩家”，是否构成失败由订单系统判断。
-	## 菜单、接单界面、结算界面和上帝视角都不会有活动会话，直接忽略。
-	if not _configured or _session == null or not _session.is_active():
-		return false
-	if _player == null or not _player.is_physics_processing():
-		return false
-	return _session.fail(OrderSession.FailureReason.HIT_BY_CAR)
-
-
 func handle_restart() -> bool:
 	if not _configured:
 		return false
-	if _at_start_screen:
-		return start_game()
-	if _pending_offer:
-		return accept_order()
-	if _pending_generation:
-		return false
 	if _current_order == null:
+		if _pending_generation:
+			return false
 		_begin_generation(_order_seed + 1, "")
 		return true
 	if _session == null:
@@ -201,14 +141,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.is_echo():
 		return
 	if event.is_action_pressed("interact"):
-		var handled := false
-		if _at_start_screen:
-			handled = start_game()
-		elif _pending_offer:
-			handled = accept_order()
-		else:
-			handled = try_interact(_player.global_position)
-		if handled:
+		if try_interact(_player.global_position):
 			get_viewport().set_input_as_handled()
 	elif event.is_action_pressed("restart"):
 		if handle_restart():
@@ -217,8 +150,9 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _begin_generation(seed_value: int, avoid_signature: String) -> void:
 	_current_order = null
+	_phone_order = null
+	_phone_offer = {}
 	_session = null
-	_pending_offer = false
 	_pending_generation = true
 	_pending_seed = seed_value
 	_avoid_signature = avoid_signature
@@ -249,40 +183,23 @@ func _attempt_generation() -> void:
 			):
 				_order_seed = seed_value
 				_pending_generation = false
-				_offer_order(order)
+				if phone_notifications_enabled:
+					_offer_on_phone(order)
+				else:
+					_activate_order(order)
 				return
 		seed_value += 1
 	_pending_generation = false
 	_hud.show_error("订单生成失败：没有可达的起点/商家/顾客组合，按 R 重试")
 
 
-func _offer_order(order: DeliveryOrder) -> void:
-	## 生成成功后先展示商家、顾客、路程和时限，玩家接单后才开始计时。
-	_current_order = order
-	_order_seed = order.order_seed
-	_session = null
-	_pending_offer = true
-	if _beacon != null:
-		_beacon.visible = false
-	if _player != null:
-		_player.set_controls_enabled(false)
-	var time_limit := OrderSession.calculate_time_limit(
-		order, _player.move_speed if _player != null else 5.0
-	)
-	_hud.show_offer(order, time_limit)
-	order_offered.emit(order)
-
-
 func _activate_order(order: DeliveryOrder) -> void:
 	_current_order = order
 	_order_seed = order.order_seed
-	_pending_offer = false
 	_session = OrderSession.new(order, _player.move_speed if _player != null else 5.0)
 	_session.state_changed.connect(_on_session_state_changed)
 	_session.finished.connect(_on_session_finished)
-	if _player != null:
-		_player.reset_to(order.start)
-		_player.set_controls_enabled(true)
+	_player.reset_to(order.start)
 	_hud.show_active(order, _session)
 	_update_beacon()
 	_refresh_hud()
@@ -295,9 +212,7 @@ func _restart_same_order() -> void:
 	_session = OrderSession.new(_current_order, _player.move_speed if _player != null else 5.0)
 	_session.state_changed.connect(_on_session_state_changed)
 	_session.finished.connect(_on_session_finished)
-	if _player != null:
-		_player.reset_to(_current_order.start)
-		_player.set_controls_enabled(true)
+	_player.reset_to(_current_order.start)
 	_hud.show_active(_current_order, _session)
 	_update_beacon()
 	_refresh_hud()
@@ -318,8 +233,6 @@ func _on_session_state_changed(_state: int) -> void:
 func _on_session_finished(_success: bool) -> void:
 	if _beacon != null:
 		_beacon.visible = false
-	if _player != null:
-		_player.set_controls_enabled(false)
 	if _current_order != null and _session != null and _hud != null:
 		_hud.show_result(_current_order, _session)
 	order_finished.emit(_session.is_success() if _session != null else false)
@@ -340,17 +253,7 @@ func _ensure_hud() -> void:
 		return
 	_hud = OrderHUD.new()
 	_hud.name = "OrderHUD"
-	_hud.start_pressed.connect(start_game)
-	_hud.accept_pressed.connect(accept_order)
-	_hud.next_order_pressed.connect(handle_restart)
-	_hud.menu_pressed.connect(return_to_start_menu)
 	add_child(_hud)
-
-
-func _city_seed() -> int:
-	if _world != null and _world.network != null:
-		return _world.network.seed_value
-	return 0
 
 
 func _ensure_beacon() -> void:
@@ -390,3 +293,44 @@ func _update_beacon() -> void:
 	_beacon_material.albedo_color = color
 	_beacon_material.emission = color
 	_beacon.visible = true
+
+
+func _offer_on_phone(order: DeliveryOrder) -> void:
+	_phone_order = order
+	_offer_serial += 1
+	var distance := order.get_total_path_length_m()
+	_phone_offer = {
+		"id": "delivery/%d/%d/%d" % [order.city_seed, order.order_seed, _offer_serial],
+		"shop_name": "商家 · " + str(order.merchant.id),
+		"pickup_address": "地块 %d 取餐点" % order.merchant.lot_id,
+		"destination_address": "地块 %d 顾客站点" % order.customer.lot_id,
+		"distance_m": distance,
+		"reward_yuan": snappedf(ESTIMATED_BASE_PAY + distance / 1000.0 * ESTIMATED_PAY_PER_KM, 0.01),
+	}
+	_hud.show_waiting("手机收到新订单 · Y 接单 / N 拒单")
+	order_offered.emit(_phone_offer.duplicate(true))
+
+
+func get_phone_offer() -> Dictionary:
+	return _phone_offer.duplicate(true)
+
+
+func accept_phone_order(order_id: String) -> bool:
+	if _phone_order == null or str(_phone_offer.get("id", "")) != order_id:
+		return false
+	var order := _phone_order
+	_phone_order = null
+	_phone_offer = {}
+	_activate_order(order)
+	phone_order_accepted.emit(order_id)
+	return true
+
+
+func reject_phone_order(order_id: String) -> bool:
+	if _phone_order == null or str(_phone_offer.get("id", "")) != order_id:
+		return false
+	_phone_order = null
+	_phone_offer = {}
+	_hud.show_waiting("已拒绝订单 · R 获取下一单")
+	phone_order_rejected.emit(order_id)
+	return true

@@ -1,15 +1,31 @@
 [gd_scene format=3 uid="uid://bhtnsn6bhwr5h"]
 
 [ext_resource type="Script" uid="uid://dl4qjpdgp2ukb" path="res://scripts/player/player_controller.gd" id="1_player"]
-[ext_resource type="PackedScene" uid="uid://c5udir2xpgxqv" path="res://assets/models/电鸡模型.glb" id="2_dovo2"]
+[ext_resource type="PackedScene" uid="uid://fg5eey52tfcl" path="res://assets/models/电鸡模型.glb" id="2_dovo2"]
+[ext_resource type="PackedScene" path="res://scenes/ui/order_notification.tscn" id="3_phone_ui"]
+[ext_resource type="Script" uid="uid://cdody2tmq0g60" path="res://scripts/ui/phone_screen.gd" id="4_phone_screen"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_player"]
 radius = 0.35
 height = 1.8
 
+[sub_resource type="ViewportTexture" id="ViewportTexture_phone"]
+viewport_path = NodePath("MeshInstance3D/SubViewport")
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_vkqoe"]
+resource_local_to_scene = true
+shading_mode = 0
+albedo_texture = SubResource("ViewportTexture_phone")
+uv1_scale = Vector3(3, 2, 1)
+texture_repeat = false
+
+[sub_resource type="BoxMesh" id="BoxMesh_vkqoe"]
+resource_local_to_scene = true
+size = Vector3(0.08, 0.15, 0.01)
+
 [node name="Player" type="CharacterBody3D" unique_id=805032846 node_paths=PackedStringArray("steering_pivot")]
 script = ExtResource("1_player")
-steering_pivot = NodePath("电鸡模型/Empty")
+steering_pivot = NodePath("电鸡模型")
 max_steer_angle = 30.0
 steer_response = 1.0
 
@@ -17,11 +33,32 @@ steer_response = 1.0
 transform = Transform3D(-1, 0, 8.742278e-08, 0, 1, 0, -8.742278e-08, 0, -1, 0, 0.8, 0)
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=847726229]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.3682455, 0)
 shape = SubResource("CapsuleShape3D_player")
 
 [node name="Camera3D" type="Camera3D" parent="." unique_id=191232166]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.0682454, 0)
 current = true
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="." unique_id=1253876041]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.09771033, 1.8221333, -0.554344)
+material_override = SubResource("StandardMaterial3D_vkqoe")
+mesh = SubResource("BoxMesh_vkqoe")
+script = ExtResource("4_phone_screen")
+
+[node name="SubViewport" type="SubViewport" parent="MeshInstance3D" unique_id=610376771]
+size = Vector2i(720, 1080)
+render_target_update_mode = 4
+
+[node name="Phone_Ui" type="Control" parent="MeshInstance3D/SubViewport" unique_id=92291608]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="OrderNotification" parent="MeshInstance3D/SubViewport/Phone_Ui" unique_id=1223149558 instance=ExtResource("3_phone_ui")]
+layout_mode = 1
 
 [editable path="电鸡模型"]

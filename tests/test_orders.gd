@@ -57,39 +57,27 @@ func _setup_main() -> void:
 		return
 	var ready := false
 	for _frame in 120:
+		if not _orders.get_phone_offer().is_empty():
+			_expect(_orders.accept_phone_order(str(_orders.get_phone_offer().get("id", ""))), "接单失败")
 		ready = _navigation.is_ready()
-		if ready:
+		if ready and _orders.get_current_order() != null:
 			break
 		await physics_frame
 	_expect(ready, "导航在 120 个物理帧内未就绪")
-	_expect(_orders.is_start_screen_visible(), "启动时应显示开始界面")
-	_expect(_orders.get_current_order() == null, "开始界面前不应生成订单")
-	_expect(not _player.controls_enabled, "菜单期间应关闭玩家控制")
-	_expect(_orders.start_game(), "开始按钮应启动游戏")
-	for _frame in 120:
-		if _orders.get_current_order() != null and _orders.is_offer_visible():
-			break
-		await physics_frame
 	_expect(_orders.get_current_order() != null, "订单系统在 120 个物理帧内没有生成首单")
-	_expect(_orders.is_offer_visible(), "生成首单后应显示接单界面")
-	_expect(_orders.get_session() == null, "接单前不应开始倒计时")
-	_expect(_orders.get_offer_text().contains("限时"), "接单界面应显示时限")
-	_expect(_orders.accept_order(), "接单按钮应开始订单")
-	_expect(_orders.get_session() != null and _orders.get_session().is_active(), "接单后订单应进入活动状态")
-	_expect(_player.controls_enabled, "接单后应恢复玩家控制")
 	_expect(_world.city != null and _world.city.is_valid(_world.network), "主场景城市校验失败")
 
 
 func _check_starts() -> void:
-	var starts := _world.city.player_starts
-	_expect(starts.size() >= 2, "随机起点需要至少两个安全玩家起点")
-	_expect(starts.size() <= CityGenerator.MAX_PLAYER_STARTS, "玩家起点数量超过上限")
+	var starts: Array[SpawnPoint] = _world.city.get_available_player_starts()
+	_expect(starts.size() >= 1, "城市至少需要一个安全玩家起点")
+	_expect(starts.size() <= 1, "当前兼容模式只允许一个确定性玩家起点")
 	_expect(
 		_world.city.player_start == starts[0],
 		"player_start 应指向 player_starts 首项"
 	)
 	for index in starts.size():
-		var start := starts[index]
+		var start: SpawnPoint = starts[index]
 		_expect(start != null, "玩家起点 %d 为空" % index)
 		if start == null:
 			continue
@@ -130,7 +118,7 @@ func _check_generation() -> DeliveryOrder:
 		"同种子送达路径长度不确定"
 	)
 	_expect(first.is_valid(_world.network), "订单契约无效：%s" % str(first.validate(_world.network)))
-	_expect(_world.city.player_starts.has(first.start), "订单起点不在玩家起点的列表中")
+	_expect(_world.city.get_available_player_starts().has(first.start), "订单起点不在玩家起点的列表中")
 	_expect(first.merchant.kind == CitySite.Kind.MERCHANT, "订单商家类型错误")
 	_expect(first.customer.kind == CitySite.Kind.RESIDENTIAL, "订单顾客类型错误")
 
@@ -151,7 +139,8 @@ func _check_generation() -> DeliveryOrder:
 		start_positions["%s" % order.start.position] = true
 		_check_route(order, seed_value)
 	_expect(signatures.size() >= 2, "不同订单种子应产生不同订单")
-	_expect(start_positions.size() >= 2, "不同订单种子应产生不同随机起点")
+	if _world.city.get_available_player_starts().size() >= 2:
+		_expect(start_positions.size() >= 2, "不同订单种子应产生不同随机起点")
 
 	var unbuilt := NavigationService.new()
 	var no_nav_order := OrderGenerator.generate(
@@ -195,13 +184,6 @@ func _check_session(order: DeliveryOrder) -> void:
 	session.finished.connect(func(success: bool) -> void: finished_events.append(success))
 	_expect(session.state == OrderSession.State.TO_MERCHANT, "新会话应处于取餐阶段")
 	_expect(session.time_limit >= OrderSession.MIN_TIME_LIMIT_S, "订单时限过短")
-	_expect(
-		is_equal_approx(
-			session.time_limit,
-			OrderSession.calculate_time_limit(order, _player.move_speed)
-		),
-		"接单界面与会话的时限公式不一致"
-	)
 	_expect(session.is_active(), "新会话应处于活动状态")
 	_expect(
 		not session.try_interact(Vector3(100000.0, 0.0, 100000.0)),
@@ -250,65 +232,8 @@ func _check_session(order: DeliveryOrder) -> void:
 	_expect(failed.state == OrderSession.State.FAILED, "超时应进入失败状态")
 	_expect(fail_events == [false], "超时应只触发一次 finished(false)")
 	_expect(is_zero_approx(failed.time_remaining), "失败后剩余时间应为 0")
-	_expect(
-		failed.get_failure_reason() == OrderSession.FailureReason.TIMEOUT,
-		"超时失败原因错误"
-	)
-	_expect(failed.get_failure_text() == "倒计时已结束", "超时失败文本错误")
-	_expect(
-		not failed.fail(OrderSession.FailureReason.HIT_BY_CAR),
-		"已结束的订单不应再次失败"
-	)
 	failed.advance(10.0)
 	_expect(fail_events.size() == 1, "失败后不应重复结算")
-
-	var car_order := OrderGenerator.generate(
-		_world.city, _world.network, _navigation, 3
-	)
-	if car_order == null:
-		_expect(false, "无法生成撞车测试订单")
-		return
-	var car_failed := OrderSession.new(car_order, _player.move_speed)
-	var car_events: Array = []
-	car_failed.finished.connect(func(success: bool) -> void: car_events.append(success))
-	car_failed.advance(5.0)
-	var car_remaining := car_failed.time_remaining
-	var car_elapsed := car_failed.get_elapsed_s()
-	_expect(
-		not car_failed.fail(OrderSession.FailureReason.NONE),
-		"失败原因为空时不应结束订单"
-	)
-	_expect(
-		car_failed.fail(OrderSession.FailureReason.HIT_BY_CAR),
-		"活动订单应能被标记为撞车失败"
-	)
-	_expect(
-		car_failed.state == OrderSession.State.FAILED,
-		"撞车后应进入失败状态"
-	)
-	_expect(
-		car_failed.get_failure_reason() == OrderSession.FailureReason.HIT_BY_CAR,
-		"撞车失败原因错误"
-	)
-	_expect(
-		is_equal_approx(car_failed.time_remaining, car_remaining),
-		"撞车失败不应清空剩余时间"
-	)
-	_expect(
-		is_equal_approx(car_failed.get_elapsed_s(), car_elapsed),
-		"撞车失败不应改变已用时间"
-	)
-	_expect(car_failed.get_failure_text().contains("撞"), "撞车失败文本未说明原因")
-	_expect(car_events == [false], "撞车应只触发一次 finished(false)")
-	_expect(
-		not car_failed.fail(OrderSession.FailureReason.HIT_BY_CAR),
-		"撞车失败后不应重复结算"
-	)
-	_expect(car_events.size() == 1, "撞车失败后不应重复触发 finished")
-	_expect(
-		not session.fail(OrderSession.FailureReason.HIT_BY_CAR),
-		"已成功送达的订单不应被撞车失败覆盖"
-	)
 
 
 func _check_hud_direction() -> void:
@@ -324,14 +249,6 @@ func _check_hud_direction() -> void:
 		OrderHUD.direction_arrow(Vector3.ZERO, 0.0, Vector3(0.0, 0.0, 10.0)) == "↓",
 		"朝向南侧的方向箭头错误"
 	)
-	var merchant := CitySite.new()
-	merchant.id = &"merchant_007"
-	merchant.kind = CitySite.Kind.MERCHANT
-	_expect(OrderHUD.site_label(merchant) == "商家 #007", "商家站点显示名称错误")
-	var customer := CitySite.new()
-	customer.id = &"customer_012"
-	customer.kind = CitySite.Kind.RESIDENTIAL
-	_expect(OrderHUD.site_label(customer) == "顾客 #012", "顾客站点显示名称错误")
 
 
 func _check_manager() -> void:
@@ -376,6 +293,8 @@ func _check_manager() -> void:
 	var completed_signature := OrderGenerator.signature(order)
 	_expect(_orders.handle_restart(), "结算后 R 应生成下一单")
 	_expect(_orders.get_order_seed() > completed_seed, "下一单种子没有递增")
+	_expect(not _orders.get_phone_offer().is_empty(), "下一单应先等待手机确认")
+	_expect(_orders.accept_phone_order(str(_orders.get_phone_offer().get("id", ""))), "下一单接单失败")
 	var next_order := _orders.get_current_order()
 	_expect(next_order != null, "下一单没有生成")
 	if next_order == null:
@@ -385,10 +304,6 @@ func _check_manager() -> void:
 		"下一单不应与上一单完全相同"
 	)
 	_expect(not hud.is_result_visible(), "新订单未隐藏结算面板")
-	_expect(_orders.is_offer_visible(), "下一单应先显示接单界面")
-	_expect(_orders.get_session() == null, "接单前不应开始倒计时")
-	_expect(not _player.controls_enabled, "接单界面应关闭玩家控制")
-	_expect(_orders.accept_order(), "下一单接单按钮应开始订单")
 	_expect(
 		_orders.get_session().state == OrderSession.State.TO_MERCHANT,
 		"新订单状态未重置"
@@ -423,30 +338,15 @@ func _check_manager() -> void:
 	)
 	_expect(hud.is_result_visible(), "超时后结算面板未显示")
 	_expect(hud.get_result_title() == "订单失败", "失败结算标题错误")
-	_expect(
-		hud.get_result_body().contains("倒计时已结束"),
-		"超时结算正文应说明倒计时结束"
-	)
-	_expect(not _player.controls_enabled, "结算界面应关闭玩家控制")
 	_expect(_orders.handle_restart(), "失败后 R 应生成下一单")
+	_expect(not _orders.get_phone_offer().is_empty(), "失败后下一单应先等待手机确认")
+	_expect(_orders.accept_phone_order(str(_orders.get_phone_offer().get("id", ""))), "失败后下一单接单失败")
 	_expect(_orders.get_order_seed() > timeout_seed, "失败后订单种子没有递增")
-	_expect(_orders.is_offer_visible(), "失败后下一单应先显示接单界面")
-	_expect(_orders.accept_order(), "失败后下一单应能接单")
 	_expect(
 		_orders.get_session() != null and _orders.get_session().state == OrderSession.State.TO_MERCHANT,
 		"失败后新订单状态未重置"
 	)
 	_expect(not hud.is_result_visible(), "失败后新订单未隐藏结算面板")
-
-	_expect(_orders.return_to_start_menu(), "结算后应能返回主菜单")
-	_expect(hud.is_start_menu_visible(), "返回主菜单后应显示开始界面")
-	_expect(_orders.get_current_order() == null, "返回主菜单后不应保留当前订单")
-	_expect(_orders.get_session() == null, "返回主菜单后不应保留会话")
-	_expect(not _player.controls_enabled, "主菜单应关闭玩家控制")
-	_expect(_orders.start_game(), "返回主菜单后应能重新开始")
-	_expect(_orders.is_offer_visible(), "重新开始后应生成待接订单")
-	_expect(_orders.accept_order(), "重新开始后应能接单")
-	_expect(_orders.get_session().is_active(), "重新开始后订单应处于活动状态")
 
 
 func _point_in_building(point: Vector3, city: CityContent) -> bool:

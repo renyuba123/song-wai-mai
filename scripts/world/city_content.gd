@@ -35,9 +35,13 @@ const ENTRANCE_KEYS := ["edge_id", "offset", "width", "facing_yaw", "lot_id"]
 @export var sites: Array[CitySite] = []
 @export var player_start: SpawnPoint = null
 
-## 多个安全玩家起点。player_start 保留为兼容字段，必须与数组首项等价；
-## 订单系统从这里选择每单的随机起点。
-@export var player_starts: Array[SpawnPoint] = []
+
+func get_available_player_starts() -> Array[SpawnPoint]:
+	## 兼容旧版 CityContent：当前项目只保存一个确定性出生点。
+	var result: Array[SpawnPoint] = []
+	if player_start != null:
+		result.append(player_start)
+	return result
 
 
 func validate(network: RoadNetwork = null) -> Array[String]:
@@ -245,22 +249,15 @@ func validate(network: RoadNetwork = null) -> Array[String]:
 	if player_start == null:
 		errors.append("城市没有玩家出生点")
 	else:
-		errors.append_array(_validate_player_start(player_start, "玩家出生点", network))
-	if not player_starts.is_empty():
-		var seen_starts := {}
-		for index in player_starts.size():
-			var spawn := player_starts[index]
-			var label := "玩家出生点 %d" % index
-			if spawn == null:
-				errors.append("%s为空" % label)
-				continue
-			errors.append_array(_validate_player_start(spawn, label, network))
-			var key := _spawn_key(spawn)
-			if seen_starts.has(key):
-				errors.append("%s与已有起点重复" % label)
-			seen_starts[key] = true
-		if player_start != null and not _same_spawn(player_start, player_starts[0]):
-			errors.append("player_start 必须与 player_starts 首项一致")
+		errors.append_array(player_start.validate(network))
+		if player_start.kind != SpawnPoint.Kind.PLAYER_START:
+			errors.append("玩家出生点类型无效")
+		if player_start.site_id != &"":
+			errors.append("玩家出生点不应关联站点")
+		if absf(player_start.lateral_offset_m) <= RoadNetwork.EPS:
+			errors.append("玩家出生点位于道路中心")
+		if _point_in_building(Vector2(player_start.position.x, player_start.position.z)):
+			errors.append("玩家出生点落在建筑内")
 	return errors
 
 
@@ -274,51 +271,6 @@ func get_entrance_lots() -> Array[Dictionary]:
 		if lot.has("entrance_id") and int(lot.entrance_id) >= 0:
 			result.append(lot)
 	return result
-
-
-func get_available_player_starts() -> Array[SpawnPoint]:
-	var result: Array[SpawnPoint] = []
-	if not player_starts.is_empty():
-		for spawn in player_starts:
-			if spawn != null:
-				result.append(spawn)
-	elif player_start != null:
-		result.append(player_start)
-	return result
-
-
-func _validate_player_start(spawn: SpawnPoint, label: String, network: RoadNetwork) -> Array[String]:
-	var errors: Array[String] = []
-	errors.append_array(spawn.validate(network))
-	if spawn.kind != SpawnPoint.Kind.PLAYER_START:
-		errors.append("%s类型无效" % label)
-	if spawn.site_id != &"":
-		errors.append("%s不应关联站点" % label)
-	if absf(spawn.lateral_offset_m) <= RoadNetwork.EPS:
-		errors.append("%s位于道路中心" % label)
-	if _point_in_building(Vector2(spawn.position.x, spawn.position.z)):
-		errors.append("%s落在建筑内" % label)
-	return errors
-
-
-func _same_spawn(first: SpawnPoint, second: SpawnPoint) -> bool:
-	if first == null or second == null:
-		return first == second
-	return (
-		first.kind == second.kind
-		and first.site_id == second.site_id
-		and first.position == second.position
-		and first.facing_yaw == second.facing_yaw
-		and first.road_edge_id == second.road_edge_id
-		and first.road_offset_m == second.road_offset_m
-		and first.lateral_offset_m == second.lateral_offset_m
-	)
-
-
-func _spawn_key(spawn: SpawnPoint) -> String:
-	return "%d|%.4f|%.4f" % [
-		spawn.road_edge_id, spawn.road_offset_m, spawn.lateral_offset_m
-	]
 
 
 func _point_in_building(point: Vector2) -> bool:

@@ -7,31 +7,38 @@ extends Node3D
 @onready var navigation: NavigationService = $NavigationSystem
 @onready var traffic: TrafficSpawner = $TrafficSystem
 @onready var player: PlayerController = $Player
-@onready var orders: OrderManager = $OrderSystem
 
 
 func _ready() -> void:
 	world.world_generated.connect(_on_world_generated)
-	traffic.player_hit.connect(_on_traffic_player_hit)
 	world.regenerate()
 	_place_player()
-	orders.setup(world, navigation, player)
 	_setup_test_god_view()
+	var orders := get_node_or_null("OrderSystem") as OrderManager
+	if orders == null:
+		orders = OrderManager.new()
+		orders.name = "OrderSystem"
+		add_child(orders)
+	var phone := player.get_node_or_null("MeshInstance3D") as PhoneOrderScreen
+	if phone == null:
+		phone = player.get_node_or_null("电鸡模型/Empty/MeshInstance3D") as PhoneOrderScreen
+	if phone != null:
+		phone.bind_order_manager(orders)
+	orders.setup(world, navigation, player)
 
 
 func _on_world_generated(network: RoadNetwork) -> void:
 	navigation.build(network)
-	traffic.build(network, world.city)
-
-
-func _on_traffic_player_hit(_car: TrafficCar, position: Vector3) -> void:
-	orders.notify_player_hit(position)
+	traffic.build(network)
 
 
 func _place_player() -> void:
 	if world.city == null or world.city.player_start == null:
 		return
-	player.reset_to(world.city.player_start)
+	var start := world.city.player_start
+	player.global_position = start.position
+	player.rotation.y = start.facing_yaw
+	player.velocity = Vector3.ZERO
 
 
 func _setup_test_god_view() -> void:
