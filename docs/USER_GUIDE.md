@@ -266,7 +266,7 @@ scenes/traffic/
 
 ### 4.3 交通与行人
 
-当前已实现第一版背景车流，行人仍待人物模型：
+当前已实现第一版背景车流和胶囊占位行人：
 
 - `TrafficSpawner.build(network, city)` 从同一份 `RoadNetwork` 生成方块占位汽车，`max_vehicles` 默认上限 256；每个路段一辆，当前 2400 米地图的 214 条路段都会出车。同一城市种子结果一致（`network.seed_value ^ RNG_SALT`，只用局部 `RandomNumberGenerator`）。
 - 每个路段最多一辆车，距路口至少 20 米，距玩家起点和所有站点出生点至少 15 米；车辆沿右侧车道行驶，速度按道路等级区分。
@@ -274,7 +274,8 @@ scenes/traffic/
 - `TrafficCar` 是 `AnimatableBody3D`：车身/车厢/轮子全部用 `BoxMesh` 代码生成，碰撞层 `VEHICLE`、掩码 `PLAYER`；子节点 `Area3D` 掩码 `PLAYER` 负责命中玩家，通过 `player_entered` → `TrafficSpawner.player_hit` 上报。
 - 车辆不加入 `navigation_source`，也不使用 `WORLD_STATIC`；交通在世界和导航烘焙完成后才生成。
 - 车辆之间、车辆与建筑之间不做碰撞，避免车流卡死；路口外形重叠、无交通灯和避让属于当前已知限制。
-- 当前不做行人；`max_pedestrians` 保留。行人接入前仍应优先使用 `MultiMesh` 或实例化池。
+- 行人第一版已接入：`PedestrianSpawner` 由 `TrafficSpawner.build()` 在代码里创建，`max_pedestrians` 默认 24；只在玩家/角色附近的人行道上生成，距离过远时回收，数量不超过上限；同一城市种子生成位置一致（使用独立的 RNG 盐，不与车辆共用）。行人沿人行道行走，到路口按 `crossing_chance`（默认 0.35）横穿到对侧，横穿结束回到人行道。交叉口目前没有斑马线几何，横穿段是路口平铺区内的一条直线，属于占位阶段的已知表现。
+- 行人是 `AnimatableBody3D` + `CapsuleMesh` 占位，碰撞层 `PEDESTRIAN`、掩码 0，不会触发车辆命中，也不会让订单失败。正式人形模型到位后只替换 `Pedestrian._build_visuals()`，路线、碰撞和公开接口不变；行人数量增多后应再考虑 `MultiMesh` 或实例化池。
 - 命中信号链：`TrafficCar.player_entered` → `TrafficSpawner.player_hit` → `main.gd` → `OrderManager.notify_player_hit()`。只有活动订单会失败，菜单、接单、结算和上帝视角下忽略。
 - 换成正式汽车模型时替换 `TrafficCar._build_visuals()`，保留路线、碰撞和命中逻辑；不要修改 `player.tscn` 或 `navigation_system.tscn`。
 

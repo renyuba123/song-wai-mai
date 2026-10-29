@@ -737,3 +737,27 @@ GitHub Actions 报 `resident count grows after revisit`。实测首次访问商�
 定位两个问题：原 TrafficSpawner 把最多 214 辆车撒到整座 2400 米地图，玩家附近缺车；原 TrafficCar 的 AnimatableBody3D 物理同步覆盖脚本写入的位置，造成离树 advance 单测正常、游戏场景车不动。关闭同步并让现有路线沿真实物理帧更新。扫描全部 11 个汽车 GLB，按实测层级包围盒统一缩放、贴地和设置 BoxShape3D；新 TrafficSpawner 只关注附近道路，按等级和长度控制密度，支持基础跟车、转弯减速、路口让行、镜头避让、流式补车及池化回收。离树池由退出处理显式释放。主场景落位后接入玩家位置。
 
 运行全部十二组 Godot headless 测试，包括四 Seed 的模型、真实物理位移、动态生成/回收、对象池及完整城市/订单/交通回归。主场景旧“全图至少 100 辆”断言改为“附近有车且不超上限”，保留其余行为检查。无界面环境未验证实际模型门向、灯光、帧率和驾驶画面，见 TRAFFIC_STREAMING.md。本记录随功能提交。
+
+## 2026-10-29 11:03（Asia/Shanghai）行人过街（胶囊占位）
+
+需求：按城市种子确定性生成行人，初始位置落在人行道范围内，不落在车行道中央；行人沿人行道行走，到路口按简单节奏左右过街，过街时朝对侧移动，结束后回到人行道；随玩家位置在附近生成、远处回收，数量有上限（`max_pedestrians` 默认大于 0）；用 `CapsuleMesh` 占位，正式人形模型到位后只替换视觉。不改订单/UI/导航文件和 `main.tscn`，车辆逻辑保持不变。
+
+实现内容：
+
+- 新增 `Pedestrian`（`AnimatableBody3D`）：胶囊视觉与胶囊碰撞，碰撞层 `PEDESTRIAN`、掩码 0，不加入 `navigation_source`；路径推进与 `TrafficCar.advance()` 同构，按弧长沿人行道折线行走。到路段尽头按 `crossing_chance` 决定是否横穿，横穿段是从本侧人行道到对侧的直线，结束后回到对侧人行道继续走；换到新路段时按目标道路红线宽度和 `band_ratio` 重算横向位置，避免在窄路上走进车行道。
+- 新增 `PedestrianSpawner`：按 `network.seed_value ^ (edge_id * 65537) ^ (_serial * 131071) ^ 0x51D3A7` 生成，和车辆 RNG 盐完全独立；只选玩家/角色附近、避开路口退让区的人行道段，出生点距焦点 24 米以上，避开站点出生点 12 米、行人彼此 6 米；目标数量按附近可行走人行道长度除以 120 米估算并受 `max_pedestrians` 约束，每个路段按主/次/支分别最多 3/2/2 人；远离超过回收半径且不在视锥内时回收；每 0.75 秒节流补生成，`immediate` 时一次补满。
+- `TrafficSpawner` 只做最小接线：`max_pedestrians` 默认从 0 改为 24；`build()` 里在车辆生成后由代码创建行人管理器，重建时清理；`set_player()` 转发玩家；新增 `get_pedestrian_spawner()`、`get_pedestrian_count()`、`get_pedestrians()` 访问器。原有提前返回条件、车辆生成/行驶/避让/回收逻辑和 `traffic_ready` 发射时机未改。
+- 行人没有命中 `Area3D`，车辆 `HitBox` 也只检测 `PLAYER` 层，因此行人不会触发撞车失败。
+- 正式人形模型到位后只替换 `Pedestrian._build_visuals()`；路径、碰撞和公开接口不变。
+- `tests/test_pedestrians.gd` 覆盖人行道数学、确定性、出生约束、行走、过街翻转并回到对侧、回收与上限、边界/重建、行人不会触发车辆命中、主场景集成；CI 测试清单加入 `test_pedestrians`。
+
+修改文件：新增 `scripts/traffic/pedestrian.gd`、`scripts/traffic/pedestrian_spawner.gd`、`tests/test_pedestrians.gd`（及 `.uid`）；修改 `scripts/traffic/traffic_spawner.gd`、`.github/workflows/repository-integrity.yml`、`docs/USER_GUIDE.md`、`docs/DEVELOPMENT_LOG.md`。
+
+测试与校验：
+
+- Godot 4.7.2 `--headless --path . --import` 退出码 0；资源导入仍报 99 个 GLB 为 LFS pointer、部分贴图缺失，属于既有环境阻塞。
+- `test_pedestrians` 输出 `PASS pedestrians`、`exit=0`。
+- `test_traffic_streaming`、`test_main_scene`、`test_contracts` 均 `PASS`、`exit=0`；`test_traffic` 输出 `PASS traffic`，但退出时仍因 LFS pointer 模型崩溃（Windows 访问冲突 `-1073741819`），与本任务无关。
+- `git diff --check` 通过。
+
+提交与分支：分支 `feature/jzy070407-pedestrian-placeholder`，基于 `origin/main` a25b008。

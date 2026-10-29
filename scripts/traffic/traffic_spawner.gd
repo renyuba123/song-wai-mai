@@ -12,7 +12,7 @@ const COLORS := [Color("c94f4f"), Color("3f7fbf"), Color("e0c15a"), Color("e8e8e
 @export var enable_traffic := true
 @export_range(0.1, 3.0) var traffic_density := 1.0
 @export_range(1, 100) var max_vehicles := 30
-@export var max_pedestrians := 0
+@export_range(0, 100) var max_pedestrians := 24
 @export_range(50.0, 1000.0) var traffic_spawn_radius := 220.0
 @export_range(100.0, 1400.0) var traffic_despawn_radius := 320.0
 @export_range(0.1, 2.0) var traffic_update_interval := 0.5
@@ -26,6 +26,7 @@ var network: RoadNetwork = null
 var _cars: Array[TrafficCar] = []
 var _pool: Array[TrafficCar] = []
 var _vehicles: Node3D = null
+var _pedestrians: PedestrianSpawner = null
 var _adjacency: Array = []
 var _edge_ids: Array[int] = []
 var _avoidance: Array[Vector3] = []
@@ -42,11 +43,14 @@ var _active_roads := 0
 func set_player(player: Node3D) -> void:
 	_player = player
 	_camera = player.get_node_or_null("Camera3D") if player != null else null
+	if is_instance_valid(_pedestrians):
+		_pedestrians.set_player(player)
 	if player != null and network != null:
 		update_traffic(player.global_position, true)
 
 func build(source_network: RoadNetwork, source_city: CityContent = null) -> void:
 	_clear_vehicles()
+	_clear_pedestrians()
 	network = source_network
 	if network == null or network.edges.is_empty() or max_vehicles <= 0 or not enable_traffic:
 		traffic_ready.emit()
@@ -63,6 +67,16 @@ func build(source_network: RoadNetwork, source_city: CityContent = null) -> void
 	if is_instance_valid(_player):
 		_focus = _player.global_position
 	update_traffic(_focus, true)
+	if max_pedestrians > 0:
+		_pedestrians = PedestrianSpawner.new()
+		_pedestrians.name = "Pedestrians"
+		_pedestrians.max_pedestrians = max_pedestrians
+		_pedestrians.spawn_radius = traffic_spawn_radius
+		_pedestrians.despawn_radius = traffic_despawn_radius
+		add_child(_pedestrians)
+		_pedestrians.build(network, _adjacency, source_city, _avoidance)
+		if is_instance_valid(_player):
+			_pedestrians.set_player(_player)
 	traffic_ready.emit()
 
 func get_vehicle_count() -> int:
@@ -75,6 +89,15 @@ func get_recycled_count() -> int:
 	return _recycled
 func get_pool_count() -> int:
 	return _pool.size()
+func get_pedestrian_spawner() -> PedestrianSpawner:
+	return _pedestrians
+func get_pedestrian_count() -> int:
+	return _pedestrians.get_pedestrian_count() if is_instance_valid(_pedestrians) else 0
+func get_pedestrians() -> Array[Pedestrian]:
+	if is_instance_valid(_pedestrians):
+		return _pedestrians.get_pedestrians()
+	var empty: Array[Pedestrian] = []
+	return empty
 
 func _physics_process(delta: float) -> void:
 	if network == null or not enable_traffic:
@@ -272,6 +295,11 @@ func _clear_vehicles() -> void:
 	_serial = 0
 	_spawned = 0
 	_recycled = 0
+
+func _clear_pedestrians() -> void:
+	if is_instance_valid(_pedestrians):
+		_pedestrians.free()
+	_pedestrians = null
 
 func _exit_tree() -> void:
 	# Pooled cars are detached nodes, so the normal child cleanup cannot release them.
