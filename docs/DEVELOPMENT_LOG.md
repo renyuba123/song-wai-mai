@@ -980,3 +980,23 @@ Godot 4.7.2 `--headless --path . --import` 退出码 0，路网 150 个节点、
 - 以上 139 与无 PASS 的 headless 现象均与既有记录一致，不视为本次同步引入的断言失败。
 
 本条记录随 `docs/jzy070407-sync-20261029-b` 分支提交、推送并建 PR。
+
+## 2026-10-29 13:19（Asia/Shanghai）接单手机界面
+
+本轮需求（原文）：“这个图片上的手机界面为什么还没有？”、“优先做这个模块”。用户给的截图里，左上角是“手机收到新订单 · Y 接单 / N 拒单”，画面中间偏下是一台斜放在车把前的手机，屏幕显示“新外卖订单”、商家 `merchant_004`、顾客 `#009`、“总路程 12.7km”、“配送费 ¥9.34”、绿色“接单 Y”按钮、灰色拒单按钮和“7s”倒计时。本轮按这张图把接单界面做成场景里的三维手机，不再用屏幕中央的平面弹窗。
+
+实现放在新文件 `scripts/orders/order_phone.gd`：`OrderManager.setup()` 把手机挂到玩家相机下，收到订单时出现在视线下方。手机屏幕用 `SubViewport`（360×640）加圆角浅色底板渲染，显示取餐/送达店名、总路程、配送费、限时和 10 秒倒计时；屏幕贴图设为无光照、带透明，手机外壳是黑色方块和摄像头点。按键新增 `order_accept`（Y）和 `order_reject`（N），`interact`（E）保留为接单兼容键；鼠标和触屏点击会从相机射线投到手机屏幕平面，再换算成 `SubViewport` 像素坐标转发给屏幕里的按钮，因此可以直接点“Y 接单”。倒计时归零按拒单处理，立即按新种子生成下一单；拒单和超时都不会退回开始菜单。
+
+`OrderHUD` 去掉了原来的接单弹层和接单按钮，只保留左上角“手机收到新订单 / Y 接单 · N 拒单”的提醒；开始菜单、等待、配送、结算和错误状态仍由 HUD 负责。接单后手机和 HUD 提醒一起隐藏，活动订单、路线、暂停和撞车失败逻辑不变。手机由代码挂到现有相机上，没有改 `player.tscn`、车辆、行人或导航文件；`project.godot` 只新增 Y/N 两个输入动作。
+
+新增 `tests/test_phone_orders.gd`：检查手机挂在玩家相机下、开始菜单隐藏、首单屏幕文字与 `OrderPhone.format_offer_text()` 一致、店名/总路程/配送费/限时/倒计时/按钮文字齐全、配送费公式、Y 接单后手机隐藏且订单开始、N 拒单后种子递增并换单、倒计时归零自动换单、回主菜单后隐藏手机。`test_input_actions` 的期望动作增加到 9 个，`README.md`、`docs/USER_GUIDE.md` 和 CI 测试清单同步加入 `test_phone_orders`。
+
+**测试与校验：**
+
+- Godot 4.7.2 `--headless --path . --import` 退出码 0；路网校验通过（节点 150、路段 214），城市生成通过（地块 1637、建筑 1637、站点 32、出入口 98）。
+- headless：`test_input_actions`（`PASS input actions count=9`）、`test_phone_orders`（`PASS phone orders`）、`test_orders`（`PASS orders`）、`test_main_scene`（`PASS main scene`）都先打印 PASS，后三个在退出阶段以既有访问冲突 139 结束；`test_pause` 本轮 headless 在第二次按 Esc 恢复时触发 `Attempting to initialize the wrong RID`，未打印 PASS。
+- 窗口渲染 1280×720：`test_pause`、`test_orders`、`test_phone_orders`、`test_route_guidance`、`test_site_readability` 全部打印 PASS、退出码 0。
+- 窗口渲染 1600×900 截图确认：手机在视线下方完整可见，圆角屏幕显示“新外卖订单”、取餐“城市广场”、送达“城市银行”、总路程 2.4 km、配送费 ¥5.40、“剩余 10 秒”、绿色“Y 接单”和灰色“N 拒单”；左上角 HUD 为紧凑的两行提醒。另用临时脚本模拟点击屏幕接单按钮，接单成功（`session=true controls=true`），临时脚本和截图已删除，不进入提交。
+- 以上 139 和 headless 的 RID 报错与既有记录一致，按本机 headless 环境问题处理，不视为断言失败。
+
+本条记录随 `feature/jzy070407-phone-order` 分支提交、推送并建 PR。
