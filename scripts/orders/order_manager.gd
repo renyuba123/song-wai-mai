@@ -232,6 +232,9 @@ func _process(delta: float) -> void:
 	if not _configured or not _pending_offer or _phone == null:
 		return
 	_phone.advance(delta)
+	# 右侧接单详情跟随手机倒计时，两边显示的剩余秒数一致。
+	if _hud != null:
+		_hud.update_offer_countdown(_phone.get_remaining_s())
 
 
 func _physics_process(delta: float) -> void:
