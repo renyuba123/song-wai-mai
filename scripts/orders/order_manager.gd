@@ -23,6 +23,7 @@ var _navigation: NavigationService = null
 var _player: PlayerController = null
 var _hud: OrderHUD = null
 var _phone: OrderPhone = null
+var _wallet: DeliveryWallet = null
 var _beacon: MeshInstance3D = null
 var _beacon_material: StandardMaterial3D = null
 
@@ -40,6 +41,7 @@ var _nav_wait_frames := 0
 
 func _ready() -> void:
 	_ensure_hud()
+	_ensure_wallet()
 	_ensure_beacon()
 
 
@@ -53,6 +55,8 @@ func setup(
 	_player = player
 	_configured = world != null and navigation != null and player != null
 	_ensure_hud()
+	_ensure_wallet()
+	_hud.bind_player(player)
 	_ensure_phone()
 	_ensure_beacon()
 	if not _configured:
@@ -64,6 +68,8 @@ func setup(
 	_pending_offer = false
 	_pending_generation = false
 	_at_start_screen = true
+	if _wallet != null:
+		_wallet.reset()
 	_player.set_controls_enabled(false)
 	if _phone != null:
 		_phone.hide_offer()
@@ -91,6 +97,10 @@ func get_phone() -> OrderPhone:
 	return _phone
 
 
+func get_wallet() -> DeliveryWallet:
+	return _wallet
+
+
 func is_start_screen_visible() -> bool:
 	return _at_start_screen and _hud != null and _hud.is_start_menu_visible()
 
@@ -115,6 +125,9 @@ func start_game() -> bool:
 	if not _configured or not _at_start_screen:
 		return false
 	_at_start_screen = false
+	if _wallet != null:
+		# 从主菜单开始新一局，账户回到初始余额。
+		_wallet.reset()
 	_hud.hide_start_menu()
 	_begin_generation(_order_seed, "")
 	return true
@@ -161,6 +174,8 @@ func return_to_start_menu() -> bool:
 		_beacon.visible = false
 	if _player != null:
 		_player.set_controls_enabled(false)
+	if _wallet != null:
+		_wallet.reset()
 	_hud.show_start_menu(_city_seed())
 	_sync_signage()
 	return true
@@ -270,6 +285,8 @@ func _begin_generation(seed_value: int, avoid_signature: String) -> void:
 	_current_order = null
 	_session = null
 	_pending_offer = false
+	if _wallet != null:
+		_wallet.clear_order_income()
 	_pending_generation = true
 	_pending_seed = seed_value
 	_avoid_signature = avoid_signature
@@ -353,6 +370,8 @@ func _activate_order(order: DeliveryOrder) -> void:
 func _restart_same_order() -> void:
 	if _current_order == null:
 		return
+	if _wallet != null:
+		_wallet.clear_order_income()
 	_session = OrderSession.new(_current_order, _player.move_speed if _player != null else 5.0)
 	_session.state_changed.connect(_on_session_state_changed)
 	_session.finished.connect(_on_session_finished)
@@ -388,6 +407,7 @@ func _on_session_finished(_success: bool) -> void:
 	if _player != null:
 		_player.set_controls_enabled(false)
 	_sync_signage()
+	_record_session_reward()
 	if _current_order != null and _session != null and _hud != null:
 		_hud.show_result(_current_order, _session)
 	order_finished.emit(_session.is_success() if _session != null else false)
@@ -403,6 +423,26 @@ func _refresh_hud() -> void:
 	)
 	if _phone != null:
 		_phone.update_active(_session, _player.global_position)
+
+
+func _record_session_reward() -> void:
+	## 成功按手机上的预估收入入账；撞车失败扣固定赔偿，超时不扣钱。
+	if _wallet == null or _session == null or _current_order == null:
+		return
+	if _session.is_success():
+		_wallet.add_income(OrderPhone.calculate_fee(_current_order))
+	elif _session.get_failure_reason() == OrderSession.FailureReason.HIT_BY_CAR:
+		_wallet.add_compensation(DeliveryWallet.HIT_COMPENSATION)
+	else:
+		_wallet.clear_order_income()
+
+
+func _ensure_wallet() -> void:
+	if _wallet != null:
+		return
+	_wallet = DeliveryWallet.new()
+	if _hud != null:
+		_hud.bind_wallet(_wallet)
 
 
 func _ensure_hud() -> void:

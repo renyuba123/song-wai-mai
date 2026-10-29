@@ -63,12 +63,14 @@ godot --headless --path . --script res://tests/test_city_catalog.gd
 godot --headless --path . --script res://tests/test_god_view.gd
 godot --headless --path . --script res://tests/test_orders.gd
 godot --headless --path . --script res://tests/test_menu_ui.gd
+godot --headless --path . --script res://tests/test_delivery_wallet.gd
+godot --headless --path . --script res://tests/test_hud_panels.gd
 godot --headless --path . --script res://tests/test_phone_orders.gd
 godot --headless --path . --script res://tests/test_site_readability.gd
 godot --headless --path . --script res://tests/test_traffic.gd
 ```
 
-前两条检查路网生成、校验、寻路和主场景启动；中间三条分别检查共享数据契约、输入映射与玩家移动、导航查询接口；`test_city` 检查城市确定性、反向数据、主场景城市装配和站点可达性；`test_city_catalog` 检查模型目录可加载、包围盒有效、分类数量和种子 118 的模型多样性；`test_god_view` 检查测试用上帝视角只在调试构建创建、开关时相机和玩家状态正确切换并恢复；`test_orders` 检查订单生成、状态机、开始/接单/结算界面和撞车失败语义；`test_menu_ui` 单独挂载订单 HUD，检查开始界面的标题、副标题、种子和按钮，以及成功/失败结算页面的取送路线、总路程、用时、剩余时间、收入和卡片是否超出可视区域；`test_phone_orders` 检查三维手机的挂载位置、屏幕内容、倒计时、Y/N、点击接单/拒单、配送中常驻和主菜单隐藏；`test_site_readability` 检查站点店名确定性、三维店名牌、当前目标星标以及接单/取餐/送达时的 HUD 与信标文本；`test_traffic` 检查车道数学、确定性车流、出生安全、命中 Area3D 和主场景撞车信号链。新增脚本后先执行一次 `godot --headless --path . --import`，让 Godot 注册 `class_name` 并生成 `.gd.uid`。
+前两条检查路网生成、校验、寻路和主场景启动；中间三条分别检查共享数据契约、输入映射与玩家移动、导航查询接口；`test_city` 检查城市确定性、反向数据、主场景城市装配和站点可达性；`test_city_catalog` 检查模型目录可加载、包围盒有效、分类数量和种子 118 的模型多样性；`test_god_view` 检查测试用上帝视角只在调试构建创建、开关时相机和玩家状态正确切换并恢复；`test_orders` 检查订单生成、状态机、开始/接单/结算界面和撞车失败语义；`test_menu_ui` 单独挂载订单 HUD，检查开始界面的标题、副标题、种子和按钮，以及成功/失败结算页面的取送路线、总路程、用时、剩余时间、收入和卡片是否超出可视区域；`test_delivery_wallet` 检查配送账户的初始余额、收入累计、撞车赔偿和重置；`test_hud_panels` 检查右上角配送收支与输入自检面板的数字、菜单/结算时隐藏、F9 开关和面板不超出屏幕；`test_phone_orders` 检查三维手机的挂载位置、屏幕内容、倒计时、Y/N、点击接单/拒单、配送中常驻和主菜单隐藏；`test_site_readability` 检查站点店名确定性、三维店名牌、当前目标星标以及接单/取餐/送达时的 HUD 与信标文本；`test_traffic` 检查车道数学、确定性车流、出生安全、命中 Area3D 和主场景撞车信号链。新增脚本后先执行一次 `godot --headless --path . --import`，让 Godot 注册 `class_name` 并生成 `.gd.uid`。
 
 ## 2. 所有人：日常操作流程
 
@@ -342,10 +344,20 @@ project.godot
 | `order_reject` | N | 在手机上拒单，立即生成下一单 |
 | `pause` | Esc | 配送中暂停/继续；暂停层显示城市与订单种子，可重开本单或返回主菜单 |
 | `restart` | R | 开始游戏、接单、重开本单或生成下一单 |
+| — | F9 | 显示/隐藏右上角“输入自检”面板（`OrderHUD._input` 直接处理，不进 InputMap） |
 
 输入使用 `Input.get_vector("move_left", "move_right", "move_forward", "move_back")`，不要退回 `Input.is_physical_key_pressed`。前进后退是油门/刹车，左右是车把转向：`PlayerController` 用“加速度随车速衰减、滑行按滚阻加风阻减速”的模型算车速（`acceleration`、`brake_deceleration`、`coast_deceleration`、`coast_drag`），再按车速换算整车转率，车速为零时不能原地转身；车模的 `Empty` 车把节点跟着 A/D 转，改转向手感调 `max_steer_angle`、`steer_speed`、`max_turn_rate` 和 `steer_full_speed` 四个导出参数。鼠标和触屏视角只转相机（`camera.rotation`），不改车头朝向和前进方向，低头时车模也保持可见。地面不再画路线指引条带，方向交给 HUD 箭头和小地图。
 
-### 5.3 测试用上帝视角
+### 5.3 右上角面板
+
+游戏进行时右上角固定两块面板，结构和参考截图一致：标题在上，大号主数值在下，再跟几行小字明细。
+
+- **配送收支**（`WalletPanel`）：显示余额、本单收入、累计收入和累计赔偿。数字来自 `scripts/orders/delivery_wallet.gd`，`OrderManager` 在每单结算时记账——成功按 `OrderPhone.calculate_fee()` 的预估收入入账，被汽车撞倒扣 `DeliveryWallet.HIT_COMPENSATION`（50），超时不扣钱；每局从主菜单开始时余额回到 `STARTING_BALANCE`（500）。
+- **输入自检**（`SelfCheckPanel`）：显示窗口焦点、输入是否激活、累计收到多少次键盘事件和最近一次按键、角色是否可控以及当前速度和车头朝向。按 **F9** 隐藏或显示，默认显示。
+- 两块面板都设置 `MOUSE_FILTER_IGNORE`，不会挡住点击和触屏拖动；开始界面和结算界面自动隐藏，手机竖屏时自动收窄并精简文字。
+- 只改显示格式时动 `_refresh_wallet()` / `refresh_self_check()`；要加新的收支字段，先加 `DeliveryWallet` 的字段，再在 `OrderHUD` 里补一行。
+
+### 5.4 测试用上帝视角
 
 `scripts/dev/test_god_view.gd` 提供只在调试/测试构建启用的俯视相机，用来快速检查地块、建筑和站点分布：
 
@@ -354,7 +366,7 @@ project.godot
 - 入口是 `TestGodView.is_test_only_enabled()`（当前基于 `OS.is_debug_build()`），`main.gd` 只在返回 `true` 时动态创建节点。正式导出不创建该节点，也不往 `project.godot` 增加 F3 输入动作。
 - 相机和提示 UI 都由脚本创建，不改 `main.tscn`；测试见 `tests/test_god_view.gd`。不要把调试功能改成正式快捷键，也不要绕过 `is_test_only_enabled()` 在发布场景里直接实例化。
 
-### 5.4 主场景装配
+### 5.5 主场景装配
 
 `scenes/main/main.tscn` 只做装配：
 
@@ -376,7 +388,7 @@ Main
 
 不要把业务逻辑写进 `main.gd`；它只负责接线。新增模块时，先在模块内部提供入口场景和信号，再在 `main.tscn` 里实例化。`World` 场景内 `RoadBuilder` 与 `CityBuilder` 是兄弟节点，`CityBuilder` 只清理自己的子节点，不删除道路。
 
-### 5.5 整合者职责
+### 5.6 整合者职责
 
 - 维护 `project.godot`、输入映射、碰撞层、`main.tscn`、`.gitattributes`、`.gitignore`。
 - 审核 PR：是否只改自己负责的目录、是否夹带调试残留、是否更新日志。

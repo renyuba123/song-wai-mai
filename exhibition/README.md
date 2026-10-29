@@ -73,6 +73,12 @@ Web 构建没有系统字体，项目通过 `project.godot` 的
 放不下 38 MB 的 `index.wasm`；CloudBase 静态托管命令行上传没有这个限制，
 所以走腾讯云 CloudBase。
 
+`main` 更新后由 GitHub Actions 自动导出并上传，不需要手工执行命令；
+仓库需要先配置腾讯云 API 密钥，配置方法和排查步骤见
+[docs/WEB_DEPLOY.md](../docs/WEB_DEPLOY.md)。
+
+没有配置凭据或 CI 不可用时，仍可本地手动部署：
+
 ```bash
 npm install -g @cloudbase/cli --registry=https://registry.npmmirror.com
 tcb login

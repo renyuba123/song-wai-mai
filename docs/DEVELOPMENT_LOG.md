@@ -1176,6 +1176,32 @@ PR #31 合并后，从 `origin/main` 的 `7c3d412` 起 `feature/jzy070407-menu-r
 
 本条记录随 `feature/jzy070407-exhibition-qr` 分支提交、推送并更新 PR。
 
+## 2026-10-29 19:54（Asia/Shanghai）main 更新后自动导出 Web 版并部署到服务器
+
+本轮需求（原文）：“将仓库最新项目与服务器挂钩，做到更新后自动上传至服务器”。
+
+**做了什么：**
+
+- 新增 `.github/workflows/deploy-web.yml`：`main` 推送和手动触发时，带 LFS 检出仓库，先跑 `git lfs fsck --pointers`，再下载标准版 Godot `4.7.2-stable`（非 .NET 版）和 `4.7.2.stable` Web 导出模板，执行 `--headless --path . --import` 和 `--export-release "Web" build/web/index.html`，检查 `index.html`、`index.wasm`、`index.pck` 都不为空后，把产物作为 artifact 保留 7 天。
+- 部署段用 `tcb login --apiKeyId … --apiKey …` 非交互登录 CloudBase CLI，再执行 `tcb hosting deploy build/web / -e <环境 ID> --concurrency 10 --safe --verify`：`--safe` 在发布前备份、失败自动回滚，`--verify` 发布后核对远端文件与本地一致。登录命令的 `--json` 输出重定向到 `/dev/null`，避免登录令牌进日志。
+- 部署后用 `curl` 访问线上地址做一次探活，确认页面里能读到 Godot 相关标记；同一时间只允许一个部署任务，新的推送会取消未完成的旧任务。
+- 凭据通过 GitHub Secrets 传入：`TCB_SECRET_ID`、`TCB_SECRET_KEY`；环境 ID 和站点地址做成可选仓库变量 `TCB_ENV_ID`、`TCB_SITE_URL`，不填时用当前展览环境 `passive-sailfish-d0e1nvt8175333a` 和默认域名。未配置凭据时工作流只构建不部署，并在 Summary 里提示，不会把检查标红。
+- 新增 `docs/WEB_DEPLOY.md`：写清触发方式、腾讯云 CAM 子账号与 API 密钥的获取步骤、`gh secret set` / 网页两种写入方式、工作流每一步的作用、本地手动部署命令和常见问题排查。
+- `exhibition/README.md` 的部署章节改为先指向自动部署文档，并保留本地手动部署命令作为兜底；`README.md` 的文档清单补上 `WEB_DEPLOY.md`。
+
+**校验：**
+
+- 用 Python 的 `yaml.safe_load` 解析工作流，结构和步骤顺序正确。
+- 对照本机 CloudBase CLI 3.8.10 的 `tcb login --help`、`tcb hosting deploy --help` 核对了 `--apiKeyId` / `--apiKey`、`-e`、`--concurrency`、`--safe`、`--verify` 参数确实存在。
+- 本机只装了 .NET 版 Godot（`Godot_v4.7.2-stable_mono_win64`），不能导出 Web，因此没有在本机复跑导出；Web 导出链路此前在展览分支上用标准版 Godot 验证过，产物约 66 MB。
+- 本轮只改 CI、文档和 README，不涉及 GDScript 与场景，未跑 headless 测试。
+
+**需要用户操作：**
+
+- 仓库目前没有配置任何 Actions secret（`gh secret list` 为空）。需要在仓库 Settings → Secrets and variables → Actions 里添加 `TCB_SECRET_ID`、`TCB_SECRET_KEY`，自动部署才会真正上传；在此之前工作流只构建。
+- API 密钥建议用 CAM 子账号单独生成，只授予 CloudBase 需要的权限，泄露时直接禁用并更新 Secret；不要通过聊天或 Issue 传送密钥。
+
+本条记录随 `feature/jzy070407-web-autodeploy` 分支提交、推送并建 PR。
 ## 2026-10-29 19:55（Asia/Shanghai）去掉地面路线指引，改成摩托车式骑行
 
 本轮需求（原文）：“删去地面引导的导航指示线，同时提高车速，修复电动车的物理引擎：当按下左/右移键时，车把对应转动，使之更符合常见游戏中摩托类似物的物理引擎效果”。
@@ -1273,3 +1299,35 @@ PR #31 合并后，从 `origin/main` 的 `7c3d412` 起 `feature/jzy070407-menu-r
 **修改文件：** 新增 `exhibition/analytics/index.html`、`exhibition/analytics/analytics.css`、`exhibition/analytics/analytics.js`、`exhibition/analytics/data/city-118.json`、`exhibition/analytics/data/sample-data.js`、`tools/export_city_map.gd`、`tools/build_behavior_page_data.py`；修改 `scripts/core/telemetry_client.gd`、`tests/test_telemetry.gd`、`docs/BEHAVIOR_DATA_EXPORT.md`、`server/behavior-log/README.md`、`exhibition/README.md`、`docs/DEVELOPMENT_LOG.md`。
 
 本条记录随 `feature/jzy070407-behavior-analytics` 分支提交、推送并建 PR。
+## 2026-10-29 20:06（Asia/Shanghai）右上角增加配送收支和输入自检两块提示面板
+
+本轮需求（原文）：“右上角增加UI提示，结构类似于[Image #1]”。截图里右上角有上下两块面板，用户确认两块都要。
+
+**排版：**
+
+- `OrderHUD` 上新加一列 `RightPanels`，贴右上角、宽 340，小屏按 `视口宽度 × 0.32` 收窄到 210–340；两块面板共用深蓝底、金色描边的圆角样式，和左上角状态面板同一套配色。
+- 上面一块“配送收支”：小标题、大号绿色“余额”、再往下是本单收入、累计收入、累计赔偿三行，数字右对齐，整数不带小数点（500 而不是 500.00）。
+- 下面一块“输入自检 · F9 隐藏”：窗口焦点、输入激活、键盘输入、角色状态四行，值正常时绿色、异常时红色。手机竖屏时“键盘输入”只显示“次数 · 最近按键”，“角色状态”去掉车头角度。
+- 两块面板都是 `MOUSE_FILTER_IGNORE`，不挡点击和触屏拖动；开始界面和结算界面自动隐藏，进入配送、等待生成、接单和出错时显示。
+
+**收支数据：**
+
+- 新增 `scripts/orders/delivery_wallet.gd`（`DeliveryWallet`）：初始余额 500，记本单收入、累计收入和累计赔偿，`changed` 信号驱动 HUD 刷新。
+- `OrderManager` 持有一个账户，`OrderHUD.bind_wallet()` 订阅；每单结算时记账：成功按 `OrderPhone.calculate_fee()` 的预估收入入账，被汽车撞倒扣 `HIT_COMPENSATION`（50），超时不扣钱；新订单、重开本单、返回主菜单和从主菜单开局都会把本单收入或整个账户清零。
+- 数字和结算页的“本单收入 ¥x.xx”用的是同一个 `calculate_fee()`，不会出现面板和结算对不上的情况。
+
+**输入自检：**
+
+- `OrderHUD._input()` 统计键盘事件次数和最近一次按键（`OS.get_keycode_string()`），并直接处理 **F9** 隐藏/显示面板；F9 不进 InputMap，避免和 `project.godot` 的输入动作冲突。
+- `OrderHUD.bind_player()` 拿到玩家后，每帧读取 `controls_enabled`、水平速度和车头朝向；“窗口焦点”读 `Window.has_focus()`。
+
+**测试与校验：**
+
+- 新增 `tests/test_delivery_wallet.gd`：初始 500、收入累加、本单收入只保留最后一单、清零不影响累计、撞车赔偿 50、零/负赔偿不入账、重置，以及 `changed` 信号次数。headless 打印 `PASS delivery wallet`，退出码 0。
+- 新增 `tests/test_hud_panels.gd`：面板初始数字 `500 / +0 / 0 / -0`、收入后 `523.40 / +23.40 / 23.40`、赔偿后 `473.40 / -50`、开始与结算界面隐藏、绑定玩家后“已连接/可控制”与关闭控制后“已暂停/菜单中”、F9 开关和面板不超出屏幕。headless 四条 PASS，退出码 0。
+- 回归：`test_menu_ui` 四条 PASS、`test_orders` 与 `test_phone_orders` 先打印 PASS、退出阶段以既有 139 结束；窗口渲染下 `test_main_scene` 打印 `PASS main scene nodes=91 lots=764 sites=32 starts=12 vehicles=4 order_seed=1 sky=true`、`test_pause` 打印 `PASS pause`，退出码 0。
+- 真实窗口跑了一次主场景：用临时脚本进入配送、按住 W 后截图，确认右上角两块的排版、数字和绿色状态值与截图结构一致；临时脚本已删除。
+- 两个新测试已加入 CI 清单、README 测试表和命令示例；`docs/USER_GUIDE.md` 增加 5.3 右上角面板一节并补上 F9 行（后续章节顺延为 5.4–5.6）。
+- 没有动 NPC 汽车方向、人类模型、车流量和车速、撞人判定、人行道和马路贴图、红绿灯系统。
+
+本条记录随 `feature/jzy070407-right-hud` 分支提交、推送并建 PR。
