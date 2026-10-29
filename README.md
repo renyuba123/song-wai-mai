@@ -44,7 +44,7 @@ tests/
   test_city_catalog.gd      城市模型目录完整性、数量与种子多样性测试
   test_god_view.gd          测试用上帝视角开关与状态恢复测试
   test_orders.gd            订单生成、状态机、开始/接单/结算界面测试
-  test_route_guidance.gd    地面路线可见性、偏航/传送/目标切换重算与节流测试
+  test_route_guidance.gd    地面路线可见性、贴路面高度、移动实时重算、偏航/传送/目标切换与节流测试
   test_traffic.gd           车道、确定性车流、命中检测与撞车失败测试
 docs/
   ROADMAP.md            已确认的开发路线图
