@@ -240,6 +240,11 @@ func is_result_visible() -> bool:
 	return _result_layer.visible
 
 
+func is_any_modal_visible() -> bool:
+	## 开始菜单、接单或结算面板挡在前面时，暂停层不应抢走 Esc。
+	return _start_layer.visible or _offer_layer.visible or _result_layer.visible
+
+
 func get_result_title() -> String:
 	return _result_title.text
 
