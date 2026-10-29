@@ -212,7 +212,7 @@ python tools/build_behavior_page_data.py --demo \
   --out exhibition/analytics/data/sample-data.js --js
 ```
 
-游戏里每局的城市种子是随机的（见 `GameSeeds`），每个访客走的是不同的城市，
+游戏里每次从主菜单进入都会换一座随机城市（见 `GameSeeds`），每个访客走的是不同的城市，
 所以线上采集的数据多数会和 118 号底图对不上。页面检测到
 `meta.city` 与底图种子不一致时会在图例里提示“数据来自种子 X，当前底图是 Y”，
 轨迹和拥挤度仍然会画，但路网不是那局的路网。需要对齐时，用该局的种子

@@ -1,6 +1,6 @@
 extends SceneTree
 
-## 开始/结算界面测试：标题页文案、种子、结算统计、路线和按钮布局。
+## 开始/结算界面测试：标题页文案、主菜单不显示种子、结算统计、路线和按钮布局。
 ## 这里只挂载 OrderHUD，不加载主场景和模型，避免 headless 下已知的
 ## RendererDummy / RID 退出崩溃影响界面断言；主场景集成由 test_orders 覆盖。
 
@@ -37,12 +37,12 @@ func _expect(condition: bool, message: String) -> void:
 
 
 func _check_start_menu() -> void:
-	_hud.show_start_menu(118)
+	_hud.show_start_menu()
 	_expect(_hud.is_start_menu_visible(), "启动时应显示开始界面")
 	_expect(_hud.get_start_title_text() == "大城市送外卖", "开始界面标题错误")
 	_expect(_hud.get_start_subtitle_text().contains("程序化"), "开始界面应说明城市由程序生成")
 	_expect(_hud.get_start_button_text().contains("开始接单"), "开始按钮文案错误")
-	_expect(_hud.get_start_seed_text().contains("118"), "开始界面应显示城市种子")
+	_expect(not _hud.get_start_footer_text().contains("种子"), "主菜单不应显示种子")
 	_expect(_hud.is_any_modal_visible(), "开始界面应被视为模态界面")
 	_check_inside(_hud.get_start_content_rect(), "开始界面内容")
 	print("PASS menu ui start")

@@ -10,6 +10,8 @@ signal order_rejected(order: DeliveryOrder)
 signal order_started(order: DeliveryOrder)
 signal order_finished(success: bool)
 signal game_started
+## 即将从主菜单进入一局；主场景收到后换一座新城市，再开始生成首单。
+signal session_starting
 
 const NAV_READY_MAX_FRAMES := 120
 const NEXT_SEED_ATTEMPTS := 10
@@ -64,7 +66,7 @@ func setup(
 	if not _configured:
 		_hud.show_error("订单系统缺少世界、导航或玩家")
 		return
-	_order_seed = initial_order_seed if initial_order_seed > 0 else GameSeeds.order_seed()
+	_order_seed = _first_order_seed()
 	_current_order = null
 	_session = null
 	_pending_offer = false
@@ -75,7 +77,7 @@ func setup(
 	_player.set_controls_enabled(false)
 	if _phone != null:
 		_phone.hide_offer()
-	_hud.show_start_menu(_city_seed())
+	_hud.show_start_menu()
 	_sync_signage()
 
 
@@ -128,6 +130,10 @@ func start_game() -> bool:
 		return false
 	_at_start_screen = false
 	_hud.hide_start_menu()
+	# 每局重新取首单种子；主场景收到 session_starting 后会换一座新城市，
+	# 所以这里先定种子、再生成订单，保证订单和地图对得上。
+	_order_seed = _first_order_seed()
+	session_starting.emit()
 	game_started.emit()
 	_begin_generation(_order_seed, "")
 	return true
@@ -155,7 +161,7 @@ func reject_order() -> bool:
 		_phone.hide_offer()
 	_hud.hide_offer()
 	order_rejected.emit(rejected)
-	_begin_generation(_order_seed + 1, signature)
+	_begin_generation(_next_order_seed(), signature)
 	return true
 
 
@@ -168,14 +174,13 @@ func return_to_start_menu() -> bool:
 	_session = null
 	_customer_hit_reported = false
 	_at_start_screen = true
-	_order_seed += 1
 	if _phone != null:
 		_phone.hide_offer()
 	if _beacon != null:
 		_beacon.visible = false
 	if _player != null:
 		_player.set_controls_enabled(false)
-	_hud.show_start_menu(_city_seed())
+	_hud.show_start_menu()
 	_sync_signage()
 	return true
 
@@ -210,7 +215,7 @@ func handle_restart() -> bool:
 	if _pending_generation:
 		return false
 	if _current_order == null:
-		_begin_generation(_order_seed + 1, "")
+		_begin_generation(_next_order_seed(), "")
 		return true
 	if _session == null:
 		return false
@@ -391,7 +396,19 @@ func _restart_same_order() -> void:
 func _begin_next_order() -> void:
 	var previous := _current_order
 	var previous_signature := OrderGenerator.signature(previous)
-	_begin_generation(_order_seed + 1, previous_signature)
+	_begin_generation(_next_order_seed(), previous_signature)
+
+
+func _first_order_seed() -> int:
+	## 导出属性固定了首单种子时优先使用，否则每局重新取（固定/参数模式可复现）。
+	return initial_order_seed if initial_order_seed > 0 else GameSeeds.order_seed()
+
+
+func _next_order_seed() -> int:
+	## 正常游玩每单随机；固定种子或 --order-seed 时沿用 +1 的可复现序列。
+	if initial_order_seed > 0:
+		return _order_seed + 1
+	return GameSeeds.next_order_seed(_order_seed)
 
 
 func _check_customer_hit() -> void:
@@ -473,12 +490,6 @@ func _ensure_phone() -> void:
 func _on_offer_expired() -> void:
 	## 手机倒计时归零：按拒单处理，继续生成下一单。
 	reject_order()
-
-
-func _city_seed() -> int:
-	if _world != null and _world.network != null:
-		return _world.network.seed_value
-	return 0
 
 
 func _ensure_beacon() -> void:

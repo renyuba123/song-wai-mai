@@ -24,11 +24,11 @@ func _ready() -> void:
 	_setup_input_layers()
 	world.world_generated.connect(_on_world_generated)
 	traffic.player_hit.connect(_on_traffic_player_hit)
-	# 每局换一座城市；测试和录制脚本会通过 GameSeeds.pin() 固定种子。
+	# 主菜单先摆一座城市做背景；每次从主菜单开始游戏时再换一座新的。
+	# 测试和录制脚本会通过 GameSeeds.pin() 固定种子，进入游戏时不再重新生成。
 	world.seed = GameSeeds.city_seed()
 	world.allow_seed_retry = GameSeeds.is_city_random()
 	world.regenerate()
-	_place_player()
 	traffic.set_player(player)
 	_setup_economy()
 	orders.setup(world, navigation, player)
@@ -37,8 +37,6 @@ func _ready() -> void:
 	_setup_telemetry()
 	_setup_test_god_view()
 	_setup_mini_map()
-	# 把本局种子打到日志里；需要复现时用 --city-seed / --order-seed 传回去。
-	print("[种子] 城市 %d · 订单 %d" % [world.seed, orders.get_order_seed()])
 
 
 func _setup_settings() -> void:
@@ -51,6 +49,8 @@ func _setup_settings() -> void:
 
 func _on_world_generated(network: RoadNetwork) -> void:
 	navigation.build(network)
+	# 换城后先把玩家放到新城市的出生点，交通再按玩家位置布置车辆。
+	_place_player()
 	traffic.build(network, world.city)
 	if _settings != null:
 		_settings.apply_to(player, traffic)
@@ -108,9 +108,21 @@ func _setup_economy() -> void:
 	_economy.name = "EconomyHUD"
 	add_child(_economy)
 	player.pedestrian_hit.connect(_on_player_pedestrian_hit)
+	orders.session_starting.connect(_on_session_starting)
 	orders.game_started.connect(_on_game_started)
 	orders.order_started.connect(_on_order_started)
 	orders.order_finished.connect(_on_order_finished)
+
+
+func _on_session_starting() -> void:
+	## 每次从主菜单进入游戏都换一座新城市；固定种子（测试、录制、
+	## --city-seed 复现）保持同一座城市，不额外重新生成。
+	if GameSeeds.is_city_random():
+		world.seed = GameSeeds.city_seed()
+		world.allow_seed_retry = true
+		world.regenerate()
+	# 把本局种子打到日志里；需要复现时用 --city-seed / --order-seed 传回去。
+	print("[种子] 城市 %d · 订单 %d" % [world.seed, orders.get_order_seed()])
 
 
 func _on_game_started() -> void:

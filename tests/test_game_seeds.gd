@@ -26,8 +26,20 @@ func _run() -> void:
 	GameSeeds.pin(118, 1)
 	_expect(GameSeeds.city_seed() == 118, "固定后城市种子应保持不变")
 	_expect(GameSeeds.order_seed() == 1, "固定后订单种子应保持不变")
+	_expect(
+		GameSeeds.next_order_seed(1) == 2,
+		"固定种子后下一单应按固定序列递增，保持可复现"
+	)
 	_expect(not GameSeeds.is_city_random(), "固定种子时不应再自动换种子")
 	GameSeeds.release_pins()
+
+	var first_order := GameSeeds.order_seed()
+	var next_order := GameSeeds.next_order_seed(first_order)
+	_expect(
+		next_order >= 1 and next_order <= GameSeeds.MAX_SEED,
+		"随机下一单种子应在 1..%d：%d" % [GameSeeds.MAX_SEED, next_order]
+	)
+	_expect(next_order != first_order, "随机下一单种子不应与上一单相同")
 
 	_expect(
 		GameSeeds.override_seed(PackedStringArray(["--city-seed", "2024"]), "--city-seed", "")
