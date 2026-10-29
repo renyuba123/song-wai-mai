@@ -1586,3 +1586,33 @@ PR #31 合并后，从 `origin/main` 的 `7c3d412` 起 `feature/jzy070407-menu-r
 **修改文件：** `docs/DEVELOPMENT_LOG.md`。
 
 本条记录随 `docs/jzy070407-sync-20261029-e` 分支提交、推送并建 PR。
+
+## 2026-10-29 21:45（Asia/Shanghai）修正 Web 自动部署的云端路径：去掉 `/`，让一致性校验能对上
+
+现象：配置好 `TCB_SECRET_ID`、`TCB_SECRET_KEY` 后，`main` 合并 #42/#43/#44 触发的部署任务在 `Deploy to CloudBase hosting` 一步失败，日志为：
+
+```text
+一致性发布失败，已自动回滚，备份保留于 .cloudbase-backup/…/：
+一致性校验失败：missing=/index.apple-touch-icon.png,/index.audio.worklet.js,…,/index.html,/index.js,/index.pck,/index.png,/index.wasm; mismatched=[]
+```
+
+排查：
+
+- 用同一对密钥在本地 `tcb login` 后执行 `tcb hosting list -e passive-sailfish-d0e1nvt8175333a`，根目录只有 `__auth/*`、`cloud-admin/index.html` 和三个 `index.*.png.import` 残留，游戏文件已经随回滚删除，线上首页返回的是 COS 的 `NoSuchKey` 404 页面。
+- 读 CloudBase CLI 3.8.10 的 `uploadDirectoryConsistent`：本地清单的 Key 用 `path.join(cloudPath, 相对路径)` 生成，`cloudPath` 是 `/` 时会拼出 `/index.html`；远端清单直接取 COS 的 Key，没有前导斜杠。两边用带斜杠和不带斜杠的字符串比较，所有文件都被判成 missing，`--safe` 随即回滚。上传本身没有问题，是校验拼接的写法导致的误判。
+- CLI 自带示例写的是 `tcb hosting deploy ./dist`（省略云端路径即上传到根目录），工作流多写了一个 `/`。
+
+修改：
+
+- `.github/workflows/deploy-web.yml` 的发布命令改为 `tcb hosting deploy build/web -e "$TCB_ENV_ID" --concurrency 10 --safe --verify`，并加注释说明不能传 `/`。
+- `docs/WEB_DEPLOY.md` 同步修改命令示例，补上这段原因说明，避免以后又照着旧写法加回斜杠。
+
+验证：
+
+- 本机与 CI 用的是同一个 CLI 版本（3.8.10），本地 `tcb hosting list` 与线上首页 404 的结果相互印证了回滚确实生效。
+- 工作流改动只涉及发布命令和文档，`--import` 与全部 Godot 测试在上一轮 `b2901e2` 上已经通过，这次没有改 GDScript。
+- 修复是否生效要等下一次部署运行回填；触发方式为在 `main` 合并后自动执行，或在 Actions 里手动 Run workflow。
+
+**修改文件：** `.github/workflows/deploy-web.yml`、`docs/WEB_DEPLOY.md`、`docs/DEVELOPMENT_LOG.md`。
+
+本条记录随 `fix/jzy070407-web-deploy-path` 分支提交、推送并建 PR。
