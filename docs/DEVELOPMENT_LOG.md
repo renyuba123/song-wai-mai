@@ -738,6 +738,16 @@ GitHub Actions 报 `resident count grows after revisit`。实测首次访问商�
 
 运行全部十二组 Godot headless 测试，包括四 Seed 的模型、真实物理位移、动态生成/回收、对象池及完整城市/订单/交通回归。主场景旧“全图至少 100 辆”断言改为“附近有车且不超上限”，保留其余行为检查。无界面环境未验证实际模型门向、灯光、帧率和驾驶画面，见 TRAFFIC_STREAMING.md。本记录随功能提交。
 
+## 2026-10-29 10:13（Asia/Shanghai）人行道与地块导航基础
+
+本轮按“先不要涉及性能优化，优先进行功能搭建”的要求，暂停性能调优，转回功能开发。原先的寻路只在车行道上可用：人行道碰撞体没有加入导航源组，导航代理还沿用车行车辆级别的 4 米半径，玩家从出生点走到商家门口、再从商家走到顾客门口的路径会贴着车行道或被裁断。
+
+在 `feature/jzy070407-sidewalk-navigation` 分支完成三处改动：`CityBuilder` 的人行道碰撞体加入 `CollisionLayers.NAVIGATION_SOURCE_GROUP`，建筑碰撞体仍不加入，因此导航网格只覆盖道路和人行道，不会铺进建筑内部；`NavigationService` 的烘焙体素从 0.25 米级改成 2 米，代理半径 4 米改为 0.5 米、高度改为 1.8 米，按玩家尺寸烘焙；`test_city` 的人行道断言从“不应在导航源组”改为“应在导航源组”，`test_navigation_queries` 增加玩家起点、商家、顾客三个出生点的吸附误差检查和商家到顾客的配送路径检查。
+
+用临时探针实测：主场景实例化加导航烘焙合计约 2107 毫秒，导航网格 2282 个多边形；全部 32 个站点出生点里，吸附误差最大 2.19 米（customer_015）；玩家起点到商家路径 46 个点、约 1144.9 米，商家到顾客路径 82 个点、约 2471.4 米，连通正常。探针脚本没有提交。
+
+测试：`test_navigation_queries`、`test_city`、`test_contracts`、`test_orders`、`test_main_scene`、`test_traffic` 均为 PASS，退出码 0；`test_city_streaming` 因 99 个城市 GLB 仍是 LFS pointer、资源加载失败而失败（退出码 1），与本改动无关，记为环境阻塞。没有修改订单、UI、主场景和共享文件，因此没有加锁。
+
 ## 2026-10-29 10:35（Asia/Shanghai）暂停菜单、设置与城市种子显示
 
 需求（任务原文）：Esc 打开暂停层：`get_tree().paused = true`，暂停层自身设 `process_mode = PROCESS_MODE_WHEN_PAUSED`，关闭玩家输入，释放并显示鼠标；再按 Esc 或点“继续”恢复。暂停层按钮：继续；重开本单：调用现有 `OrderManager.handle_restart()`；返回主菜单：调用现有 `OrderManager.return_to_start_menu()`。暂停层里显示当前城市种子和订单种子（从现有生成数据读取，拿不到就显示“—”，不要为此改生成逻辑）。开始菜单、接单选择、结算界面下按 Esc 不打开暂停层，也不误触发游戏操作。
