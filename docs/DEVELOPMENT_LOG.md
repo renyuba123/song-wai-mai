@@ -747,3 +747,15 @@ GitHub Actions 报 `resident count grows after revisit`。实测首次访问商�
 用临时探针实测：主场景实例化加导航烘焙合计约 2107 毫秒，导航网格 2282 个多边形；全部 32 个站点出生点里，吸附误差最大 2.19 米（customer_015）；玩家起点到商家路径 46 个点、约 1144.9 米，商家到顾客路径 82 个点、约 2471.4 米，连通正常。探针脚本没有提交。
 
 测试：`test_navigation_queries`、`test_city`、`test_contracts`、`test_orders`、`test_main_scene`、`test_traffic` 均为 PASS，退出码 0；`test_city_streaming` 因 99 个城市 GLB 仍是 LFS pointer、资源加载失败而失败（退出码 1），与本改动无关，记为环境阻塞。没有修改订单、UI、主场景和共享文件，因此没有加锁。
+
+## 2026-10-29 10:57（Asia/Shanghai）远端同步检查
+
+本轮按要求检查 `song-wai-mai` 仓库的远端更新：“检查 song-wai-mai 仓库的远端更新：进入 E:/Project/Game Work Team/song-wai-mai，先确认工作区状态，再执行 git fetch origin --prune。如果 origin/main 或 origin/refactor/modular-base 有新提交，按 CONTRIBUTING.md 和每轮工作规则安全整合（有未提交改动时先保留或提交，不覆盖），运行相关 Godot 测试，把本轮同步和测试结果追加到 docs/DEVELOPMENT_LOG.md，提交并推送；若出现冲突或权限问题，停止并向用户说明，不要强推。”
+
+主检出当前在 `feature/jzy070407-traffic-cars`，工作区干净，没有未提交改动。`git fetch origin --prune` 因本机网络走 HTTPS 时 schannel 握手失败而没有完成，随后用 GitHub SSH 地址做一次性拉取，把远端全部分支更新到 `origin/*` 引用并清理已删除的远端分支，`origin` 地址没有修改。拉取结果：`origin/main` 从 a25b008 前进到 b872b50，只包含人行道导航分支的 b67fbcf 及其合并提交 #18；远端和本地都没有 `refactor/modular-base` 分支。
+
+主检出按工作区规则留给整合终端和定时同步任务，本轮没有在其中切换分支或改写本地 `main` 引用，本地 `main` 仍指向 a25b008。同步校验、测试和本条日志在 lead 工作树新建的 `docs/jzy070407-sync-20261029` 分支上完成，分支从 `origin/main` 的 b872b50 创建，不改任何代码。
+
+Godot 4.7.2 headless 导入退出码 0，路网校验 150 个节点、214 条路段、通过，城市生成 1637 个地块、1637 栋建筑、32 个站点、98 个出入口、通过。测试结果：`test_road_network`、`test_city`、`test_contracts`、`test_navigation_queries`、`test_orders`、`test_main_scene`、`test_input_actions`、`test_traffic`、`test_city_population`、`test_god_view`、`test_traffic_streaming` 全部 PASS，退出码 0；`test_city_streaming` 退出码 1，原因是城市 GLB 仍是 LFS pointer，属于已知的模型下载阻塞，与本轮同步无关。
+
+没有出现合并冲突，也没有向 `main` 推送或强推。本记录随 `docs/jzy070407-sync-20261029` 分支提交并推送。
