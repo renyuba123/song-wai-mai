@@ -792,6 +792,31 @@ GitHub Actions 报 `resident count grows after revisit`。实测首次访问商�
 - 合并只在 `docs/DEVELOPMENT_LOG.md` 产生冲突，按时间顺序保留本条记录和人行道导航记录（`10:13`），合并提交 `b52018c`。
 
 **提交与分支：** 从 `origin/main` `a25b008` 建立 `feature/jzy070407-route-guidance`；功能与日志提交 `d24d158 feat(orders): add ground route guidance`，随后合并 `origin/main` `b872b50` 得到 `b52018c`；推送后向 `main` 建 PR，不直接推送 `main`，不强推。
+
+## 2026-10-29 10:54（Asia/Shanghai）行人过街（胶囊占位）
+
+需求：按城市种子确定性生成行人，初始位置落在人行道范围内，不落在车行道中央；行人沿人行道行走，到路口按简单节奏左右过街，过街时朝对侧移动，结束后回到人行道；随玩家位置在附近生成、远处回收，数量有上限（`max_pedestrians` 默认大于 0）；用 `CapsuleMesh` 占位，正式人形模型到位后只替换视觉。不改订单/UI/导航文件和 `main.tscn`，车辆逻辑保持不变。
+
+实现内容：
+
+- 新增 `Pedestrian`（`AnimatableBody3D`）：胶囊视觉与胶囊碰撞，碰撞层 `PEDESTRIAN`、掩码 0，不加入 `navigation_source`；路径推进与 `TrafficCar.advance()` 同构，按弧长沿人行道折线行走。到路段尽头按 `crossing_chance` 决定是否横穿，横穿段是从本侧人行道到对侧的直线，结束后回到对侧人行道继续走；换到新路段时按目标道路红线宽度和 `band_ratio` 重算横向位置，避免在窄路上走进车行道。
+- 新增 `PedestrianSpawner`：按 `network.seed_value ^ (edge_id * 65537) ^ (_serial * 131071) ^ 0x51D3A7` 生成，和车辆 RNG 盐完全独立；只选玩家/角色附近、避开路口退让区的人行道段，出生点距焦点 24 米以上，避开站点出生点 12 米、行人彼此 6 米；目标数量按附近可行走人行道长度除以 120 米估算并受 `max_pedestrians` 约束，每个路段按主/次/支分别最多 3/2/2 人；远离超过回收半径且不在视锥内时回收；每 0.75 秒节流补生成，`immediate` 时一次补满。
+- `TrafficSpawner` 只做最小接线：`max_pedestrians` 默认从 0 改为 24；`build()` 里在车辆生成后由代码创建行人管理器，重建时清理；`set_player()` 转发玩家；新增 `get_pedestrian_spawner()`、`get_pedestrian_count()`、`get_pedestrians()` 访问器。原有提前返回条件、车辆生成/行驶/避让/回收逻辑和 `traffic_ready` 发射时机未改。
+- 行人没有命中 `Area3D`，车辆 `HitBox` 也只检测 `PLAYER` 层，因此行人不会触发撞车失败。
+- 正式人形模型到位后只替换 `Pedestrian._build_visuals()`；路径、碰撞和公开接口不变。
+- `tests/test_pedestrians.gd` 覆盖人行道数学、确定性、出生约束、行走、过街翻转并回到对侧、回收与上限、边界/重建、行人不会触发车辆命中、主场景集成；CI 测试清单加入 `test_pedestrians`。
+
+修改文件：新增 `scripts/traffic/pedestrian.gd`、`scripts/traffic/pedestrian_spawner.gd`、`tests/test_pedestrians.gd`（及 `.uid`）；修改 `scripts/traffic/traffic_spawner.gd`、`.github/workflows/repository-integrity.yml`、`docs/USER_GUIDE.md`、`docs/DEVELOPMENT_LOG.md`。
+
+测试与校验：
+
+- Godot 4.7.2 `--headless --path . --import` 退出码 0；资源导入仍报 99 个 GLB 为 LFS pointer、部分贴图缺失，属于既有环境阻塞。
+- `test_pedestrians` 输出 `PASS pedestrians`、`exit=0`。
+- `test_traffic_streaming`、`test_main_scene`、`test_contracts` 均 `PASS`、`exit=0`；`test_traffic` 输出 `PASS traffic`，但退出时仍因 LFS pointer 模型崩溃（Windows 访问冲突 `-1073741819`），与本任务无关。
+- `git diff --check` 通过。
+
+提交与分支：原始分支 `feature/jzy070407-pedestrian-placeholder`，基于 `origin/main` a25b008。该分支的 PR #20 在 `main` 连续合并 #18、#19、#21 后出现冲突，本轮按“重置此工作内容，拉取更新，重新进行开发”的要求，从最新 `origin/main` 的 72b26f4 重建为 `feature/jzy070407-pedestrian-placeholder-2`，功能提交通过 cherry-pick a1a1479 重新落地，并修正日志时间戳、调整记录顺序。
+
 ## 2026-10-29 10:57（Asia/Shanghai）远端同步检查
 
 本轮按要求检查 `song-wai-mai` 仓库的远端更新：“检查 song-wai-mai 仓库的远端更新：进入 E:/Project/Game Work Team/song-wai-mai，先确认工作区状态，再执行 git fetch origin --prune。如果 origin/main 或 origin/refactor/modular-base 有新提交，按 CONTRIBUTING.md 和每轮工作规则安全整合（有未提交改动时先保留或提交，不覆盖），运行相关 Godot 测试，把本轮同步和测试结果追加到 docs/DEVELOPMENT_LOG.md，提交并推送；若出现冲突或权限问题，停止并向用户说明，不要强推。”
@@ -803,3 +828,15 @@ GitHub Actions 报 `resident count grows after revisit`。实测首次访问商�
 Godot 4.7.2 headless 导入退出码 0，路网校验 150 个节点、214 条路段、通过，城市生成 1637 个地块、1637 栋建筑、32 个站点、98 个出入口、通过。测试结果：`test_road_network`、`test_city`、`test_contracts`、`test_navigation_queries`、`test_orders`、`test_main_scene`、`test_input_actions`、`test_traffic`、`test_city_population`、`test_god_view`、`test_traffic_streaming` 全部 PASS，退出码 0；`test_city_streaming` 退出码 1，原因是城市 GLB 仍是 LFS pointer，属于已知的模型下载阻塞，与本轮同步无关。
 
 本条记录首次提交时没有冲突；随后 PR #19 合并、`main` 前进到 a94d952，本分支按协作规则合并最新 `main`，在日志末尾追加位置出现冲突。按“保留双方记录、按时间排序”处理：10:35 的暂停菜单记录在前，10:57 的同步记录在后，并重新运行导入和相关测试。没有向 `main` 推送或强推。本记录随 `docs/jzy070407-sync-20261029` 分支提交并推送。
+
+## 2026-10-29 11:33（Asia/Shanghai）重置行人分支并从最新 main 重新落地
+
+本轮需求（原文）：“针对未能提交的pr，重置此工作内容，拉取更新，重新进行开发，分发工作暂停直到下一次声明。”
+
+远端已连续合并人行道导航 #18、暂停菜单 #19、地面路线指引 #21 和远端同步记录 #22，`origin/main` 到了 72b26f4；只剩下行人占位 PR #20 冲突。按重置要求，先清掉上一轮为解冲突临时建的两个合并工作树和残留的无界面测试进程，再从最新 `origin/main` 的 72b26f4 重建分支 `feature/jzy070407-pedestrian-placeholder-2`，用 cherry-pick 把行人功能提交 a1a1479 重新落地，没有在旧分支上继续叠加合并提交，也没有强推任何共享分支。
+
+解决两处冲突：CI 测试清单按并集合并为 `... test_pause test_route_guidance test_pedestrians`；开发日志按时间排序，行人记录校正为 10:54，排在 10:45 路线指引之后、10:57 同步记录之前。日志中同时写明该功能原属 PR #20、原分支基于 a25b008，后续由新分支接替。
+
+Godot 4.7.2 `--headless --path . --import` 退出码 0，路网 150 个节点、214 条路段通过，城市 1637 个地块、1637 栋建筑、32 个站点通过。测试：`test_traffic_streaming`、`test_main_scene`、`test_contracts`、`test_pause`、`test_route_guidance` 退出码 0；`test_pedestrians`、`test_traffic`、`test_navigation_queries`、`test_orders` 都先打印 PASS，但部分运行在退出阶段以 Windows 访问冲突（退出码 139）结束，重复运行会在 0 和 139 之间变化，日志同批出现 3 到 5 条 `Failed loading resource`，仍是 99 个城市 GLB 为 LFS pointer 的既有环境问题，不是本次重建引入的断言失败。
+
+分发暂停：按用户要求，暂停向其他终端派发新任务，等待下一次声明。本条记录随新分支提交、推送并建 PR。
