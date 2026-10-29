@@ -1234,3 +1234,42 @@ PR #31 合并后，从 `origin/main` 的 `7c3d412` 起 `feature/jzy070407-menu-r
 - `test_input_actions` 退出码 0，打印 `PASS input actions count=9`。
 
 本条记录随同一分支追加提交。
+
+## 2026-10-29 20:24（Asia/Shanghai）重做用户行为记录：地图、轨迹速度热力、计时点和道路拥挤度
+
+本轮需求（原文）：“修正用户行为记录的内容：地图；当前任务的起止点，玩家的运动轨迹图以及速度热力图（直接已热力形式显示到轨迹图上），以及特定计时点玩家在轨迹图中的位置”。
+
+追加需求（原文）：“追加：用户当前所处道路的npc拥挤度（贴在底图为地图的新图中）”。
+
+续接需求（原文）：“接续，同时数据记录要保证做到藉由网址游玩的玩家的相关行为信息全部记录保存并进行下载”。
+
+用户确认这次改动覆盖“采集 + 分析页”两层，地图底图用“城市路网俯视示意图”。
+
+**采集扩展：**
+
+- 位置采样保持每 2 秒一次，新增平面速度 `speed`、当前最近路段 `road`、路段等级 `rk`、同路段车辆数 `cars`、同路段行人数 `peds`、80 米内车辆数 `near`。速度只取 `Vector2(velocity.x, velocity.z)`，不把重力和跳跃算进去。
+- 骑行中每 30 秒记一个 `checkpoint`，带序号 `i`、已用秒数 `sec`、坐标、速度、剩余时间和道路信息，分析页据此在轨迹上标计时点。
+- `start` 事件记录本单起点 `sx`/`sz`、取餐点 `px`/`pz`、送达点 `dx`/`dz` 和限时 `limit`；`offer` 增加地图种子；`pickup`、`reject`、`finish` 和新增的 `hit` 都带当时的位置、速度、道路和 NPC 数量。
+- `session` 事件记录地图种子、地图尺寸、交通密度和车辆数，方便确认数据对应的城市和交通规模。
+- 本地队列上限提高到 2000 条，每 4 秒或每 50 条批量上报；Web 端在 JS 里维护同样的待发事件，页面关闭时用 `navigator.sendBeacon` 补发，成功后按条数从两边同时移除，失败则放回队首重试。
+- `main.gd` 仍只调用 `_telemetry.setup(orders, player)`；`TelemetryClient` 自己从同级节点里补 `WorldGenerator` 和 `TrafficSpawner`，不改主场景装配。
+
+**地图与分析页：**
+
+- 新增 `tools/export_city_map.gd`，按主场景实际使用的种子 118、2400×2400 米、密度 0.5 和 40/30/18 米路宽导出 `exhibition/analytics/data/city-118.json`；结果与主场景一致：91 个节点、144 条路段、32 个站点、12 个出生点。
+- 新增 `tools/build_behavior_page_data.py`：既能把 `behavior_events_events.csv` 转成页面 JSON，也能从路网生成演示轨迹；`--js` 会把地图和会话一起写进 `data/sample-data.js`，页面用 `file://` 直接打开也能用。
+- 新增 `exhibition/analytics/` 静态页面（`index.html`、`analytics.css`、`analytics.js`）：地图上画本单起点、取餐点和送达点；轨迹按采样速度从蓝、青、黄渐变到红，热力光晕直接叠在轨迹上；每 30 秒的计时点带时间标签；玩家经过的路段按“每百米车辆数”着色，盖在路网底图上。右侧是本单概况、图例和当前道路信息，点计时点或轨迹可以看速度和道路拥挤度，顶部可以开关拥挤度和计时点。
+- 页面支持多会话切换、载入本地 JSON，以及把当前数据下载成 JSON、CSV 或地图 PNG；布局按手机单列、桌面双列适配。仓库里只提交演示数据，真实访客数据不落仓库。
+- 文档同步：`docs/BEHAVIOR_DATA_EXPORT.md` 补事件字典、道路字段说明和分析页生成步骤；`server/behavior-log/README.md` 补事件表和拥挤度字段；`exhibition/README.md` 补分析页位置、部署方法和 3 号二维码待办。
+
+**验证：**
+
+- 用 `origin/main` 新建干净的临时工作树，只应用本轮补丁后重新导入：路网 91 节点/144 路段、城市 764 地块/建筑、32 站点、141 出入口。
+- 干净工作树 headless：`test_telemetry` 打印 `PASS telemetry`、退出码 0；`test_orders`、`test_phone_orders` 先打印 PASS，退出阶段以既有访问冲突 139 结束。
+- `test_traffic`、`test_pedestrians`、`test_pause`、`test_main_scene` 在 headless 下仍因既有 `RendererDummy`/RID 问题不打印 PASS；`test_main_scene` 改用 1280×720 窗口和 GL Compatibility 复跑，打印 `PASS main scene nodes=91 lots=764 sites=32 starts=12 vehicles=4 order_seed=1 sky=true`、退出码 0，说明主场景创建采集节点和自动补齐世界/交通不会报错。
+- 用 headless Edge 打开 `exhibition/analytics/index.html` 截图核对：地图、渐变轨迹、起点/取餐/送达标记、计时点标签、道路拥挤度、概况数字和左右布局都正常；演示会话为 6 分 04 秒、2680 米、12 个计时点。
+- 用一条自造的导出 CSV 跑 `tools/build_behavior_page_data.py --csv`，生成 1 个会话、7 条事件、`city=118`、`demo=false`，确认 CSV 转换路径可用。
+
+**修改文件：** 新增 `exhibition/analytics/index.html`、`exhibition/analytics/analytics.css`、`exhibition/analytics/analytics.js`、`exhibition/analytics/data/city-118.json`、`exhibition/analytics/data/sample-data.js`、`tools/export_city_map.gd`、`tools/build_behavior_page_data.py`；修改 `scripts/core/telemetry_client.gd`、`tests/test_telemetry.gd`、`docs/BEHAVIOR_DATA_EXPORT.md`、`server/behavior-log/README.md`、`exhibition/README.md`、`docs/DEVELOPMENT_LOG.md`。
+
+本条记录随 `feature/jzy070407-behavior-analytics` 分支提交、推送并建 PR。
