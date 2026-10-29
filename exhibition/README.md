@@ -84,6 +84,12 @@ tcb hosting deploy build/web / -e <环境 ID>
 把正式地址填入 `qr/links.json` 的 `game.url`，再把 `placeholder` 改成 `false`，
 重新运行生成脚本即可得到 1 号二维码的正式版本。
 
+## 行为数据
+
+3 号二维码背后的参观行为记录保存在 CloudBase PostgreSQL 的
+`behavior_events` 表里。取数、导成 CSV 和常用查询见
+[docs/BEHAVIOR_DATA_EXPORT.md](../docs/BEHAVIOR_DATA_EXPORT.md)。
+
 ## 待办
 
 - 1 号码等 CloudBase 部署完成后替换链接。
