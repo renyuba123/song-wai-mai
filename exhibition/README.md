@@ -98,6 +98,15 @@ tcb hosting deploy build/web / -e <环境 ID>
 把正式地址填入 `qr/links.json` 的 `game.url`，再把 `placeholder` 改成 `false`，
 重新运行生成脚本即可得到 1 号二维码的正式版本。
 
+## 行为数据
+
+游戏页会匿名上报体验过程（只带随机会话 ID，不含姓名、账号、设备标识），
+落到 CloudBase PostgreSQL 的 `behavior_events` 表。采集说明、表结构、
+部署方法以及**如何导出数据**都写在
+[`server/behavior-log/README.md`](../server/behavior-log/README.md)；
+只想取数据的话，用有权限的账号 `tcb login` 后执行
+`node server/behavior-log/export.js --out <目录>` 即可导出会话汇总和逐条事件两份 CSV。
+
 ## 待办
 
 - 1 号码等 CloudBase 部署完成后替换链接。

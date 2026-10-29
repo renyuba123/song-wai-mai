@@ -1118,3 +1118,34 @@ PR #31 合并后，从 `origin/main` 的 `7c3d412` 起 `feature/jzy070407-menu-r
 - 本轮没有冲突，也没有权限问题。
 
 本条记录随 `docs/jzy070407-sync-20261029-c` 分支提交、推送并建 PR。
+
+## 2026-10-29 17:06（Asia/Shanghai）接收新交接包、补完展览行为采集并整理数据导出方法
+
+本轮需求（原文）：“完成更新后：有新的交接包传入，读取后自动执行未完成项，同时我有一段时间无法直接操作服务器，请将如何导出后台数据记录的方法上传git，一边其他成员能够调取。”
+
+**交接包：**
+
+- `交接包接收/` 里新增 `song-wai-mai-ready-16569b9.zip`（57 MB，16:54 收到），解压后和 `origin/main` 的 `16569b9` 逐文件比对（忽略 `.godot`、`*.import` 和换行差异），只有两处内容不同：`project.godot` 的 `[gui]` 段被编辑器挪到了 `[input]` 前面，语义不变；`scripts/player/player_controller.gd` 的 `move_speed` 从 5.0 改成 18。后者是对方本地的调试数值，仓库里仍是 5.0，本轮没有把它带进来，交接包里也没有其他未提交的代码。
+- 包里的 `目前在干嘛` 还是之前那份（路网、模型导入、车头动画、UI 改版），没有新任务，也没有新的美术文件。
+
+**展览分支收尾（上一轮未提交的改动）：**
+
+- 先把两个未提交的部分整理成提交：`fix(player): scale touch look by viewport and hide scooter at steep pitch`（触屏视角按视口比例换算、低头超过 35° 隐藏自车）和 `feat: collect exhibition behavior telemetry through a CloudBase function`（`TelemetryClient`、云函数 `server/behavior-log`、开始界面的匿名提示、`test_telemetry`、CI 清单和 `node_modules/` 忽略规则）。
+- 合并最新 `origin/main`（`16569b9`，含 PR #33 同步记录和 PR #34 小地图），四个文件冲突逐个处理：CI 测试清单取并集；`scripts/core/main.gd` 同时保留 `_telemetry` 和 `_mini_map` 两个成员以及各自的 setup；`scripts/orders/order_hud.gd` 采用上游重做后的开始界面，把匿名提示作为 `TelemetryNotice` 放回操作说明和种子之间；`docs/DEVELOPMENT_LOG.md` 按时间顺序把 13:35 的 CloudBase 部署记录插到 13:19 和 13:42 两条之间。
+- 数据库实测：`behavior_events` 已有 108 批、341 条事件、14 个会话，最新一条在 16:42，说明公网采集链路在正常工作。
+
+**数据导出：**
+
+- 新增 `server/behavior-log/export.js`：通过本机已登录的 `tcb db execute` 分页查询，导出两份带 UTF-8 BOM、CRLF 换行的 CSV——`sessions.csv`（每个会话的开始/结束时间、批次、事件数、浏览器标识）和 `events.csv`（每条事件的会话、服务器时间、相对毫秒、事件名和属性 JSON）。参数支持 `--out`、`--from`、`--to`、`--env`。
+- 在 `server/behavior-log/README.md` 增加“导出数据”一节：一条命令导出、`tcb db execute` 直接查 SQL、控制台 SQL 编辑器导出三条路径，写明需要登录有权限的账号、匿名角色只有 INSERT 权限，以及对外分享前去掉 `user_agent` 和位置轨迹。
+- `exhibition/README.md` 增加“行为数据”一节，指向上面这份说明，方便其他成员直接找到。
+
+**测试与校验：**
+
+- 合并后 `--headless --path . --import` 退出码 0，路网校验通过（节点 91、路段 144），城市生成通过（地块 764、建筑 764、站点 32、出入口 141）。
+- headless：`test_telemetry` 打印 `PASS telemetry`、`test_touch_controls` 打印 `PASS touch controls`、`test_menu_ui` 打印四条 PASS，退出码都是 0。
+- 窗口渲染：`test_main_scene` 打印 `PASS main scene nodes=91 lots=764 sites=32 starts=12 vehicles=4 order_seed=1 sky=true`，`test_orders` 打印 `PASS orders starts=12`、`PASS orders`，`test_phone_orders` 打印 `PASS phone orders`，退出码都是 0。`test_main_scene` 在 headless 下仍会在取餐交互后触发既有的 Dummy 渲染器崩溃，按本机环境问题处理。
+- 导出脚本实跑：`node export.js --out <临时目录>` 列出 14 个会话、341 条事件，两份 CSV 均生成并抽查了表头和数据行，临时导出目录已删除。
+- 合并过程没有出现无法判断的冲突，也没有权限问题。
+
+本条记录随 `feature/jzy070407-exhibition-qr` 分支提交、推送并建 PR。
