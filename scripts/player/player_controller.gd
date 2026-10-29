@@ -366,6 +366,8 @@ func _update_steering(steer_axis: float, delta: float) -> void:
 func reset_to(start: SpawnPoint) -> void:
 	if start == null:
 		return
+	if has_node("MotorcycleAudio"):
+		$MotorcycleAudio.reset_audio()
 
 	global_position = start.position
 	rotation = Vector3(
