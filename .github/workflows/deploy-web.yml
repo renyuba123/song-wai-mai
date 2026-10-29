@@ -113,7 +113,9 @@ jobs:
           set -euo pipefail
           # --json 会打印登录令牌，重定向到 /dev/null，避免出现在公开日志里
           tcb login --apiKeyId "$TCB_SECRET_ID" --apiKey "$TCB_SECRET_KEY" --json > /dev/null
-          tcb hosting deploy build/web / -e "$TCB_ENV_ID" \
+          # 不要传 "/" 当云端路径：CLI 会把本地清单的 key 拼成 /index.html，
+          # 与 COS 里没有前导斜杠的 index.html 对不上，--verify 会误判全部缺失并回滚。
+          tcb hosting deploy build/web -e "$TCB_ENV_ID" \
             --concurrency 10 --safe --verify
           echo "已在环境 $TCB_ENV_ID 的静态托管根目录发布 build/web"
 
