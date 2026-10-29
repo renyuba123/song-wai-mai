@@ -1001,26 +1001,6 @@ Godot 4.7.2 `--headless --path . --import` 退出码 0，路网 150 个节点、
 
 本条记录随 `feature/jzy070407-phone-order` 分支提交、推送并建 PR。
 
-## 2026-10-29 13:35（Asia/Shanghai）CloudBase 部署完成与公网验证
-
-本轮继续“1# 扫描后打开游戏本体”的国内托管：用户完成 CloudBase 登录（设备码授权第一次因 oauth/token 接口瞬时 ECONNRESET 失败，重试后成功），环境为 `passive-sailfish-d0e1nvt8175333a`（体验版，ap-shanghai，2027-04-29 到期）。
-
-**部署：**
-
-- 静态托管状态 Online，默认域名 `https://passive-sailfish-d0e1nvt8175333a-1451076912.tcloudbaseapp.com/`。
-- 第一次执行 `tcb hosting deploy build/web /` 时，Git Bash 把参数 `/` 自动转换成 Windows 路径 `D:/Git/`，11 个文件传到了云端 `D:/Git/` 目录。发现后改用 `MSYS_NO_PATHCONV=1` 重新部署到根目录，`index.html`、`index.js`、`index.pck`、`index.wasm` 等均返回 200，`index.wasm` 的 MIME 为 `application/wasm`。云端 `D:/Git/` 目录待清理。
-- 把正式地址写入 `exhibition/qr/links.json` 的 `game.url`，`placeholder` 改为 `false`，重新生成三张二维码；1 号二维码已指向正式地址，2、3 号仍为占位。
-
-**公网验证：**
-
-- Edge 无头浏览器访问公网地址，`window.isSecureContext` 为 `true`，引擎正常启动；控制台输出路网 150 节点、214 条路段，城市 1637 个地块、1637 栋建筑、32 个站点，确认游戏本体在 HTTPS 下可运行。
-- 出现的 `WrongDocumentError: pointer lock` 仍是 headless 环境特有，不影响普通浏览器。
-
-**中间页问题：**
-
-- 体验版默认域名首次访问会先显示“页面访问提示”，需要访客点一次“确定访问”，之后同一浏览器在 Cookie 有效期内不再出现。按官方文档，移除中间页唯一合规方式是绑定已完成 ICP 备案的自定义域名；默认域名不适合正式大规模分发。
-- 当前 1 号二维码先指向该地址，扫码后多点一次即可进入游戏；若拿到备案域名，改 `links.json` 重新生成即可，二维码文件名不变。
-
 ## 2026-10-29 13:42（Asia/Shanghai）仿照片复刻接单手机
 
 本轮需求（原文）：“与预期不符合，请仿照照片复刻”；“车辆运行时，手机的界面也应出现在左侧相应位置”。
@@ -1119,7 +1099,53 @@ PR #31 合并后，从 `origin/main` 的 `7c3d412` 起 `feature/jzy070407-menu-r
 
 本条记录随 `docs/jzy070407-sync-20261029-c` 分支提交、推送并建 PR。
 
-## 2026-10-29 17:06（Asia/Shanghai）接收新交接包、补完展览行为采集并整理数据导出方法
+## 2026-10-29 16:58（Asia/Shanghai）检查远端更新：PR #33、#34 已合并
+
+本轮需求（原文）：“检查 song-wai-mai 仓库的远端更新：进入 E:/Project/Game Work Team/song-wai-mai，先确认工作区状态，再执行 git fetch origin --prune。如果 origin/main 或 origin/refactor/modular-base 有新提交，按 CONTRIBUTING.md 和每轮工作规则安全整合（有未提交改动时先保留或提交，不覆盖），运行相关 Godot 测试，把本轮同步和测试结果追加到 docs/DEVELOPMENT_LOG.md，提交并推送；若出现冲突或权限问题，停止并向用户说明，不要强推。”
+
+检查结果：
+
+- `song-wai-mai` 主检出的工作区是干净的，当前停在 `feature/jzy070407-traffic-cars`，没有未提交改动，也没有 stash。
+- `git fetch origin --prune` 成功。`origin/main` 从 `af924d6` 前进到 `16569b9`，新增 `774e9bb feat: add circular minimap with order route navigation`、`37cee4a fix: remove reference to deleted car model`，以及两个合并提交 `7f35c9d Merge pull request #33`（上一轮的同步日志分支）和 `16569b9 Merge pull request #34`（小地图）。
+- 小地图提交在 `scripts/core/main.gd` 里加了一个 `MiniMapLayer` 画布层和 `scripts/ui/mini_map.gd`，跟随玩家显示道路和订单路线；`test_main_scene.gd` 同时新增了读取小地图目标点和取餐后刷新的校验。
+- 删除车辆模型的提交只补删了 `Asset_0020.glb.import`，并把 `traffic_model_catalog.gd` 里对它的引用去掉，和 main 上早已删除的 `Asset_0020.glb` 对齐。
+- `origin/refactor/modular-base` 远端已经不存在，`git branch -r` 里没有 refactor 或 modular 相关分支，无需整合。
+- 没有切换 `song-wai-mai` 当前分支。只执行了 `git fetch origin main:main`，把本地 `main` 从 `af924d6` 快进到 `16569b9`，不触碰工作区，不覆盖任何未提交内容。
+- 本轮同步记录同样写在 `worktrees/lead` 里，从最新 `origin/main` 新建 `docs/jzy070407-sync-20261029-d` 分支，避免在主检出里切换分支。
+
+**测试与校验：**
+
+- 在最新 `origin/main` 上执行 `--headless --path . --import`，退出码 0；路网校验通过，节点 91、路段 144；城市生成通过，地块 764、建筑 764、站点 32、出入口 141。
+- headless：`test_traffic_streaming` 打印 `PASS traffic streaming`，退出码 0；`test_contracts` 打印 `PASS contracts nodes=96 edges=149`，退出码 0；`test_orders` 打印 `PASS orders starts=12`、`PASS orders`，退出阶段以 139 结束。
+- headless：`test_main_scene` 连续 5 次都没打印 PASS，并在取餐交互后以 139 结束，报错从 `order_manager.gd` 的 `_update_beacon` 开始（Dummy 渲染器的网格/RID 报错）。做了三组对照：同一台机器上把工作树切到 `af924d6`（小地图之前）跑 `test_main_scene` 2 次都打印 PASS；用 `af924d6` 的旧测试正文跑 `16569b9` 的代码 2 次也都打印 PASS；用真实窗口渲染跑 `16569b9` 的新测试，退出码 0，打印 `PASS main scene nodes=91 lots=764 sites=32 starts=12 vehicles=4 order_seed=1 sky=true`，没有任何报错。结论是小地图本身和主场景都正常，问题只出现在 headless Dummy 渲染器走到“取餐后信标/店招更新”这条路径时，属于本机已知 headless 环境现象的新触发点，不是 PR #34 的功能回归。
+- headless：`test_traffic` 和 `test_route_guidance` 都在导航烘焙阶段或之后崩溃、没有打印 PASS；改用真实窗口渲染复跑，分别打印 `PASS traffic` 和 `PASS route guidance`，退出码都是 0。
+- 本轮没有冲突，也没有权限问题。
+
+本条记录随 `docs/jzy070407-sync-20261029-d` 分支提交、推送并建 PR。
+
+## 2026-10-29 17:03（Asia/Shanghai）导出后台行为数据的方法
+
+本轮需求（原文）：“我有一段时间无法直接操作服务器，请将如何导出后台数据记录的方法上传git，一边其他成员能够调取”。
+
+**做了什么：**
+
+- 新增 `docs/BEHAVIOR_DATA_EXPORT.md`，写明展览行为数据的位置、权限前提、三种导出方式、表结构、事件字典、常用查询、隐私注意事项和常见问题。
+- 新增 `tools/export_behavior_data.py`，用 CloudBase CLI 的 `tcb db execute --json` 只读查询 `public.behavior_events`，按 `id` 分批取数，输出 `behavior_events.csv`、`behavior_events_events.csv` 和 `summary.json`；支持 `--out`、`--since`、`--until`、`--batch-size`，默认环境 `passive-sailfish-d0e1nvt8175333a`。
+- 导出方式以命令行脚本为主，同时保留控制台 DMC（账号管理 → 数据库管理 → SQL 窗口 / 悬浮工具 → 导入导出）和拿到连接信息后的 `psql`/`pg_dump` 两条路径；文档里说明体验版共享集群通常没有外网直连，优先用前两种。
+- 文档补充权限准备：云函数的 `anon` 角色只有 INSERT 权限，导出必须使用有读权限的腾讯云子账号、API Key 或控制台数据库账号；提醒原维护者离开前把授权或密钥交接好。
+- `.gitignore` 增加 `exports/`，避免导出的 CSV、JSON 和备份被提交；`exhibition/README.md` 增加指向导出文档的链接。
+- 文档里保留 2026-10-29 的实测数字，便于其他成员判断自己的导出结果是否正常。
+
+**校验：**
+
+- `python tools/export_behavior_data.py --batch-size 40` 读取 108 行、14 个会话，事件计数 `{"finish": 2, "offer": 8, "pos": 298, "probe": 5, "session": 13, "start": 15}`，CSV 和 `summary.json` 正常生成。
+- 加 `--since "2026-10-29 16:00:00+08"` 复跑得到 60 行、3 个会话，时间过滤生效。
+- 两种导出都只执行 SELECT，没有写入或修改云端数据；脚本在 Windows 上通过 `tcb.cmd` 正常调用 CloudBase CLI。
+- 本轮只改文档、脚本和忽略规则，不涉及 Godot 场景与 GDScript，未跑 headless 测试。
+
+本条记录随 `docs/jzy070407-behavior-export` 分支提交、推送并建 PR。
+
+## 2026-10-29 17:10（Asia/Shanghai）接收新交接包、补完展览行为采集，导出方法统一到已合并文档
 
 本轮需求（原文）：“完成更新后：有新的交接包传入，读取后自动执行未完成项，同时我有一段时间无法直接操作服务器，请将如何导出后台数据记录的方法上传git，一边其他成员能够调取。”
 
@@ -1131,21 +1157,21 @@ PR #31 合并后，从 `origin/main` 的 `7c3d412` 起 `feature/jzy070407-menu-r
 **展览分支收尾（上一轮未提交的改动）：**
 
 - 先把两个未提交的部分整理成提交：`fix(player): scale touch look by viewport and hide scooter at steep pitch`（触屏视角按视口比例换算、低头超过 35° 隐藏自车）和 `feat: collect exhibition behavior telemetry through a CloudBase function`（`TelemetryClient`、云函数 `server/behavior-log`、开始界面的匿名提示、`test_telemetry`、CI 清单和 `node_modules/` 忽略规则）。
-- 合并最新 `origin/main`（`16569b9`，含 PR #33 同步记录和 PR #34 小地图），四个文件冲突逐个处理：CI 测试清单取并集；`scripts/core/main.gd` 同时保留 `_telemetry` 和 `_mini_map` 两个成员以及各自的 setup；`scripts/orders/order_hud.gd` 采用上游重做后的开始界面，把匿名提示作为 `TelemetryNotice` 放回操作说明和种子之间；`docs/DEVELOPMENT_LOG.md` 按时间顺序把 13:35 的 CloudBase 部署记录插到 13:19 和 13:42 两条之间。
+- 合并 `origin/main` 的 `16569b9`（PR #33 同步记录、PR #34 小地图），四个文件冲突逐个处理：CI 测试清单取并集；`scripts/core/main.gd` 同时保留 `_telemetry` 和 `_mini_map`；`scripts/orders/order_hud.gd` 采用上游重做后的开始界面，把匿名提示作为 `TelemetryNotice` 放回操作说明和种子之间；`docs/DEVELOPMENT_LOG.md` 按时间顺序把 13:35 的 CloudBase 部署记录插到 13:19 和 13:42 两条之间。
 - 数据库实测：`behavior_events` 已有 108 批、341 条事件、14 个会话，最新一条在 16:42，说明公网采集链路在正常工作。
 
 **数据导出：**
 
-- 新增 `server/behavior-log/export.js`：通过本机已登录的 `tcb db execute` 分页查询，导出两份带 UTF-8 BOM、CRLF 换行的 CSV——`sessions.csv`（每个会话的开始/结束时间、批次、事件数、浏览器标识）和 `events.csv`（每条事件的会话、服务器时间、相对毫秒、事件名和属性 JSON）。参数支持 `--out`、`--from`、`--to`、`--env`。
-- 在 `server/behavior-log/README.md` 增加“导出数据”一节：一条命令导出、`tcb db execute` 直接查 SQL、控制台 SQL 编辑器导出三条路径，写明需要登录有权限的账号、匿名角色只有 INSERT 权限，以及对外分享前去掉 `user_agent` 和位置轨迹。
-- `exhibition/README.md` 增加“行为数据”一节，指向上面这份说明，方便其他成员直接找到。
+- 本轮先在本分支写了 `server/behavior-log/export.js`（Node 调用 `tcb db execute` 分页查询，导出 `sessions.csv` 和 `events.csv`，带 UTF-8 BOM、CRLF 换行），实跑得到 14 个会话、341 条事件。
+- 随后发现同一时间另一个会话已经通过 PR #36 把等价的导出说明合进 `main`（`docs/BEHAVIOR_DATA_EXPORT.md` 和 `tools/export_behavior_data.py`）。两份并存会重复维护、权限说明也容易写岔，因此再合并一次最新 `main`（`b4ed7f3`）后删掉本分支的 `export.js`，`server/behavior-log/README.md` 的导出长段落改成一句话指向已合并的文档，`exhibition/README.md` 采用 `main` 的写法，日志里 16:58 和 17:03 两条也按时间顺序重新排好。
+- 冲突处理：`.gitignore` 同时保留 `node_modules/` 和 `exports/` 两条忽略规则。
 
 **测试与校验：**
 
 - 合并后 `--headless --path . --import` 退出码 0，路网校验通过（节点 91、路段 144），城市生成通过（地块 764、建筑 764、站点 32、出入口 141）。
 - headless：`test_telemetry` 打印 `PASS telemetry`、`test_touch_controls` 打印 `PASS touch controls`、`test_menu_ui` 打印四条 PASS，退出码都是 0。
 - 窗口渲染：`test_main_scene` 打印 `PASS main scene nodes=91 lots=764 sites=32 starts=12 vehicles=4 order_seed=1 sky=true`，`test_orders` 打印 `PASS orders starts=12`、`PASS orders`，`test_phone_orders` 打印 `PASS phone orders`，退出码都是 0。`test_main_scene` 在 headless 下仍会在取餐交互后触发既有的 Dummy 渲染器崩溃，按本机环境问题处理。
-- 导出脚本实跑：`node export.js --out <临时目录>` 列出 14 个会话、341 条事件，两份 CSV 均生成并抽查了表头和数据行，临时导出目录已删除。
+- 后续合并的 `main` 只改了文档、`.gitignore` 和 `tools/` 下的 Python 脚本，没有动 GDScript，上面的测试结果对最终代码仍然有效。
 - 合并过程没有出现无法判断的冲突，也没有权限问题。
 
-本条记录随 `feature/jzy070407-exhibition-qr` 分支提交、推送并建 PR。
+本条记录随 `feature/jzy070407-exhibition-qr` 分支提交、推送并更新 PR。

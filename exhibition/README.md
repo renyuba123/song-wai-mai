@@ -4,7 +4,7 @@
 
 | 编号 | 文件 | 用途 | 当前链接 |
 | --- | --- | --- | --- |
-| 1 | `qr/output/qr-1-game.png` | 打开游戏本体 | CloudBase（体验版默认域名） |
+| 1 | `qr/output/qr-1-game.png` | 打开游戏本体 | 待部署后替换 |
 | 2 | `qr/output/qr-2-video.png` | 打开游戏演示视频 | 占位 |
 | 3 | `qr/output/qr-3-analytics.png` | 打开用户行为分析数据 | 占位 |
 
@@ -67,14 +67,6 @@ Web 构建没有系统字体，项目通过 `project.godot` 的
 （Noto Sans SC，SIL Open Font License 1.1，授权文本见同目录 `OFL.txt`）。
 字体随仓库用 Git LFS 保存。
 
-### 必须用 HTTPS
-
-Godot 的 Web 构建启动前会检查浏览器安全上下文，局域网里用 HTTP 打开会提示
-“Secure Context - Check web server configuration (use HTTPS)”，引擎不会启动。
-`localhost` 例外，所以本机调试 `http://127.0.0.1:端口/` 可以正常跑。
-正式部署要用 HTTPS（CloudBase 默认域名自带证书）；安卓 Chrome 临时测试可以在
-`chrome://flags/#unsafely-treat-insecure-origin-as-secure` 里把局域网地址加进白名单。
-
 ## 部署
 
 国内静态托管需要账号登录。已验证 EdgeOne Pages 单个文件上限 25 MiB，
@@ -88,24 +80,15 @@ tcb env:list
 tcb hosting deploy build/web / -e <环境 ID>
 ```
 
-部署后域名形如 `https://<环境 ID>-<APPID>.tcloudbaseapp.com/`。当前环境
-`passive-sailfish-d0e1nvt8175333a` 的地址是
-`https://passive-sailfish-d0e1nvt8175333a-1451076912.tcloudbaseapp.com/`。
-
-体验版默认域名首次访问会显示“页面访问提示”，访客需点一次“确定访问”，
-之后同一浏览器在 Cookie 有效期内不再提示。去掉中间页需要绑定已完成 ICP 备案的
-自定义域名（控制台 → 域名管理 → HTTP 访问服务）。
+部署后默认域名形如 `https://<环境 ID>.tcloudbaseapp.com/`。
 把正式地址填入 `qr/links.json` 的 `game.url`，再把 `placeholder` 改成 `false`，
 重新运行生成脚本即可得到 1 号二维码的正式版本。
 
 ## 行为数据
 
-游戏页会匿名上报体验过程（只带随机会话 ID，不含姓名、账号、设备标识），
-落到 CloudBase PostgreSQL 的 `behavior_events` 表。采集说明、表结构、
-部署方法以及**如何导出数据**都写在
-[`server/behavior-log/README.md`](../server/behavior-log/README.md)；
-只想取数据的话，用有权限的账号 `tcb login` 后执行
-`node server/behavior-log/export.js --out <目录>` 即可导出会话汇总和逐条事件两份 CSV。
+3 号二维码背后的参观行为记录保存在 CloudBase PostgreSQL 的
+`behavior_events` 表里。取数、导成 CSV 和常用查询见
+[docs/BEHAVIOR_DATA_EXPORT.md](../docs/BEHAVIOR_DATA_EXPORT.md)。
 
 ## 待办
 

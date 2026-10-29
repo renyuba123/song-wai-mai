@@ -8,3 +8,6 @@ build/
 
 # 云函数依赖，由 npm install 安装
 node_modules/
+
+# 行为数据导出（见 docs/BEHAVIOR_DATA_EXPORT.md），只留在本机
+exports/

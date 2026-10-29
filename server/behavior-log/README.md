@@ -48,59 +48,11 @@ tcb fn deploy behavior-log --httpFn --force --dir . -e passive-sailfish-d0e1nvt8
 
 ## 导出数据
 
-导出的前提是本机能用 `tcb` 登录**对这个环境有权限的账号**（就是部署环境的账号），
-不需要数据库密码。游戏端和云函数使用的匿名角色只有 INSERT 权限，读不了数据；
-没有账号的成员需要先加入环境，或请有权限的成员按下面方法导出后转交。
-
-### 一条命令导出 CSV（推荐）
-
-```bash
-cd server/behavior-log
-npm install -g @cloudbase/cli   # 已安装可跳过
-tcb login                       # 浏览器里用有权限的账号授权，一次即可
-node export.js --out D:/展览数据
-```
-
-脚本会分页查询并把两份文件写到输出目录：
-
-- `sessions.csv`：每个会话一行，列是 `session_id`、`started_at`、`last_seen`、
-  `batches` 上报批次数、`events` 事件条数、`user_agent`（浏览器标识）。
-- `events.csv`：每个事件一行，列是 `session_id`、`server_time`、`t_ms`
-  （页面打开后的毫秒数）、`event` 事件名、`props` 事件属性（JSON）。
-
-参数：
-
-- `--out <目录>`：输出目录，默认当前目录下的 `export/`。
-- `--from 2026-10-29` / `--to 2026-10-30`：按服务器时间筛选，`to` 不含当天之后的数据；可只写一个。
-- `--env <环境 ID>`：默认读同目录 `cloudbaserc.json` 里的 `envId`。
-
-CSV 带 UTF-8 BOM 和 CRLF 换行，Excel 直接双击就能打开中文。
-
-### 直接执行 SQL
-
-临时看数或写自己的统计时，用 `tcb db execute`，结果会直接打印：
-
-```bash
-tcb db execute -e passive-sailfish-d0e1nvt8175333a --sql "SELECT count(*) FROM behavior_events;"
-
-# 每天的体验人数和完成单数
-tcb db execute -e passive-sailfish-d0e1nvt8175333a --sql "SELECT date(server_time) AS day, count(DISTINCT session_id) AS sessions, count(*) FILTER (WHERE events @> '[{\"n\":\"finish\"}]') AS finishes FROM behavior_events GROUP BY 1 ORDER BY 1;"
-```
-
-加 `--json` 得到机器可读的结果（`Columns` 和 `Rows`，每行是一个 JSON 数组字符串），
-`tcb db execute --help` 里还有 `--role postgres` 等选项。
-
-### 控制台导出（不装命令行）
-
-CloudBase 控制台 → 数据库 → PostgreSQL → SQL 编辑器，执行上面的 SQL，
-用结果面板的导出按钮下载 CSV。适合只取一份汇总表、或者临时排查问题。
-
-### 注意事项
-
-- 导出的数据包含体验者的游戏轨迹和浏览器标识，只用于展览效果分析，
-  对外分享前先去掉 `user_agent` 列和 `pos` 事件。
-- 用 `--role postgres` 才能修改表结构或删除数据；日常导出保持默认角色即可，
-  避免误改线上数据。
+导出方法、权限申请和常用查询统一写在
+[`docs/BEHAVIOR_DATA_EXPORT.md`](../../docs/BEHAVIOR_DATA_EXPORT.md)，
+脚本是仓库根目录的 `tools/export_behavior_data.py`。这里只记一件事：
+云函数的平台身份 `anon` 只有 INSERT 权限，读数据必须用有权限的账号登录
+CloudBase CLI 或控制台。
 
 ## 数据
 
