@@ -934,3 +934,23 @@ Godot 4.7.2 `--headless --path . --import` 退出码 0，路网 150 个节点、
 
 - CloudBase 登录、创建环境并部署，回填 1 号二维码正式链接。
 - 2 号演示视频、3 号行为分析页面地址到位后替换占位链接并重新生成。
+
+## 2026-10-29 13:35（Asia/Shanghai）CloudBase 部署完成与公网验证
+
+本轮继续“1# 扫描后打开游戏本体”的国内托管：用户完成 CloudBase 登录（设备码授权第一次因 oauth/token 接口瞬时 ECONNRESET 失败，重试后成功），环境为 `passive-sailfish-d0e1nvt8175333a`（体验版，ap-shanghai，2027-04-29 到期）。
+
+**部署：**
+
+- 静态托管状态 Online，默认域名 `https://passive-sailfish-d0e1nvt8175333a-1451076912.tcloudbaseapp.com/`。
+- 第一次执行 `tcb hosting deploy build/web /` 时，Git Bash 把参数 `/` 自动转换成 Windows 路径 `D:/Git/`，11 个文件传到了云端 `D:/Git/` 目录。发现后改用 `MSYS_NO_PATHCONV=1` 重新部署到根目录，`index.html`、`index.js`、`index.pck`、`index.wasm` 等均返回 200，`index.wasm` 的 MIME 为 `application/wasm`。云端 `D:/Git/` 目录待清理。
+- 把正式地址写入 `exhibition/qr/links.json` 的 `game.url`，`placeholder` 改为 `false`，重新生成三张二维码；1 号二维码已指向正式地址，2、3 号仍为占位。
+
+**公网验证：**
+
+- Edge 无头浏览器访问公网地址，`window.isSecureContext` 为 `true`，引擎正常启动；控制台输出路网 150 节点、214 条路段，城市 1637 个地块、1637 栋建筑、32 个站点，确认游戏本体在 HTTPS 下可运行。
+- 出现的 `WrongDocumentError: pointer lock` 仍是 headless 环境特有，不影响普通浏览器。
+
+**中间页问题：**
+
+- 体验版默认域名首次访问会先显示“页面访问提示”，需要访客点一次“确定访问”，之后同一浏览器在 Cookie 有效期内不再出现。按官方文档，移除中间页唯一合规方式是绑定已完成 ICP 备案的自定义域名；默认域名不适合正式大规模分发。
+- 当前 1 号二维码先指向该地址，扫码后多点一次即可进入游戏；若拿到备案域名，改 `links.json` 重新生成即可，二维码文件名不变。

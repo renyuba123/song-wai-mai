@@ -4,7 +4,7 @@
 
 | 编号 | 文件 | 用途 | 当前链接 |
 | --- | --- | --- | --- |
-| 1 | `qr/output/qr-1-game.png` | 打开游戏本体 | 待部署后替换 |
+| 1 | `qr/output/qr-1-game.png` | 打开游戏本体 | CloudBase（体验版默认域名） |
 | 2 | `qr/output/qr-2-video.png` | 打开游戏演示视频 | 占位 |
 | 3 | `qr/output/qr-3-analytics.png` | 打开用户行为分析数据 | 占位 |
 
@@ -88,7 +88,13 @@ tcb env:list
 tcb hosting deploy build/web / -e <环境 ID>
 ```
 
-部署后默认域名形如 `https://<环境 ID>.tcloudbaseapp.com/`。
+部署后域名形如 `https://<环境 ID>-<APPID>.tcloudbaseapp.com/`。当前环境
+`passive-sailfish-d0e1nvt8175333a` 的地址是
+`https://passive-sailfish-d0e1nvt8175333a-1451076912.tcloudbaseapp.com/`。
+
+体验版默认域名首次访问会显示“页面访问提示”，访客需点一次“确定访问”，
+之后同一浏览器在 Cookie 有效期内不再提示。去掉中间页需要绑定已完成 ICP 备案的
+自定义域名（控制台 → 域名管理 → HTTP 访问服务）。
 把正式地址填入 `qr/links.json` 的 `game.url`，再把 `placeholder` 改成 `false`，
 重新运行生成脚本即可得到 1 号二维码的正式版本。
 
