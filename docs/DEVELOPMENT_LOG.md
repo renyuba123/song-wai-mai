@@ -933,3 +933,22 @@ Godot 4.7.2 `--headless --path . --import` 退出码 0，路网 150 个节点、
 
 - CloudBase 登录、创建环境并部署，回填 1 号二维码正式链接。
 - 2 号演示视频、3 号行为分析页面地址到位后替换占位链接并重新生成。
+
+## 2026-10-29 12:56（Asia/Shanghai）远端同步检查
+
+本轮需求（原文）：“检查 song-wai-mai 仓库的远端更新：进入 E:/Project/Game Work Team/song-wai-mai，先确认工作区状态，再执行 git fetch origin --prune。如果 origin/main 或 origin/refactor/modular-base 有新提交，按 CONTRIBUTING.md 和每轮工作规则安全整合（有未提交改动时先保留或提交，不覆盖），运行相关 Godot 测试，把本轮同步和测试结果追加到 docs/DEVELOPMENT_LOG.md，提交并推送；若出现冲突或权限问题，停止并向用户说明，不要强推。”
+
+主检出 `song-wai-mai` 当前在 `feature/jzy070407-traffic-cars`，工作区干净，没有未提交改动。`git fetch origin --prune` 通过 HTTPS 执行成功，没有出现握手失败；远端没有 `refactor/modular-base` 分支。`origin/main` 当前为 `dcc92dd`（合并 PR #26 展览二维码与手机触屏）。上次同步记录写入后，远端依次合入城市模型库扩充（#24，`72dcc6a`）、导航指引修正（#25，`91f5b9b`）和展览二维码/Web 导出/触屏控制（#26，`dcc92dd`）。
+
+主检出的本地 `main` 仍指向 `17c87a9`，是 `origin/main` 的祖先，可以直接快进；但主检出当前在别人的功能分支上，按工作区规则没有在其中切换分支或改写 `main` 引用，也没有覆盖任何未提交改动。最新 `origin/main` 已在 lead 工作树的 `feature/jzy070407-site-readability` 中通过合并提交 `4429a2d` 安全整合，PR #27 因此恢复为可合并；本轮同步本身没有产生冲突，也没有强推。
+
+本轮同步记录和测试在 lead 工作树新建的 `docs/jzy070407-sync-20261029-b` 分支上完成，分支从 `origin/main` 的 `dcc92dd` 创建，只改开发日志，不改代码。
+
+**测试与校验：**
+
+- Godot 4.7.2 `--headless --path . --import` 退出码 0；路网校验通过（节点 150、路段 214），城市生成通过（地块 1637、建筑 1637、站点 32、出入口 98）。
+- headless：`test_road_network`、`test_city_catalog`（`models=59 distinct_in_seed_118=55`）、`test_touch_controls`、`test_input_actions`、`test_contracts` 均打印 PASS、退出码 0；`test_city` 打印两组 PASS 后在退出阶段以既有访问冲突 139 结束；`test_navigation_queries` 在导航烘焙阶段触发既有 RendererDummy/RID 问题，未打印 PASS。
+- 窗口渲染 1280×720：`test_main_scene`、`test_navigation_queries`、`test_orders`、`test_pause`、`test_route_guidance` 全部打印 PASS、退出码 0。
+- 以上 139 与无 PASS 的 headless 现象均与既有记录一致，不视为本次同步引入的断言失败。
+
+本条记录随 `docs/jzy070407-sync-20261029-b` 分支提交、推送并建 PR。
