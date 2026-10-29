@@ -1176,6 +1176,32 @@ PR #31 合并后，从 `origin/main` 的 `7c3d412` 起 `feature/jzy070407-menu-r
 
 本条记录随 `feature/jzy070407-exhibition-qr` 分支提交、推送并更新 PR。
 
+## 2026-10-29 19:54（Asia/Shanghai）main 更新后自动导出 Web 版并部署到服务器
+
+本轮需求（原文）：“将仓库最新项目与服务器挂钩，做到更新后自动上传至服务器”。
+
+**做了什么：**
+
+- 新增 `.github/workflows/deploy-web.yml`：`main` 推送和手动触发时，带 LFS 检出仓库，先跑 `git lfs fsck --pointers`，再下载标准版 Godot `4.7.2-stable`（非 .NET 版）和 `4.7.2.stable` Web 导出模板，执行 `--headless --path . --import` 和 `--export-release "Web" build/web/index.html`，检查 `index.html`、`index.wasm`、`index.pck` 都不为空后，把产物作为 artifact 保留 7 天。
+- 部署段用 `tcb login --apiKeyId … --apiKey …` 非交互登录 CloudBase CLI，再执行 `tcb hosting deploy build/web / -e <环境 ID> --concurrency 10 --safe --verify`：`--safe` 在发布前备份、失败自动回滚，`--verify` 发布后核对远端文件与本地一致。登录命令的 `--json` 输出重定向到 `/dev/null`，避免登录令牌进日志。
+- 部署后用 `curl` 访问线上地址做一次探活，确认页面里能读到 Godot 相关标记；同一时间只允许一个部署任务，新的推送会取消未完成的旧任务。
+- 凭据通过 GitHub Secrets 传入：`TCB_SECRET_ID`、`TCB_SECRET_KEY`；环境 ID 和站点地址做成可选仓库变量 `TCB_ENV_ID`、`TCB_SITE_URL`，不填时用当前展览环境 `passive-sailfish-d0e1nvt8175333a` 和默认域名。未配置凭据时工作流只构建不部署，并在 Summary 里提示，不会把检查标红。
+- 新增 `docs/WEB_DEPLOY.md`：写清触发方式、腾讯云 CAM 子账号与 API 密钥的获取步骤、`gh secret set` / 网页两种写入方式、工作流每一步的作用、本地手动部署命令和常见问题排查。
+- `exhibition/README.md` 的部署章节改为先指向自动部署文档，并保留本地手动部署命令作为兜底；`README.md` 的文档清单补上 `WEB_DEPLOY.md`。
+
+**校验：**
+
+- 用 Python 的 `yaml.safe_load` 解析工作流，结构和步骤顺序正确。
+- 对照本机 CloudBase CLI 3.8.10 的 `tcb login --help`、`tcb hosting deploy --help` 核对了 `--apiKeyId` / `--apiKey`、`-e`、`--concurrency`、`--safe`、`--verify` 参数确实存在。
+- 本机只装了 .NET 版 Godot（`Godot_v4.7.2-stable_mono_win64`），不能导出 Web，因此没有在本机复跑导出；Web 导出链路此前在展览分支上用标准版 Godot 验证过，产物约 66 MB。
+- 本轮只改 CI、文档和 README，不涉及 GDScript 与场景，未跑 headless 测试。
+
+**需要用户操作：**
+
+- 仓库目前没有配置任何 Actions secret（`gh secret list` 为空）。需要在仓库 Settings → Secrets and variables → Actions 里添加 `TCB_SECRET_ID`、`TCB_SECRET_KEY`，自动部署才会真正上传；在此之前工作流只构建。
+- API 密钥建议用 CAM 子账号单独生成，只授予 CloudBase 需要的权限，泄露时直接禁用并更新 Secret；不要通过聊天或 Issue 传送密钥。
+
+本条记录随 `feature/jzy070407-web-autodeploy` 分支提交、推送并建 PR。
 ## 2026-10-29 19:55（Asia/Shanghai）去掉地面路线指引，改成摩托车式骑行
 
 本轮需求（原文）：“删去地面引导的导航指示线，同时提高车速，修复电动车的物理引擎：当按下左/右移键时，车把对应转动，使之更符合常见游戏中摩托类似物的物理引擎效果”。
