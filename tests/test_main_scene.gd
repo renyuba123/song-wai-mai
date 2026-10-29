@@ -19,6 +19,7 @@ func _run() -> void:
 	var navigation := main.get_node_or_null("NavigationSystem") as NavigationService
 	var player := main.get_node_or_null("Player") as PlayerController
 	var orders := main.get_node_or_null("OrderSystem") as OrderManager
+	var mini_map := main.get_node_or_null("MiniMapLayer/MiniMap") as Control
 	var traffic := main.get_node_or_null("TrafficSystem") as TrafficSpawner
 	var city_builder := main.get_node_or_null("World/CityBuilder")
 	var world_environment := main.get_node_or_null("World/WorldEnvironment") as WorldEnvironment
@@ -29,7 +30,7 @@ func _run() -> void:
 	)
 	var ok := (
 		world != null and world.network != null and world.city != null
-		and navigation != null and player != null and orders != null
+		and navigation != null and player != null and orders != null and mini_map != null
 		and traffic != null and traffic.get_vehicle_count() > 0 and traffic.get_vehicle_count() <= traffic.max_vehicles
 		and city_builder != null and city_builder.get_child_count() > 0
 		and sky_ready
@@ -57,6 +58,21 @@ func _run() -> void:
 		var start := orders.get_current_order().start.position
 		var player_xz := Vector2(player.global_position.x, player.global_position.z)
 		ok = player_xz.distance_to(Vector2(start.x, start.z)) < 1.0
+	if ok:
+		var session := orders.get_session()
+		var target := session.get_target_position()
+		var shown_target: Vector3 = mini_map.get("destination")
+		var shown_route: PackedVector3Array = mini_map.get("route")
+		ok = shown_target.is_equal_approx(target) and shown_route.size() >= 2
+		if not ok:
+			printerr("MINIMAP target=", shown_target, " expected=", target, " route_points=", shown_route.size())
+		if ok:
+			session.try_interact(target)
+			await process_frame
+			shown_target = mini_map.get("destination")
+			ok = shown_target.is_equal_approx(session.get_target_position())
+			if not ok:
+				printerr("MINIMAP after pickup target=", shown_target, " expected=", session.get_target_position(), " state=", session.state)
 	if ok:
 		print(
 			"PASS main scene nodes=", world.network.nodes.size(),
