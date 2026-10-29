@@ -1,3 +1,4 @@
+
 @tool
 extends Node3D
 class_name RoadBuilder
@@ -7,9 +8,18 @@ class_name RoadBuilder
 
 const ROAD_COLORS := [Color("d66752"), Color("e8b65b"), Color("6bbdb1")]
 const CORRIDOR_COLOR := Color("3c4650")
-const GROUND_COLOR := Color("669473")
+# The grass map needs extra brightness under the pixel-art screen effect.
+const GROUND_COLOR := Color(1.7, 1.9, 1.5)
 const GENERATED_META := &"world_generator_generated"
 const ROAD_TEXTURE := preload("res://assets/textures/road_asphalt_02_diff_1k.jpg")
+const GRASS_TEXTURE := preload("res://assets/textures/grass004_color_1k.jpg")
+
+# 新增：草地纹理饱和度
+# 1.0 = 原始饱和度，0.7 = 降低饱和度，0.0 = 黑白
+const GRASS_SATURATION := 0.5
+
+# 新增：缓存处理后的草地纹理
+var _grass_texture_cache: Texture2D = null
 
 var _map_size: Vector2
 
@@ -34,7 +44,7 @@ func build(network: RoadNetwork) -> void:
 	ground_body.collision_mask = 0
 	_add_generated_child(ground_body)
 
-	var ground := _material(GROUND_COLOR)
+	var ground := _ground_material()
 	var corridor := _material(CORRIDOR_COLOR)
 	var surface := []
 	for color in ROAD_COLORS:
@@ -150,6 +160,39 @@ func _road_material(color: Color) -> StandardMaterial3D:
 	material.albedo_texture = ROAD_TEXTURE
 	material.uv1_triplanar = true
 	material.uv1_scale = Vector3(0.08, 0.08, 0.08)
+	material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	return material
+
+
+func _ground_material() -> StandardMaterial3D:
+	var material := _material(GROUND_COLOR)
+
+	# 新增：只在第一次使用时处理草地纹理
+	if _grass_texture_cache == null:
+		var image: Image = GRASS_TEXTURE.get_image()
+
+		if image != null and not image.is_empty():
+			# 压缩图像必须先解压才能修改饱和度
+			if image.is_compressed():
+				var err: Error = image.decompress()
+				if err != OK:
+					push_warning("Grass texture decompression failed")
+
+			if not image.is_compressed():
+				# 亮度、对比度、饱和度
+				image.adjust_bcs(1.0, 1.0, GRASS_SATURATION)
+				image.generate_mipmaps()
+				_grass_texture_cache = ImageTexture.create_from_image(image)
+
+		# 处理失败时回退到原始纹理
+		if _grass_texture_cache == null:
+			_grass_texture_cache = GRASS_TEXTURE
+
+	material.albedo_texture = _grass_texture_cache
+	material.uv1_triplanar = true
+	# Grass004 covers about 1.4 m. Tile gently to keep the detail visible
+	# from street level without turning distant greenery into noisy pixels.
+	material.uv1_scale = Vector3(0.4, 0.4, 0.4)
 	material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
 	return material
 

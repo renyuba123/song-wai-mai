@@ -18,6 +18,7 @@ func _run() -> void:
 	await process_frame
 	await process_frame
 	_check_start_menu()
+	await _check_start_settings()
 	_check_offer_detail()
 	await _check_toast()
 	_check_success_result()
@@ -40,13 +41,54 @@ func _expect(condition: bool, message: String) -> void:
 func _check_start_menu() -> void:
 	_hud.show_start_menu()
 	_expect(_hud.is_start_menu_visible(), "启动时应显示开始界面")
-	_expect(_hud.get_start_title_text() == "大城市送外卖", "开始界面标题错误")
-	_expect(_hud.get_start_subtitle_text().contains("程序化"), "开始界面应说明城市由程序生成")
-	_expect(_hud.get_start_button_text().contains("开始接单"), "开始按钮文案错误")
+	_expect(_hud.get_start_title_text() == "大城市\n送外卖", "开始界面标题错误")
+	_expect(_hud.get_start_subtitle_text() == "CITY DELIVERY", "开始界面副标题错误")
+	_expect(_hud.get_start_button_text().contains("START GAME"), "开始按钮文案错误")
+	_expect(_hud.find_child("StartSettingsButton", true, false) != null, "开始界面缺少设置入口")
+	var art := _hud.find_child("StartBackdrop", true, false) as StartMenuArt
+	_expect(art != null, "开始界面应使用参考图层")
+	if art != null:
+		var image := art.get_node("ReferenceImage") as TextureRect
+		_expect(image.texture.resource_path == "res://assets/ui/start_reference.png", "开始界面必须使用原图")
+		_expect(art.get_node_or_null("ContinueButton") == null, "不应保留 CONTINUE 按钮")
+		_expect(art.get_node_or_null("LoadButton") == null, "不应显示 LOAD GAME 按钮")
+		var start := art.get_node("StartButton") as Button
+		var settings := art.get_node("SettingsButton") as Button
+		var exit := art.get_node("ExitButton") as Button
+		var exit_requested := {"value": false}
+		art.exit_pressed.connect(func() -> void: exit_requested["value"] = true)
+		exit.emit_signal("pressed")
+		_expect(exit_requested["value"], "开始界面的退出按钮应发出确认请求")
+		_expect(is_equal_approx(settings.position.y - start.position.y, exit.position.y - settings.position.y), "三个菜单选项应等距排列")
+		for button_name in ["StartButton", "SettingsButton", "ExitButton"]:
+			var button := art.get_node(button_name) as Button
+			_expect(button.text.is_empty(), "%s 不应重复绘制文字" % button_name)
+			_expect(button.get_theme_stylebox("normal") is StyleBoxEmpty, "%s 背景必须透明" % button_name)
 	_expect(not _hud.get_start_footer_text().contains("种子"), "主菜单不应显示种子")
 	_expect(_hud.is_any_modal_visible(), "开始界面应被视为模态界面")
 	_check_inside(_hud.get_start_content_rect(), "开始界面内容")
 	print("PASS menu ui start")
+
+
+func _check_start_settings() -> void:
+	var pause := PauseController.new()
+	root.add_child(pause)
+	await process_frame
+	pause.open_start_settings()
+	_expect(pause.is_settings_visible(), "开始界面应能打开设置")
+	var help := pause.find_child("ControlsHelp", true, false) as Label
+	_expect(help != null and help.text.contains("W / S"), "操作说明应放在设置中")
+	pause.back_to_pause()
+	_expect(not pause.is_pause_visible(), "返回设置后应回到开始界面")
+	pause.open_exit_confirmation()
+	_expect(pause.is_exit_confirmation_visible(), "开始界面退出应打开确认框")
+	var cancel := pause.find_child("CancelExitButton", true, false) as Button
+	_expect(cancel != null, "退出确认框应有取消按钮")
+	if cancel != null:
+		cancel.emit_signal("pressed")
+	_expect(not pause.is_pause_visible(), "取消退出后应回到开始界面")
+	pause.queue_free()
+	await process_frame
 
 
 func _check_offer_detail() -> void:

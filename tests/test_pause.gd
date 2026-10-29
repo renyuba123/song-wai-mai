@@ -119,6 +119,34 @@ func _check_pause_and_resume() -> void:
 	if order == null or session == null:
 		return
 	_expect(_player.controls_enabled, "配送中应启用玩家控制")
+	var progress := _main.call("get_order_progress_hud") as OrderProgressHUD
+	_expect(progress != null, "配送中应有顶部订单进度 HUD")
+	if progress != null:
+		progress._process(0.0)
+		var remaining_text := OrderHUD.format_time(session.time_remaining)
+		_expect(progress.get_eta_text() == remaining_text, "左上角时间应与订单倒计时一致且无说明文字")
+		var target_distance := session.get_distance_to_target(_player.global_position)
+		var expected_distance := (
+			"%.1f km" % (target_distance / 1000.0)
+			if target_distance >= 1000.0 else "%d m" % roundi(target_distance)
+		)
+		_expect(progress.get_distance_text() == expected_distance, "时间下方应显示到目标的距离")
+		var panel := progress.find_child("OrderProgressPanel", true, false) as PanelContainer
+		_expect(panel != null and panel.position.x < 30.0, "订单 HUD 应位于左上角")
+		var time_label := progress.find_child("OrderTime", true, false) as Label
+		var distance_label := progress.find_child("OrderDistance", true, false) as Label
+		_expect(time_label != null and time_label.horizontal_alignment == HORIZONTAL_ALIGNMENT_LEFT, "时间应靠左对齐")
+		_expect(distance_label != null and distance_label.horizontal_alignment == HORIZONTAL_ALIGNMENT_LEFT, "距离应靠左对齐")
+		var fade := progress.find_child("OrderFadeBackground", true, false) as TextureRect
+		_expect(fade != null and fade.texture is GradientTexture2D, "订单 HUD 应有独立的渐变背景")
+		if fade != null and fade.texture is GradientTexture2D:
+			var gradient := (fade.texture as GradientTexture2D).gradient
+			_expect(gradient.get_color(0).a > 0.0 and gradient.get_color(gradient.get_point_count() - 1).a == 0.0, "背景右端应渐变为透明")
+		_expect(progress.find_child("ProgressTrack", true, false) == null, "双行数字 HUD 不应保留进度条")
+		var phone := _orders.get_phone()
+		if phone != null:
+			phone.update_active(session, _player.global_position)
+			_expect(phone.get_screen_text().contains("剩余 %s" % remaining_text), "左上角与手机时间应一致")
 
 	_press_pause()
 	_expect(paused, "配送中按 Esc 应暂停场景树")
@@ -135,6 +163,10 @@ func _check_pause_and_resume() -> void:
 	_expect(seed_text.contains(str(order.city_seed)), "暂停层城市种子与当前订单不一致")
 	_expect(seed_text.contains(str(order.order_seed)), "暂停层订单种子与当前订单不一致")
 	_check_settings_page()
+	_pause.open_exit_confirmation()
+	_expect(_pause.is_exit_confirmation_visible(), "暂停页退出应打开确认框")
+	_pause.cancel_exit_confirmation()
+	_expect(paused and _pause.is_pause_visible(), "取消退出应返回暂停页并保持暂停")
 
 	var remaining := session.time_remaining
 	var player_position := _player.global_position

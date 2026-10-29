@@ -1,45 +1,111 @@
-[gd_scene load_steps=8 format=3 uid="uid://bhtnsn6bhwr5h"]
+[gd_scene format=3 uid="uid://bhtnsn6bhwr5h"]
 
 [ext_resource type="Script" uid="uid://dl4qjpdgp2ukb" path="res://scripts/player/player_controller.gd" id="1_player"]
-[ext_resource type="Script" path="res://scripts/player/motorcycle_audio.gd" id="3_audio"]
-[ext_resource type="AudioStream" path="res://assets/audio/motorcycle/start_a1.mp3" id="4_start"]
-[ext_resource type="AudioStream" path="res://assets/audio/motorcycle/drive_b1.mp3" id="5_drive"]
-[ext_resource type="AudioStream" path="res://assets/audio/motorcycle/stop_c2_6_to_10.ogg" id="6_stop"]
 [ext_resource type="PackedScene" uid="uid://c5udir2xpgxqv" path="res://assets/models/电鸡模型.glb" id="2_dovo2"]
+[ext_resource type="Shader" uid="uid://dlm7aj25huqvc" path="res://assets/Shaders/edge_detection.gdshader" id="3_0owmy"]
+[ext_resource type="PackedScene" uid="uid://dwk2vhfy46pg" path="res://assets/models/仪表盘模型.glb" id="3_5gtgg"]
+[ext_resource type="Script" uid="uid://b5la3s80hjl04" path="res://scripts/player/motorcycle_audio.gd" id="3_audio"]
+[ext_resource type="Material" uid="uid://cyhoffvcb2u4i" path="res://assets/materials/new_standard_material_3d.tres" id="4_h17s1"]
+[ext_resource type="AudioStream" uid="uid://bubgmihiiknwb" path="res://assets/audio/motorcycle/start_a1.mp3" id="4_start"]
+[ext_resource type="AudioStream" uid="uid://bpk36cvyer5di" path="res://assets/audio/motorcycle/drive_b1.mp3" id="5_drive"]
+[ext_resource type="AudioStream" uid="uid://drxise78rp4ch" path="res://assets/audio/motorcycle/stop_c2_6_to_10.ogg" id="6_stop"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_qankb"]
+albedo_color = Color(0.81017935, 0.8235757, 1, 1)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_0t3ax"]
+albedo_color = Color(1, 0.7833333, 0, 1)
+emission_enabled = true
+emission = Color(0.870513, 0.81584185, 0, 1)
+emission_energy_multiplier = 1.7
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_player"]
 radius = 0.35
 height = 1.8
 
-[node name="Player" type="CharacterBody3D" unique_id=805032846 node_paths=PackedStringArray("steering_pivot")]
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_qek5x"]
+render_priority = 0
+shader = ExtResource("3_0owmy")
+shader_parameter/pixel_size = 1.0
+shader_parameter/color_steps = 64.0
+shader_parameter/dither_strength = 1.0
+shader_parameter/saturation = 1.20000001788144
+shader_parameter/edge_highlight = 0.70000001043084
+shader_parameter/black_line_width = 1.0
+shader_parameter/highlight_line_width = 1.25
+shader_parameter/line_thin_start = 0.0
+shader_parameter/line_thin_end = 300.0
+shader_parameter/far_line_thickness = 0.35000000149012
+
+[sub_resource type="QuadMesh" id="QuadMesh_vkqoe"]
+material = SubResource("ShaderMaterial_qek5x")
+flip_faces = true
+size = Vector2(10, 10)
+
+[node name="Player" type="CharacterBody3D" unique_id=805032846 node_paths=PackedStringArray("steering_pivot", "speedometer_needle")]
 script = ExtResource("1_player")
 steering_pivot = NodePath("电鸡模型/Empty")
-max_steer_angle = 30.0
+speedometer_needle = NodePath("电鸡模型/Empty/仪表盘模型/指针")
 
 [node name="电鸡模型" parent="." unique_id=690155907 instance=ExtResource("2_dovo2")]
 transform = Transform3D(-1, 0, 8.742278e-08, 0, 1, 0, -8.742278e-08, 0, -1, 0, 0.8, 0)
 
+[node name="仪表盘模型" parent="电鸡模型/Empty" parent_id_path=PackedInt32Array(690155907, 1243722936) index="1" unique_id=548099046 instance=ExtResource("3_5gtgg")]
+transform = Transform3D(-3.091334e-08, -4.5540002e-08, 1, -0.5209168, 0.85360736, 2.277e-08, -0.85360736, -0.5209168, -5.0110412e-08, -0.0017555151, 0.021468043, -0.07251009)
+
+[node name="Cube_001" parent="电鸡模型/Empty/仪表盘模型" index="0" unique_id=2057000726]
+material_override = ExtResource("4_h17s1")
+
+[node name="Cube_002" parent="电鸡模型/Empty/仪表盘模型" index="1" unique_id=793711323]
+material_override = ExtResource("4_h17s1")
+
+[node name="Cube_003" parent="电鸡模型/Empty/仪表盘模型" index="2" unique_id=362317576]
+material_override = ExtResource("4_h17s1")
+
+[node name="Cube_004" parent="电鸡模型/Empty/仪表盘模型" index="3" unique_id=348811964]
+material_override = ExtResource("4_h17s1")
+
+[node name="Cube_005" parent="电鸡模型/Empty/仪表盘模型" index="4" unique_id=1991592635]
+material_override = ExtResource("4_h17s1")
+
+[node name="Cylinder" parent="电鸡模型/Empty/仪表盘模型" index="5" unique_id=1330301329]
+material_override = SubResource("StandardMaterial3D_qankb")
+
+[node name="指针" parent="电鸡模型/Empty/仪表盘模型" index="6" unique_id=714895503]
+transform = Transform3D(1, 0, -1.7763568e-14, 0, 1, 3.5527137e-15, 0, 0, 1, -0.00039172173, 0.00016605854, 0)
+
+[node name="Cube" parent="电鸡模型/Empty/仪表盘模型/指针" index="0" unique_id=1651187623]
+transform = Transform3D(0.05511266, 0, 0, 0, 0.05511266, 0, 3.330669e-16, -2.220446e-16, 0.05511266, 0, 0, 0)
+material_override = SubResource("StandardMaterial3D_0t3ax")
+
 [node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=847726229]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8089572, 0)
 shape = SubResource("CapsuleShape3D_player")
 
 [node name="Camera3D" type="Camera3D" parent="." unique_id=191232166]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.0682454, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.9772027, 0)
 current = true
 
-[node name="MotorcycleAudio" type="Node" parent="."]
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Camera3D" unique_id=152828758]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.20756918, -0.397578, -0.90452397)
+cast_shadow = 0
+extra_cull_margin = 16384.0
+mesh = SubResource("QuadMesh_vkqoe")
+
+[node name="MotorcycleAudio" type="Node" parent="." unique_id=916934891]
 script = ExtResource("3_audio")
 
-[node name="Start" type="AudioStreamPlayer" parent="MotorcycleAudio"]
+[node name="Start" type="AudioStreamPlayer" parent="MotorcycleAudio" unique_id=67375141]
 stream = ExtResource("4_start")
 bus = &"Motorcycle"
 
-[node name="Drive" type="AudioStreamPlayer" parent="MotorcycleAudio"]
+[node name="Drive" type="AudioStreamPlayer" parent="MotorcycleAudio" unique_id=232130021]
 stream = ExtResource("5_drive")
 bus = &"Motorcycle"
 
-[node name="Stop" type="AudioStreamPlayer" parent="MotorcycleAudio"]
+[node name="Stop" type="AudioStreamPlayer" parent="MotorcycleAudio" unique_id=717817094]
 stream = ExtResource("6_stop")
 bus = &"Motorcycle"
 
 [editable path="电鸡模型"]
+[editable path="电鸡模型/Empty/仪表盘模型"]

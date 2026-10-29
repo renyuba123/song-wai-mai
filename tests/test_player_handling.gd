@@ -47,6 +47,10 @@ func _check_handling() -> void:
 		_expect(false, "玩家场景缺少车把节点")
 		player.queue_free()
 		return
+	if player.speedometer_needle == null:
+		_expect(false, "玩家场景缺少仪表盘指针节点")
+		player.queue_free()
+		return
 
 	# 1. 满油门四秒后接近最高车速，且不会超过。
 	Input.action_press("move_forward")
@@ -59,6 +63,11 @@ func _check_handling() -> void:
 	_expect(
 		top_speed <= player.move_speed + 0.01,
 		"车速不应超过最高车速，实际 %.2f" % top_speed
+	)
+	_process_steps(player, 8)
+	_expect(
+		player.speedometer_needle.rotation.y < deg_to_rad(player.needle_zero_angle) - 0.2,
+		"加速后仪表盘指针应离开零速位置"
 	)
 
 	# 2. 转动视角只动相机，不改车头方向和前进方向。
@@ -103,6 +112,11 @@ func _check_handling() -> void:
 		_planar_speed(player) < 0.1,
 		"松开油门后应滑行停下，实际 %.2f" % _planar_speed(player)
 	)
+	_process_steps(player, 12)
+	_expect(
+		absf(player.speedometer_needle.rotation.y - deg_to_rad(player.needle_zero_angle)) < 0.05,
+		"停车后仪表盘指针应回到零速位置"
+	)
 
 	# 6. 静止时按 A 只转车把，不原地转身。
 	var stopped_yaw := player.rotation.y
@@ -133,6 +147,11 @@ func _check_handling() -> void:
 	_expect(
 		player.velocity.dot(forward) < -0.5,
 		"按住 S 应倒车，沿车头方向的速度 %.2f" % player.velocity.dot(forward)
+	)
+	_process_steps(player, 8)
+	_expect(
+		player.speedometer_needle.rotation.y < deg_to_rad(player.needle_zero_angle) - 0.05,
+		"倒车时仪表盘也应显示实际速度"
 	)
 
 	player.queue_free()
