@@ -1479,6 +1479,28 @@ PR #31 合并后，从 `origin/main` 的 `7c3d412` 起 `feature/jzy070407-menu-r
 - `test_navigation_queries`、`test_city`、`test_site_readability` 在 headless 下退出阶段出现既有访问冲突 139 或只打印部分 PASS，改用窗口模式复跑后全部退出码 0，没有断言失败。
 - `.github/workflows/repository-integrity.yml` 的测试清单取两边并集，新增 `test_economy`、`test_accident_research`、`test_traffic_signals`、`test_game_settings`。
 
+本条记录随 `feature/jzy070407-right-hud` 分支提交、推送并建 PR。
+## 2026-10-29 20:42（Asia/Shanghai）游戏本体自动录一单行为分析示例并打开页面
+
+本轮需求（原文）：“本体输出一个示例并打开”。
+
+**录制脚本：**
+
+- 新增 `tools/record_sample_session.gd`，用 `SceneTree` 脚本加载正式的 `scenes/main/main.tscn`，不另做假场景。开局调用 `OrderManager.start_game()`，等订单生成后自动接单，再沿 `NavigationService.find_path()` 给出的路径骑行，到商家和顾客 3 米内调用 `OrderManager.try_interact()`，直到订单结算。
+- 采集走真实的 `TelemetryClient`：脚本只把 `active` 打开，位置仍由它每 2 秒采样，计时点每 30 秒记录，取餐和结算事件由订单信号触发。桌面构建不会创建 `HTTPRequest`，`flush()` 直接返回，事件只留在本机队列，没有向云函数发任何数据。
+- 自动驾驶自己写 `global_position` 和平面 `velocity`，关掉玩家物理处理，由脚本调用 `OrderSession.advance()` 推进计时，避免同一帧计时两次。骑行速度在 2–9 米/秒之间起伏，接近目标或转弯前减速；同时把玩家碰撞层清零，避免贴着车流穿过路口时交通模块反复报“被撞”，道路 NPC 数量仍按位置统计。
+- 运行用 8 倍时间加速，跑完把事件里的真实毫秒时间线性换算成游戏内用时，页面上的耗时、计时点和轨迹才对得上。输出 `exports/game-sample/analytics.json`（页面同款 `meta` + `sessions`）和 `exports/game-sample/preview/`（分析页副本加 `data/sample-data.js`），最后用默认浏览器打开 `preview/index.html`。
+
+**验证：**
+
+- 在基于 `origin/main`（`6c121e6`）的新分支上运行，正式窗口 GL Compatibility：两次分别打印 `PASS 游戏本体示例：事件 116 条，位置采样 104 个，用时 222 秒` 和 `事件 117 条，位置采样 105 个`，退出码都是 0。
+- 示例会话内容：3 分 42 秒、轨迹 1464 米、平均 6.7 米/秒、最高 9.0 米/秒、7 个计时点（第 29–209 秒）、道路拥挤峰值 1.7 辆/百米，成功送达；起点、取餐点、送达点都有坐标。
+- 用 headless Edge 打开自动生成的 `preview/index.html` 截图核对：地图底图、速度热力轨迹、任务起止点、计时点标签、道路拥挤度叠色、概况数字和图例都正常显示，顶部标着“示例数据”。
+- `exports/` 被 `.gitignore` 忽略，示例数据和真实导出都不会进仓库。
+
+**修改文件：** 新增 `tools/record_sample_session.gd`；修改 `docs/BEHAVIOR_DATA_EXPORT.md`、`exhibition/README.md`、`docs/DEVELOPMENT_LOG.md`。
+
+本条记录随 `feature/jzy070407-sample-session` 分支提交、推送并建 PR。
 **修改文件：** 新增 `scripts/economy/economy_hud.gd`、`scripts/core/game_settings.gd`、`scripts/core/input_activation_overlay.gd`、`scripts/core/input_diagnostics_hud.gd`、`scripts/dev/accident_research_panel.gd`、`scripts/traffic/traffic_signals.gd`、`scripts/player/rider_status_hud.gd`、`tests/test_economy.gd`、`tests/test_game_settings.gd`、`tests/test_accident_research.gd`、`tests/test_traffic_signals.gd`、`assets/models/人物模型/zsky_stylized_character.glb`、`assets/textures/road_asphalt_02_diff_1k.jpg`、`assets/textures/sidewalk_concrete_pavement_02_diff_1k.jpg`、`assets/audio/traffic_horn.ogg` 及两份 `ATTRIBUTION.md`；修改 `scripts/core/main.gd`、`scripts/core/pause_controller.gd`、`scripts/core/collision_layers.gd`、`scripts/orders/order_manager.gd`、`scripts/orders/order_hud.gd`、`scripts/player/player_controller.gd`、`scripts/traffic/traffic_car.gd`、`scripts/traffic/traffic_spawner.gd`、`scripts/traffic/pedestrian.gd`、`scripts/traffic/pedestrian_spawner.gd`、`scripts/world/city_builder.gd`、`scripts/world/road_builder.gd`、`tests/` 下 12 个测试、`.github/workflows/repository-integrity.yml`、`README.md`、`docs/USER_GUIDE.md`、`docs/ROADMAP.md`、`docs/TRAFFIC_STREAMING.md`、`docs/DEVELOPMENT_LOG.md`。
 
 **合并期间远端的新提交：**
