@@ -9,6 +9,8 @@ extends Node3D
 @onready var player: PlayerController = $Player
 @onready var orders: OrderManager = $OrderSystem
 
+var _pause_menu: PauseController = null
+
 
 func _ready() -> void:
 	world.world_generated.connect(_on_world_generated)
@@ -17,6 +19,7 @@ func _ready() -> void:
 	_place_player()
 	traffic.set_player(player)
 	orders.setup(world, navigation, player)
+	_setup_pause_menu()
 	_setup_test_god_view()
 
 
@@ -33,6 +36,18 @@ func _place_player() -> void:
 	if world.city == null or world.city.player_start == null:
 		return
 	player.reset_to(world.city.player_start)
+
+
+func _setup_pause_menu() -> void:
+	## 暂停层由代码创建，避免把 UI 节点写进共享的 main.tscn。
+	_pause_menu = PauseController.new()
+	_pause_menu.name = "PauseMenu"
+	add_child(_pause_menu)
+	_pause_menu.setup(orders, player)
+
+
+func get_pause_menu() -> PauseController:
+	return _pause_menu
 
 
 func _setup_test_god_view() -> void:

@@ -330,7 +330,7 @@ project.godot
 | `move_forward` / `move_back` | W / S | 前后移动 |
 | `move_left` / `move_right` | A / D | 左右移动 |
 | `interact` | E | 开始游戏、接单、取餐、送达 |
-| `pause` | Esc | 暂停（尚未实现） |
+| `pause` | Esc | 配送中暂停/继续；暂停层显示城市与订单种子，可重开本单或返回主菜单 |
 | `restart` | R | 开始游戏、接单、重开本单或生成下一单 |
 
 移动使用 `Input.get_vector("move_left", "move_right", "move_forward", "move_back")`，不要退回 `Input.is_physical_key_pressed`。
