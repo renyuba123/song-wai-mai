@@ -1098,3 +1098,25 @@ PR #31 合并后，从 `origin/main` 的 `7c3d412` 起 `feature/jzy070407-menu-r
 - 本轮没有冲突，也没有权限问题。
 
 本条记录随 `docs/jzy070407-sync-20261029-c` 分支提交、推送并建 PR。
+
+## 2026-10-29 17:03（Asia/Shanghai）导出后台行为数据的方法
+
+本轮需求（原文）：“我有一段时间无法直接操作服务器，请将如何导出后台数据记录的方法上传git，一边其他成员能够调取”。
+
+**做了什么：**
+
+- 新增 `docs/BEHAVIOR_DATA_EXPORT.md`，写明展览行为数据的位置、权限前提、三种导出方式、表结构、事件字典、常用查询、隐私注意事项和常见问题。
+- 新增 `tools/export_behavior_data.py`，用 CloudBase CLI 的 `tcb db execute --json` 只读查询 `public.behavior_events`，按 `id` 分批取数，输出 `behavior_events.csv`、`behavior_events_events.csv` 和 `summary.json`；支持 `--out`、`--since`、`--until`、`--batch-size`，默认环境 `passive-sailfish-d0e1nvt8175333a`。
+- 导出方式以命令行脚本为主，同时保留控制台 DMC（账号管理 → 数据库管理 → SQL 窗口 / 悬浮工具 → 导入导出）和拿到连接信息后的 `psql`/`pg_dump` 两条路径；文档里说明体验版共享集群通常没有外网直连，优先用前两种。
+- 文档补充权限准备：云函数的 `anon` 角色只有 INSERT 权限，导出必须使用有读权限的腾讯云子账号、API Key 或控制台数据库账号；提醒原维护者离开前把授权或密钥交接好。
+- `.gitignore` 增加 `exports/`，避免导出的 CSV、JSON 和备份被提交；`exhibition/README.md` 增加指向导出文档的链接。
+- 文档里保留 2026-10-29 的实测数字，便于其他成员判断自己的导出结果是否正常。
+
+**校验：**
+
+- `python tools/export_behavior_data.py --batch-size 40` 读取 108 行、14 个会话，事件计数 `{"finish": 2, "offer": 8, "pos": 298, "probe": 5, "session": 13, "start": 15}`，CSV 和 `summary.json` 正常生成。
+- 加 `--since "2026-10-29 16:00:00+08"` 复跑得到 60 行、3 个会话，时间过滤生效。
+- 两种导出都只执行 SELECT，没有写入或修改云端数据；脚本在 Windows 上通过 `tcb.cmd` 正常调用 CloudBase CLI。
+- 本轮只改文档、脚本和忽略规则，不涉及 Godot 场景与 GDScript，未跑 headless 测试。
+
+本条记录随 `docs/jzy070407-behavior-export` 分支提交、推送并建 PR。
