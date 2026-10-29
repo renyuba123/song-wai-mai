@@ -75,6 +75,7 @@ godot --headless --path . --script res://tests/test_pause.gd
 godot --headless --path . --script res://tests/test_pedestrians.gd
 ```
 
+前两条检查路网生成、校验、寻路和主场景启动；中间三条分别检查共享数据契约、输入映射与玩家移动、导航查询接口；`test_city` 检查城市确定性、反向数据、主场景城市装配和站点可达性；`test_city_catalog` 检查模型目录可加载、包围盒有效、分类数量和种子 118 的模型多样性；`test_god_view` 检查测试用上帝视角只在调试构建创建、开关时相机和玩家状态正确切换并恢复；`test_game_seeds` 检查每次进入游戏随机城市、每单随机订单种子、固定种子和启动参数/环境变量覆盖；`test_orders` 检查订单生成、状态机、开始/接单/结算界面和撞车失败语义；`test_menu_ui` 单独挂载订单 HUD，检查开始界面的标题、副标题、按钮且不显示种子，接单阶段右侧详情面板的内容和倒计时，以及成功/失败结算页面的取送路线、总路程、用时、剩余时间、收入和卡片是否超出可视区域；`test_phone_orders` 检查三维手机的挂载位置、屏幕内容、右侧详情、倒计时、Y/N、点击接单/拒单、配送中常驻和主菜单隐藏；`test_site_readability` 检查站点店名确定性、三维店名牌、当前目标星标以及接单/取餐/送达时的 HUD 与信标文本；`test_game_settings` 检查设置默认值、范围裁剪、保存重载和实时应用；`test_economy` 检查配送收入公式（与手机/结算共用 `DeliveryIncome`）、行人赔偿和账户重置；`test_accident_research` 检查事故记录面板的统计、触发和 JSONL 记录；`test_traffic` 检查车道数学、确定性车流、出生安全、命中 Area3D 和主场景撞车信号链；`test_traffic_signals` 检查信号路口识别、相位边界、车辆停车规则和信号灯模型资源；`test_pause` 检查暂停菜单、设置页、临时配置持久化和恢复流程；`test_pedestrians` 检查人行道行走、信号等待、横穿提交和横穿途中不中断。新增脚本后先执行一次 `godot --headless --path . --import`，让 Godot 注册 `class_name` 并生成 `.gd.uid`。
 前两条检查路网生成、校验、寻路和主场景启动；中间三条分别检查共享数据契约、输入映射与玩家移动、导航查询接口；`test_city` 检查城市确定性、反向数据、主场景城市装配和站点可达性；`test_city_catalog` 检查模型目录可加载、包围盒有效、分类数量和种子 118 的模型多样性；`test_god_view` 检查测试用上帝视角只在调试构建创建、开关时相机和玩家状态正确切换并恢复；`test_game_seeds` 检查每次进入游戏随机城市、每单随机订单种子、固定种子和启动参数/环境变量覆盖；`test_orders` 检查订单生成、状态机、开始/接单/结算界面和撞车失败语义；`test_menu_ui` 单独挂载订单 HUD，检查开始界面的标题、副标题、按钮且不显示种子，以及成功/失败结算页面的取送路线、总路程、用时、剩余时间、收入和卡片是否超出可视区域；`test_phone_orders` 检查三维手机的挂载位置、屏幕内容、倒计时、Y/N、点击接单/拒单、配送中常驻和主菜单隐藏；`test_site_readability` 检查站点店名确定性、三维店名牌、当前目标星标以及接单/取餐/送达时的 HUD 与信标文本；`test_game_settings` 检查设置默认值、范围裁剪、保存重载和实时应用；`test_economy` 检查配送收入公式、行人赔偿和账户重置；`test_accident_research` 检查事故记录面板的统计、触发和 JSONL 记录；`test_traffic` 检查车道数学、确定性车流、出生安全、命中 Area3D 和主场景撞车信号链；`test_traffic_signals` 检查信号路口识别、相位边界、车辆停车规则和信号灯模型资源；`test_pause` 检查暂停菜单、设置页、临时配置持久化和恢复流程；`test_pedestrians` 检查人行道行走、信号等待、横穿提交和横穿途中不中断。新增脚本后先执行一次 `godot --headless --path . --import`，让 Godot 注册 `class_name` 并生成 `.gd.uid`。
 
 ## 2. 所有人：日常操作流程
@@ -337,6 +338,7 @@ project.godot
 - 玩家出生点由 `CityContent.player_start` 提供，`main.gd` 在 `world.regenerate()` 后把玩家放到该位置和朝向；订单开始后 `OrderManager` 再把玩家放到订单起点。玩家模块只负责“被放在哪里之后怎么走”，不要退回固定节点或原点。
 - 开始界面、待接订单和结算界面显示期间，`OrderManager` 调用 `PlayerController.set_controls_enabled(false)` 关闭移动和视角并释放鼠标；接单或重开时再恢复。新增菜单时沿用这个开关，不要在各处直接改鼠标模式。
 - 新订单展示在车把左侧的三维手机 `OrderPhone` 上：屏幕用 `SubViewport` 渲染，卡片显示取餐/送达店名、总路程、预计收入和限时，底部并排“拒绝 N”“立即接单 Y”按钮，并有 10 秒倒计时。按 **Y** 接单、**N** 拒单，鼠标或触屏可以直接点屏幕上的按钮；倒计时归零走拒单流程并自动生成下一单，不会回到开始菜单。接单后手机不消失，而是切到“配送中”页面，继续显示当前目标、距离、剩余时间和 E 交互提示。手机由 `OrderManager` 在代码里挂到玩家相机上，不改 `player.tscn`。
+- 接单阶段 `OrderHUD.show_offer()` 会在屏幕右侧复制一份“接单详情”面板：取餐/送达店名、总路程、预计收入、限时、城市/订单种子和操作提示，剩余秒数由 `OrderManager._process()` 每帧从 `OrderPhone.get_remaining_s()` 推给 `update_offer_countdown()`，与手机倒计时保持一致；接单、拒单、结算或回主菜单时隐藏。
 - 交通撞到玩家时，`main.gd` 把 `traffic.player_hit` 转给 `OrderManager.notify_player_hit()`。只有当前订单处于活动状态且玩家在物理处理时才会调用 `OrderSession.fail(HIT_BY_CAR)`；撞车失败保留剩余时间和真实用时，结算正文显示“被来往汽车撞倒，配送失败”。玩家被撞后表现为控制冻结并进入失败结算，按 R 继续下一单。
 - 站点的 `display_name` 由 `SiteNaming.apply()` 在布局生成后写入，HUD 的接单信息、活动目标和三维店名牌读同一份数据。店名牌由 `WorldGenerator` 在运行时创建；当前订单目标显示“★”并始终可见，其它站点标签在 160 米外淡出，接近目标时不用再靠编号找店。
 
@@ -362,7 +364,7 @@ project.godot
 
 右上角常驻两块代码创建的面板，都不改 `main.tscn`：
 
-- **配送收支**（`scripts/economy/economy_hud.gd`）：初始余额 500。成功送达按 `180 + 路程 × 1.2 + 剩余秒数 × 0.8` 入账，路程是取餐段与送餐段之和；撞到行人由 `PlayerController.pedestrian_hit` 上报，每名新行人赔 1000。回到主菜单再开始会调用 `reset_economy()` 重置账户。单价写在 `economy_hud.gd` 顶部常量里，改数值只改常量，测试见 `tests/test_economy.gd`。
+- **配送收支**（`scripts/economy/economy_hud.gd`）：初始余额 500。成功送达按 `180 + 路程 × 1.2 + 剩余秒数 × 0.8` 入账，路程是取餐段与送餐段之和；撞到行人由 `PlayerController.pedestrian_hit` 上报，每名新行人赔 1000。回到主菜单再开始会调用 `reset_economy()` 重置账户。公式集中在 `scripts/economy/delivery_income.gd` 的 `DeliveryIncome.calculate(distance_m, remaining_s)`：手机的“预计收入”、结算页的“本单收入”和本面板入账都调用它，显示金额与实际入账一致；接单时按限时估满额，实际结算按送达时的剩余秒数计算，因此可能略有差异。改数值只改这里的常量，测试见 `tests/test_economy.gd`。
 - **输入自检 v3**（`scripts/core/input_diagnostics_hud.gd`）：显示窗口焦点、输入激活状态、最近按键和角色速度/车头角度，按 **F9** 隐藏或显示。浏览器或窗口丢失焦点后先由 `scripts/core/input_activation_overlay.gd` 显示“点击画面开始”，点击画面或按任意键把键盘交回游戏。
 
 两个面板由 `main.gd` 的 `_setup_economy()` 和 `_setup_input_layers()` 创建并接线；不要在 `main.tscn` 里重复实例化，也不要让面板直接读 `PlayerController` 的私有字段，需要的数据用 `get_current_speed_mps()`、`get_heading_degrees()` 这类公开接口拿。

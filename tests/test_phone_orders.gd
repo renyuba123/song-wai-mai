@@ -84,6 +84,24 @@ func _check_first_offer() -> void:
 		return
 
 	var expected_time := OrderSession.calculate_time_limit(order, _player.move_speed)
+	var expected_income := DeliveryIncome.calculate(
+		order.get_total_path_length_m(), expected_time
+	)
+
+	# 右侧详情面板应复制手机上的全部信息，并和手机共用同一套收入公式。
+	_expect(hud.is_offer_detail_visible(), "接单阶段右侧应显示详情面板")
+	var detail := hud.get_offer_detail_text()
+	_expect(detail.contains("取餐 ·"), "右侧详情缺少取餐信息")
+	_expect(detail.contains("送达 ·"), "右侧详情缺少送达信息")
+	_expect(detail.contains("总路程"), "右侧详情缺少总路程")
+	_expect(detail.contains("预计收入  ¥%d" % expected_income), "右侧详情收入与公式不一致")
+	_expect(detail.contains("限时"), "右侧详情缺少时限")
+	_expect(detail.contains("剩余"), "右侧详情缺少倒计时")
+	_expect(detail.contains("城市种子 %d" % order.city_seed), "右侧详情缺少城市种子")
+	_expect(detail.contains("订单种子 %d" % order.order_seed), "右侧详情缺少订单种子")
+	_expect(detail.contains("Y 接单"), "右侧详情缺少接单提示")
+	_expect(detail.contains("N 拒单"), "右侧详情缺少拒单提示")
+
 	var screen := _phone.get_screen_text()
 	_expect(
 		screen == OrderPhone.format_offer_text(order, expected_time),
@@ -98,14 +116,11 @@ func _check_first_offer() -> void:
 		_expect(screen.contains(order.customer.display_name), "手机屏幕缺少顾客店名")
 	_expect(screen.contains("总路程"), "手机屏幕缺少总路程")
 	_expect(screen.contains("km"), "手机屏幕缺少公里单位")
-	_expect(screen.contains("预计收入 ¥"), "手机屏幕缺少预计收入")
+	_expect(screen.contains("预计收入 ¥%d" % expected_income), "手机屏幕预计收入与公式不一致")
 	_expect(screen.contains("限时"), "手机屏幕缺少时限")
-
-	var total_km := maxf(order.get_total_path_length_m(), 0.0) / 1000.0
-	var expected_fee := snappedf(OrderPhone.BASE_FEE + total_km * OrderPhone.FEE_PER_KM, 0.01)
 	_expect(
-		is_equal_approx(OrderPhone.calculate_fee(order), expected_fee),
-		"配送费计算错误"
+		OrderPhone.expected_income(order, expected_time) == expected_income,
+		"手机预计收入计算错误"
 	)
 
 	var accept_button := _phone.find_child("AcceptButton", true, false) as Button
@@ -121,8 +136,18 @@ func _check_first_offer() -> void:
 		"手机缺少拒绝按钮"
 	)
 
+	# 倒计时和手机是同一份数据：管理器每帧把手机剩余秒数推给右侧详情。
+	var phone_remaining := _phone.get_remaining_s()
+	await process_frame
+	_expect(
+		hud.get_offer_detail_text().contains("剩余 %d 秒" % ceili(_phone.get_remaining_s())),
+		"右侧详情倒计时未跟随手机"
+	)
+	_expect(phone_remaining > 0.0, "手机倒计时不应提前结束")
+
 	_expect(_orders.accept_order(), "手机接单失败")
 	_expect(not _phone.is_offer_visible(), "接单后应离开接单界面")
+	_expect(not hud.is_offer_detail_visible(), "接单后右侧详情应隐藏")
 	_expect(_phone.is_active_visible(), "配送中手机应继续显示在车把左侧")
 	_expect(_phone.visible, "配送中手机模型应可见")
 	_expect(_orders.get_session() != null and _orders.get_session().is_active(), "接单后订单未开始")

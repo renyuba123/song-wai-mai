@@ -21,9 +21,6 @@ const PHONE_SCALE := 0.41
 const PHONE_POSITION := Vector3(-0.064, -0.124, -0.44)
 const PHONE_ROTATION_DEGREES := Vector3(-6.0, 3.0, 0.0)
 
-const BASE_FEE := 4.5
-const FEE_PER_KM := 0.38
-
 const SCREEN_BG := Color(0.93, 0.94, 0.95, 1.0)
 const CARD_BG := Color(1.0, 1.0, 1.0, 1.0)
 const TEXT_DARK := Color(0.08, 0.09, 0.11, 1.0)
@@ -93,7 +90,7 @@ func show_offer(order: DeliveryOrder, time_limit: float) -> void:
 		_merchant_detail.text = _site_detail("取餐", order.merchant, "取餐点")
 		_customer_detail.text = _site_detail("送达", order.customer, "送达站点")
 		_distance_label.text = "%.1f km" % total_km
-		_income_label.text = "¥ %.2f" % calculate_fee(order)
+		_income_label.text = "¥ %d" % expected_income(order, time_limit)
 		_status_left.text = "▂▄▆  %s" % Time.get_time_string_from_system().substr(0, 5)
 		_status_right.text = "42  ▮"
 	_update_countdown()
@@ -196,12 +193,12 @@ func get_screen_size() -> Vector2i:
 	return SCREEN_SIZE
 
 
-## 配送费只由订单路程决定，保证同一订单每次显示一样。
-static func calculate_fee(order: DeliveryOrder) -> float:
+## 接单时显示的收入按限时估满额（假设全部剩余时间都拿到）；
+## 结算和收支面板用实际剩余时间调用同一个 DeliveryIncome 公式。
+static func expected_income(order: DeliveryOrder, time_limit: float) -> int:
 	if order == null:
-		return BASE_FEE
-	var total_km := maxf(order.get_total_path_length_m(), 0.0) / 1000.0
-	return snappedf(BASE_FEE + total_km * FEE_PER_KM, 0.01)
+		return DeliveryIncome.calculate(0.0, 0.0)
+	return DeliveryIncome.calculate(order.get_total_path_length_m(), time_limit)
 
 
 static func format_offer_text(order: DeliveryOrder, time_limit: float) -> String:
@@ -213,7 +210,7 @@ static func format_offer_text(order: DeliveryOrder, time_limit: float) -> String
 		"取餐：%s" % OrderHUD.site_label(order.merchant),
 		"送达：%s" % OrderHUD.site_label(order.customer),
 		"总路程 %.1f km" % total_km,
-		"预计收入 ¥%.2f" % calculate_fee(order),
+		"预计收入 ¥%d" % expected_income(order, time_limit),
 		"限时 %s · 城市种子 %d · 订单种子 %d" % [
 			OrderHUD.format_time(time_limit), order.city_seed, order.order_seed
 		],

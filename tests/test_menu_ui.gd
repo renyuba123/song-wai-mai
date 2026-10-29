@@ -18,6 +18,7 @@ func _run() -> void:
 	await process_frame
 	await process_frame
 	_check_start_menu()
+	_check_offer_detail()
 	await _check_toast()
 	_check_success_result()
 	_check_failure_result()
@@ -48,6 +49,36 @@ func _check_start_menu() -> void:
 	print("PASS menu ui start")
 
 
+func _check_offer_detail() -> void:
+	var order := _make_order(3)
+	var time_limit := 90.0
+	var expected_income := DeliveryIncome.calculate(
+		order.get_total_path_length_m(), time_limit
+	)
+	_hud.show_offer(order, time_limit)
+	_expect(_hud.is_offer_visible(), "接单阶段应显示接单状态")
+	_expect(_hud.is_offer_detail_visible(), "接单阶段右侧应显示详情面板")
+	var detail := _hud.get_offer_detail_text()
+	_expect(detail.contains("取餐 · 城市广场（商家）"), "右侧详情商家名错误")
+	_expect(detail.contains("送达 · 拾光书店（顾客）"), "右侧详情顾客名错误")
+	_expect(detail.contains("总路程 1.5 km"), "右侧详情总路程错误")
+	_expect(
+		detail.contains("预计收入  ¥%d" % expected_income),
+		"右侧详情预计收入与 DeliveryIncome 不一致"
+	)
+	_expect(detail.contains("限时 1:30"), "右侧详情时限错误")
+	_expect(detail.contains("剩余 10 秒"), "右侧详情初始倒计时错误")
+	_hud.update_offer_countdown(3.2)
+	_expect(_hud.get_offer_detail_text().contains("剩余 4 秒"), "右侧详情倒计时未更新")
+	_expect(detail.contains("城市种子 118"), "右侧详情缺少城市种子")
+	_expect(detail.contains("订单种子 3"), "右侧详情缺少订单种子")
+	_expect(detail.contains("Y 接单") and detail.contains("N 拒单"), "右侧详情缺少操作提示")
+	_check_inside(_hud.get_offer_detail_rect(), "接单详情面板")
+	_hud.hide_offer()
+	_expect(not _hud.is_offer_detail_visible(), "离开接单后右侧详情应隐藏")
+	print("PASS menu ui offer detail")
+
+
 func _check_toast() -> void:
 	var message := "撞到行人，赔偿 1000 元"
 	_hud.show_toast(message, 0.08)
@@ -73,7 +104,12 @@ func _check_success_result() -> void:
 	_expect(_hud.get_result_stat_text(0) == "1490 m", "总路程统计错误")
 	_expect(_hud.get_result_stat_text(1) == "0:00", "用时统计错误")
 	_expect(_hud.get_result_stat_text(2) == "8:27", "剩余时间统计错误")
-	_expect(_hud.get_result_income_text().contains("¥"), "成功结算缺少收入")
+	_expect(
+		_hud.get_result_income_text() == "本单收入  ¥%d" % DeliveryIncome.calculate(
+			order.get_total_path_length_m(), session.time_remaining
+		),
+		"成功结算收入与 DeliveryIncome 公式不一致"
+	)
 	_expect(_hud.get_result_body().contains("城市种子 118"), "结算正文缺少城市种子")
 	_expect(_hud.get_result_body().contains("剩余时间"), "成功结算正文缺少剩余时间")
 	_check_inside(_hud.get_result_card_rect(), "成功结算卡片")
@@ -89,7 +125,7 @@ func _check_failure_result() -> void:
 	_expect(_hud.get_result_title() == "订单失败", "失败结算标题错误")
 	_expect(_hud.get_result_body().contains("撞"), "失败结算正文应说明撞车原因")
 	_expect(_hud.get_result_stat_text(2) == "未完成", "失败结算的完成统计错误")
-	_expect(_hud.get_result_income_text().contains("¥0.00"), "失败结算收入应为 0")
+	_expect(_hud.get_result_income_text() == "本单收入  ¥0", "失败结算收入应为 0")
 	_expect(_hud.get_result_route_text().contains("城市广场"), "失败结算缺少商家名")
 	_check_inside(_hud.get_result_card_rect(), "失败结算卡片")
 	print("PASS menu ui failure")

@@ -75,8 +75,17 @@ func _setup_main() -> void:
 	_expect(_orders.is_offer_visible(), "生成首单后应显示接单界面")
 	_expect(_orders.get_session() == null, "接单前不应开始倒计时")
 	_expect(_orders.get_offer_text().contains("限时"), "接单界面应显示时限")
+	var hud := _orders.get_hud()
+	_expect(hud != null and hud.is_offer_detail_visible(), "接单阶段右侧应显示详情面板")
+	if hud != null:
+		_expect(
+			hud.get_offer_detail_text().contains("预计收入  ¥"),
+			"右侧详情缺少预计收入"
+		)
 	_expect(_orders.accept_order(), "接单按钮应开始订单")
 	_expect(_orders.get_session() != null and _orders.get_session().is_active(), "接单后订单应进入活动状态")
+	if hud != null:
+		_expect(not hud.is_offer_detail_visible(), "接单后右侧详情应隐藏")
 	_expect(_player.controls_enabled, "接单后应恢复玩家控制")
 	_expect(_world.city != null and _world.city.is_valid(_world.network), "主场景城市校验失败")
 
@@ -403,6 +412,19 @@ func _check_manager() -> void:
 	)
 	_expect(hud.is_result_visible(), "完成后结算面板未显示")
 	_expect(hud.get_result_title() == "订单完成", "成功结算标题错误")
+	var completed_session := _orders.get_session()
+	if economy != null and completed_session != null:
+		var expected_income := DeliveryIncome.calculate(
+			order.get_total_path_length_m(), completed_session.time_remaining
+		)
+		_expect(
+			economy.get_current_order_income() == expected_income,
+			"收支面板入账与 DeliveryIncome 公式不一致"
+		)
+		_expect(
+			hud.get_result_income_text() == "本单收入  ¥%d" % expected_income,
+			"结算页收入应与右上角收支面板一致"
+		)
 
 	var completed_seed := _orders.get_order_seed()
 	var completed_signature := OrderGenerator.signature(order)

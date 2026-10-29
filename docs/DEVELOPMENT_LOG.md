@@ -1752,3 +1752,63 @@ PR #31 合并后，从 `origin/main` 的 `7c3d412` 起 `feature/jzy070407-menu-r
 **修改文件：** `docs/DEVELOPMENT_LOG.md`。
 
 本条记录随 `docs/jzy070407-sync-20261029-f` 分支提交、推送并建 PR。
+## 2026-10-29 23:12（Asia/Shanghai）修种子随机：每次进游戏换城市、每单随机订单种子、主菜单不显示种子
+
+本轮需求（原文）：“随机效果有问题：应做到每次从主菜单进入游戏时，随机一个新的地图种子；每次开启一个新的订单时，随机一个订单种子，同时主菜单不显示种子id，仅在局内显示”。
+
+**问题定位：**
+
+- 城市种子只在主场景 `_ready()` 时取一次，等于每次启动游戏才换一座城市；从主菜单返回再开始会沿用同一座城市。
+- 首单之后的订单种子按 `+1` 递增，同一局里每单其实是确定的序列，不是随机。
+- 开始界面底部一直显示“城市种子 …”的标签，种子出现在主菜单上。
+
+**改动：**
+
+- `OrderManager` 新增 `session_starting` 信号，`start_game()` 先重新取首单种子再发信号；`main.gd` 收到后按随机模式重新选城市种子并 `world.regenerate()`。`_place_player()` 移进 `world_generated` 回调，换城后先把玩家放到新城市出生点，交通再按玩家位置布置车辆。
+- `GameSeeds` 新增 `next_order_seed(previous)`：正常游玩每单重新随机且不与上一单相同；`pin()` 或 `--order-seed` / `SWM_ORDER_SEED` 固定时仍按“基准 + 1”的固定序列，测试、录制和复现行为不变。拒单、结算后下一单、无订单时按 R 都改用它；每局首单在 `start_game()` 重新取。
+- 固定种子（测试、录制、`--city-seed`）进入游戏时不重复重建城市，保持原城市和确定性。
+- 主菜单移除种子标签（`OrderHUD.show_start_menu()` 不再接收种子），局内 HUD 顶部提示、暂停页和结算页仍显示城市/订单种子；启动日志改为真正开局时打印 `[种子]`。
+- 更新 `README.md`、`docs/USER_GUIDE.md`、`docs/BEHAVIOR_DATA_EXPORT.md` 的种子说明；`test_menu_ui` 改为断言主菜单不显示种子，`test_game_seeds` 增加下一单随机值与固定序列的断言。
+
+**验证：**
+
+- 临时探针（不固定种子，验证后已删除）实跑：主菜单城市 90245，第一次开始变为 409988（订单 266302）；拒单后订单种子 951408、城市不变；返回主菜单再开始，城市 901478（订单 326654）。每次进入换城、每单换种子、同局不换城都符合要求。
+- headless：`test_game_seeds`、`test_menu_ui`、`test_player_handling` 退出码 0；`test_orders`、`test_phone_orders`、`test_city` 打印 PASS，退出阶段的 139 按已知环境问题记录。
+- 窗口渲染：`test_main_scene`（nodes=91、lots=764、order_seed=1）、`test_pause`、`test_traffic`、`test_site_readability`、`test_city_streaming` 全部退出码 0 并打印 PASS，固定种子下城市没有重建。
+- `test_game_seeds` 覆盖：固定 1 时下一单为 2；随机时下一单在 1..999983 且不同于上一单。
+
+**修改文件：** `scripts/core/game_seeds.gd`、`scripts/core/main.gd`、`scripts/orders/order_manager.gd`、`scripts/orders/order_hud.gd`、`tests/test_game_seeds.gd`、`tests/test_menu_ui.gd`、`README.md`、`docs/USER_GUIDE.md`、`docs/BEHAVIOR_DATA_EXPORT.md`、`docs/DEVELOPMENT_LOG.md`。
+
+本条记录随 `feature/jzy070407-seed-randomization` 分支提交、推送并建 PR。
+
+## 2026-10-29 23:58（Asia/Shanghai）接单阶段把手机详情复制到屏幕右侧，并统一收入显示与入账
+
+本轮需求（原文）：“接单阶段，请将手机的详细信息复制显示到屏幕右侧UI位置，同时修正收入与UI显示的收入一致”。
+
+“收入一致”有两种理解：以手机上的预计收入为准，还是以收支面板实际入账公式为准。和用户确认后选择“以收支公式为准”：保留 `180 + 路程 × 1.2 + 剩余秒数 × 0.8`，手机、结算页和收支面板统一显示这一套金额。
+
+**问题定位：**
+
+- 手机接单页用一套旧的配送费公式 `4.5 + 公里 × 0.38`，结算页直接调用它；右上角收支面板却按 `180 + 路程 × 1.2 + 剩余秒数 × 0.8` 入账。同一单在手机上显示约 ¥5，实际入账约 ¥2000，三处数字对不上。
+- 接单详情只画在相机前的三维手机屏幕上，玩家要低头才能看清取餐、送达、总路程和限时。
+
+**改动：**
+
+- 新增 `scripts/economy/delivery_income.gd`（`DeliveryIncome.calculate(distance_m, remaining_s)`），把收入公式收成唯一来源；`EconomyHUD.record_successful_delivery()`、手机 `OrderPhone.expected_income()` 和结算页都调用它。手机上按限时估满额，实际结算按送达时的剩余秒数计算，所以预计值和最终入账可能差一点时间奖励，但用的是同一条公式。
+- 删除 `OrderPhone.BASE_FEE`、`FEE_PER_KM` 和 `calculate_fee()`；手机预计收入改为整数 `¥N`，结算页失败时显示 `¥0`。
+- `OrderHUD` 新增右侧“接单详情”面板（`OfferDetailPanel`），位于收支面板和输入自检面板下方：取餐/送达店名、总路程、预计收入、限时、城市/订单种子和 `Y 接单 · N 拒单`；接单、拒单、结算、出错和回主菜单时隐藏。
+- `OrderManager._process()` 每帧把 `OrderPhone.get_remaining_s()` 推给 `OrderHUD.update_offer_countdown()`，右侧“剩余 N 秒”和手机倒计时同步。
+- 收支面板文案补上 `¥`：余额、本单收入、累计收入和累计赔偿都带货币符号，和结算页格式一致。
+- 更新 `README.md`、`docs/USER_GUIDE.md`：右侧详情、统一公式位置和预计/实际差异。
+
+**验证：**
+
+- `test_economy`：新增 `DeliveryIncome` 与面板入账一致性、0 输入保底 180、负数按 0 处理、摘要带 `¥` 的断言，PASS。
+- `test_menu_ui`：新增接单详情面板内容、倒计时同步、初始 10 秒、`update_offer_countdown(3.2)` 后显示 4 秒以及面板不超出可视区域的断言；成功结算收入改为与 `DeliveryIncome` 精确对比，失败收入 `¥0`，全部 PASS。
+- `test_orders`：新增接单阶段右侧详情可见、接单后隐藏、结算页收入等于右上角收支面板入账和公式的断言，打印 PASS；退出阶段 139 按已知环境问题记录。
+- `test_phone_orders`：手机预计收入改为 `DeliveryIncome` 公式对比，新增右侧详情含全部字段、倒计时跟随手机、接单后隐藏的断言；headless 在 PASS 前遇到 RID 崩溃，按已知环境改用窗口模式运行，PASS、退出码 0。
+- 窗口截图（临时探针，验证后删除）：1152×648 下右侧面板在 y=350..624，接单详情完整显示在收支面板和输入自检面板下方，未遮挡中央视野。
+
+**修改文件：** `scripts/economy/delivery_income.gd`（新增）、`scripts/economy/economy_hud.gd`、`scripts/orders/order_hud.gd`、`scripts/orders/order_manager.gd`、`scripts/orders/order_phone.gd`、`tests/test_economy.gd`、`tests/test_menu_ui.gd`、`tests/test_orders.gd`、`tests/test_phone_orders.gd`、`README.md`、`docs/USER_GUIDE.md`、`docs/DEVELOPMENT_LOG.md`。
+
+本分支基于尚未合并的 `feature/jzy070407-seed-randomization`（PR #51），PR #51 合并后本 PR 的差异只剩这一轮；本条记录随 `feature/jzy070407-offer-detail-income` 分支提交、推送并建 PR。

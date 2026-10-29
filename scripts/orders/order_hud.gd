@@ -47,6 +47,16 @@ var _toast_panel: PanelContainer
 var _toast_label: Label
 var _toast_timer: Timer
 
+var _offer_panel: PanelContainer
+var _offer_route_label: Label
+var _offer_distance_label: Label
+var _offer_income_label: Label
+var _offer_time_label: Label
+var _offer_seed_label: Label
+var _offer_hint_label: Label
+var _offer_time_limit_s := 0.0
+var _offer_countdown_s := 0.0
+
 var _start_layer: Control
 var _start_backdrop: MenuBackdrop
 var _start_page_margin: MarginContainer
@@ -95,6 +105,7 @@ func show_start_menu() -> void:
 	_offer_active = false
 	_offer_text = ""
 	_set_offer_panel(false)
+	_set_offer_detail_visible(false)
 	_set_menu_visible(true, false)
 	_status_panel.visible = false
 	_prompt_label.visible = false
@@ -115,13 +126,28 @@ func hide_start_menu() -> void:
 
 
 func show_offer(order: DeliveryOrder, time_limit: float) -> void:
-	## 接单详情在三维手机屏幕上；HUD 只保留左上角的新订单提醒。
+	## 接单详情在三维手机屏幕上；右侧面板同步复制一份，方便不低头也能核对。
 	if order == null:
 		return
 	hide_toast()
 	_offer_active = true
 	_offer_text = OrderPhone.format_offer_text(order, time_limit)
 	_set_offer_panel(true)
+	_set_offer_detail_visible(true)
+	_offer_time_limit_s = maxf(time_limit, 0.0)
+	_offer_countdown_s = OrderPhone.OFFER_TIMEOUT_S
+	_offer_route_label.text = "取餐 · %s\n送达 · %s" % [
+		OrderHUD.site_label(order.merchant),
+		OrderHUD.site_label(order.customer),
+	]
+	_offer_distance_label.text = "总路程 %.1f km" % (
+		maxf(order.get_total_path_length_m(), 0.0) / 1000.0
+	)
+	_offer_income_label.text = "预计收入  ¥%d" % OrderPhone.expected_income(order, _offer_time_limit_s)
+	_offer_seed_label.text = "城市种子 %d · 订单种子 %d" % [
+		order.city_seed, order.order_seed
+	]
+	_update_offer_time_label()
 	_set_menu_visible(false, false)
 	_status_panel.visible = true
 	_objective_label.text = "手机收到新订单 · Y 接单 / N 拒单"
@@ -135,14 +161,24 @@ func show_offer(order: DeliveryOrder, time_limit: float) -> void:
 	clear_error()
 
 
+func update_offer_countdown(remaining_s: float) -> void:
+	## 手机倒计时每帧同步到右侧详情，两处显示的剩余秒数保持一致。
+	if not _offer_active or _offer_panel == null or not _offer_panel.visible:
+		return
+	_offer_countdown_s = maxf(remaining_s, 0.0)
+	_update_offer_time_label()
+
+
 func hide_offer() -> void:
 	_offer_active = false
+	_set_offer_detail_visible(false)
 
 
 func show_waiting(text: String = "正在生成订单…") -> void:
 	hide_toast()
 	_offer_active = false
 	_set_offer_panel(false)
+	_set_offer_detail_visible(false)
 	_set_menu_visible(false, false)
 	_status_panel.visible = true
 	_error_label.text = ""
@@ -161,6 +197,7 @@ func show_active(order: DeliveryOrder, session: OrderSession) -> void:
 	hide_toast()
 	_offer_active = false
 	_set_offer_panel(false)
+	_set_offer_detail_visible(false)
 	_set_menu_visible(false, false)
 	_status_panel.visible = true
 	_error_label.text = ""
@@ -209,6 +246,7 @@ func show_result(order: DeliveryOrder, session: OrderSession) -> void:
 	hide_toast()
 	_offer_active = false
 	_set_offer_panel(false)
+	_set_offer_detail_visible(false)
 	_set_menu_visible(false, true)
 	_status_panel.visible = false
 	_result_title.text = "订单完成" if session.is_success() else "订单失败"
@@ -236,10 +274,13 @@ func show_result(order: DeliveryOrder, session: OrderSession) -> void:
 	else:
 		_result_stat_values[2].text = "未完成"
 		_result_stat_values[2].add_theme_color_override("font_color", CORAL)
+	# 结算页显示实际入账：与右上角收支面板共用 DeliveryIncome 公式。
 	_result_income.text = (
-		"本单收入  ¥%.2f" % OrderPhone.calculate_fee(order)
+		"本单收入  ¥%d" % DeliveryIncome.calculate(
+			total_length, session.time_remaining
+		)
 		if session.is_success()
-		else "本单收入  ¥0.00"
+		else "本单收入  ¥0"
 	)
 	_result_income.add_theme_color_override("font_color", GOLD if session.is_success() else MUTED_UI)
 
@@ -271,6 +312,7 @@ func show_error(text: String) -> void:
 	hide_toast()
 	_offer_active = false
 	_set_offer_panel(false)
+	_set_offer_detail_visible(false)
 	_set_menu_visible(false, false)
 	_status_panel.visible = true
 	_objective_label.text = "订单未开始"
@@ -337,6 +379,28 @@ func get_error_text() -> String:
 
 func get_offer_text() -> String:
 	return _offer_text
+
+
+func is_offer_detail_visible() -> bool:
+	return _offer_panel != null and _offer_panel.visible
+
+
+func get_offer_detail_rect() -> Rect2:
+	return _offer_panel.get_global_rect() if _offer_panel != null else Rect2()
+
+
+func get_offer_detail_text() -> String:
+	## 右侧接单详情整块文字，测试和可访问性脚本按段落取用。
+	if _offer_panel == null:
+		return ""
+	return "\n".join([
+		_offer_route_label.text,
+		_offer_distance_label.text,
+		_offer_income_label.text,
+		_offer_time_label.text,
+		_offer_seed_label.text,
+		_offer_hint_label.text,
+	])
 
 
 func get_start_button_text() -> String:
@@ -501,10 +565,80 @@ func _build() -> void:
 	_error_label.offset_bottom = -38
 	_root.add_child(_error_label)
 
+	_build_offer_detail()
 	_build_start_layer()
 	_build_result_layer()
 	_build_toast()
 	show_waiting()
+
+
+func _build_offer_detail() -> void:
+	## 屏幕右侧的接单详情：把手机屏幕上的信息原样复制一份，
+	## 放在收支面板和输入诊断面板下方，不遮挡驾驶视野中央。
+	_offer_panel = PanelContainer.new()
+	_offer_panel.name = "OfferDetailPanel"
+	_offer_panel.anchor_left = 1.0
+	_offer_panel.anchor_right = 1.0
+	_offer_panel.anchor_bottom = 1.0
+	_offer_panel.offset_left = -286
+	_offer_panel.offset_right = -24
+	_offer_panel.offset_top = 350
+	_offer_panel.offset_bottom = -24
+	_offer_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_offer_panel.add_theme_stylebox_override("panel", _status_style())
+	_offer_panel.visible = false
+	_root.add_child(_offer_panel)
+
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 16)
+	margin.add_theme_constant_override("margin_right", 16)
+	margin.add_theme_constant_override("margin_top", 12)
+	margin.add_theme_constant_override("margin_bottom", 12)
+	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_offer_panel.add_child(margin)
+
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 7)
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	margin.add_child(box)
+
+	var title := _make_label(14, ACCENT_COLOR, true)
+	title.text = "接单详情"
+	box.add_child(title)
+
+	_offer_route_label = _make_label(16, TEXT_COLOR)
+	_offer_route_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(_offer_route_label)
+
+	_offer_distance_label = _make_label(15, MUTED_COLOR)
+	box.add_child(_offer_distance_label)
+
+	_offer_income_label = _make_label(22, ACCENT_COLOR, true)
+	box.add_child(_offer_income_label)
+
+	_offer_time_label = _make_label(15, MUTED_COLOR)
+	box.add_child(_offer_time_label)
+
+	_offer_seed_label = _make_label(13, MUTED_COLOR)
+	_offer_seed_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(_offer_seed_label)
+
+	_offer_hint_label = _make_label(14, OFFER_TEXT_COLOR)
+	_offer_hint_label.text = "Y 接单 · N 拒单"
+	box.add_child(_offer_hint_label)
+
+
+func _set_offer_detail_visible(visible_now: bool) -> void:
+	if _offer_panel != null:
+		_offer_panel.visible = visible_now
+
+
+func _update_offer_time_label() -> void:
+	if _offer_time_label == null:
+		return
+	_offer_time_label.text = "限时 %s · 剩余 %d 秒" % [
+		format_time(_offer_time_limit_s), ceili(_offer_countdown_s)
+	]
 
 
 func _build_start_layer() -> void:
@@ -730,7 +864,7 @@ func _build_result_layer() -> void:
 	_make_stat("剩余时间", stats)
 
 	_result_income = _make_label(22, GOLD, true)
-	_result_income.text = "本单收入  ¥0.00"
+	_result_income.text = "本单收入  ¥0"
 	_result_income.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(_result_income)
 

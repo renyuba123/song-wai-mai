@@ -7,9 +7,6 @@ class_name EconomyHUD
 signal balance_changed(balance: int)
 signal compensation_added(amount: int, total_compensation: int)
 
-const BASE_DELIVERY_INCOME := 180
-const DISTANCE_INCOME_PER_M := 1.2
-const TIME_BONUS_PER_SECOND := 0.8
 const PANEL_BG := Color(0.035, 0.055, 0.075, 0.92)
 const TEXT_COLOR := Color(0.95, 0.97, 1.0, 1.0)
 const MUTED_COLOR := Color(0.68, 0.76, 0.84, 1.0)
@@ -40,9 +37,8 @@ func begin_order() -> void:
 
 
 func record_successful_delivery(distance_m: float, remaining_s: float) -> int:
-	var distance_bonus := roundi(maxf(distance_m, 0.0) * DISTANCE_INCOME_PER_M)
-	var time_bonus := roundi(maxf(remaining_s, 0.0) * TIME_BONUS_PER_SECOND)
-	var income := BASE_DELIVERY_INCOME + distance_bonus + time_bonus
+	# 与手机预计收入、结算页共用 DeliveryIncome 的公式，避免显示和入账对不上。
+	var income := DeliveryIncome.calculate(distance_m, remaining_s)
 	_total_income += income
 	_current_order_income = income
 	_balance += income
@@ -88,7 +84,7 @@ func get_total_compensation() -> int:
 
 
 func get_summary_text() -> String:
-	return "本单收入 %d\n累计收入 %d\n累计赔偿 %d" % [
+	return "本单收入 +¥%d\n累计收入 ¥%d\n累计赔偿 -¥%d" % [
 		_current_order_income, _total_income, _total_compensation
 	]
 
@@ -96,13 +92,13 @@ func get_summary_text() -> String:
 func _refresh() -> void:
 	if _balance_label == null:
 		return
-	_balance_label.text = "余额  %d" % _balance
+	_balance_label.text = "余额  ¥%d" % _balance
 	_balance_label.add_theme_color_override(
 		"font_color", INCOME_COLOR if _balance >= 0 else EXPENSE_COLOR
 	)
-	_order_label.text = "本单收入  +%d" % _current_order_income
+	_order_label.text = "本单收入  +¥%d" % _current_order_income
 	_order_label.add_theme_color_override("font_color", INCOME_COLOR)
-	_summary_label.text = "累计收入  %d\n累计赔偿  -%d" % [
+	_summary_label.text = "累计收入  ¥%d\n累计赔偿  -¥%d" % [
 		_total_income, _total_compensation
 	]
 
