@@ -366,7 +366,11 @@ func _build_start_layer() -> void:
 	var body: Label = modal["body"]
 	body.text = "在程序化生成的城市里取餐、送达。\n按时完成每一单。"
 	var hint: Label = modal["hint"]
-	hint.text = "WASD 移动 · 鼠标视角 · E 取餐/送达 · R 重新开始"
+	hint.text = (
+		"左侧摇杆移动 · 右侧拖动视角 · E 取餐/送达"
+		if TouchControls.is_touch_device()
+		else "WASD 移动 · 鼠标视角 · E 取餐/送达 · R 重新开始"
+	)
 	_start_seed_label = _make_label(15, MUTED_COLOR)
 	_start_seed_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(_start_seed_label)

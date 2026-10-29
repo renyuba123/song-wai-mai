@@ -1,0 +1,17 @@
+{
+  "game": {
+    "title": "打开游戏",
+    "url": "https://example.com/song-wai-mai/game",
+    "placeholder": true
+  },
+  "video": {
+    "title": "观看演示视频",
+    "url": "https://example.com/song-wai-mai/video",
+    "placeholder": true
+  },
+  "analytics": {
+    "title": "查看用户行为分析",
+    "url": "https://example.com/song-wai-mai/analytics",
+    "placeholder": true
+  }
+}

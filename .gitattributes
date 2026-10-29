@@ -34,3 +34,6 @@
 # gdmerge
 *.tscn merge=gdmerge
 *.tres merge=gdmerge
+
+# 展览二维码是打印交付物，直接存普通 Git，避免 LFS 指针。
+exhibition/qr/output/*.png -filter -diff -merge -text
