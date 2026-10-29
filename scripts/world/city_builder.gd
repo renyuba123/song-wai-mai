@@ -3,8 +3,8 @@ extends Node3D
 class_name CityBuilder
 
 ## 常驻城市表现：人行道、实际模型包围盒的低细节建筑、入口和站点标记。
-## 人行道与建筑碰撞体使用 WORLD_STATIC，但不加入 navigation_source，
-## 因此阶段一导航网格仍然只覆盖道路。
+## 人行道碰撞体加入 navigation_source，行人和玩家可以走人行道；
+## 建筑碰撞体仍然不参与导航，导航网格不会铺进建筑内部。
 
 const SIDEWALK_COLOR := Color("b7b9b5")
 const MERCHANT_COLOR := Color("d98b4f")
@@ -45,6 +45,7 @@ func _build_sidewalks(network: RoadNetwork) -> void:
 	_sidewalk_body.name = "SidewalkCollision"
 	_sidewalk_body.collision_layer = CollisionLayers.WORLD_STATIC
 	_sidewalk_body.collision_mask = 0
+	_sidewalk_body.add_to_group(CollisionLayers.NAVIGATION_SOURCE_GROUP)
 	_add_generated_child(_sidewalk_body)
 
 	var nodes: Array = network.nodes

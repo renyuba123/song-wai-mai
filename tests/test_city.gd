@@ -256,7 +256,7 @@ func _check_main_scene() -> void:
 	var sidewalk_body := main.get_node_or_null("World/CityBuilder/SidewalkCollision") as StaticBody3D
 	_expect(road_body != null and road_body.is_in_group(CollisionLayers.NAVIGATION_SOURCE_GROUP), "道路碰撞体应在导航源组")
 	_expect(building_body != null and not building_body.is_in_group(CollisionLayers.NAVIGATION_SOURCE_GROUP), "建筑碰撞体不应在导航源组")
-	_expect(sidewalk_body != null and not sidewalk_body.is_in_group(CollisionLayers.NAVIGATION_SOURCE_GROUP), "人行道碰撞体不应在导航源组")
+	_expect(sidewalk_body != null and sidewalk_body.is_in_group(CollisionLayers.NAVIGATION_SOURCE_GROUP), "人行道碰撞体应在导航源组")
 
 	var ready := navigation.is_ready()
 	var current_order: DeliveryOrder = null
