@@ -1,6 +1,6 @@
 extends SceneTree
 
-## 手机接单界面测试：相机前手机、订单信息、Y/N 按钮、拒单和超时自动换单。
+## 手机接单界面测试：相机前手机、订单信息、Y/N 按钮、配送中常驻、拒单和超时自动换单。
 
 var _failed := false
 var _main: Node = null
@@ -18,6 +18,10 @@ func _run() -> void:
 	if _orders != null and _phone != null:
 		await _check_first_offer()
 		await _check_reject_and_timeout()
+		# headless 下 SubViewport 推送鼠标事件会触发 RID 相关崩溃，
+		# 点击转发只在有渲染窗口时验证。
+		if DisplayServer.get_name() != "headless":
+			await _check_clicks()
 	if _failed:
 		printerr("FAIL phone orders")
 	else:
@@ -59,7 +63,7 @@ func _setup_main() -> void:
 	if _phone == null:
 		return
 	_expect(_phone.get_parent() == _player.camera, "手机应挂在玩家相机下")
-	_expect(not _phone.is_offer_visible(), "开始菜单不应显示接单手机")
+	_expect(not _phone.is_phone_visible(), "开始菜单不应显示接单手机")
 
 
 func _check_first_offer() -> void:
@@ -72,9 +76,9 @@ func _check_first_offer() -> void:
 	_expect(_phone.get_remaining_s() > 0.0, "手机倒计时未开始")
 	_expect(_orders.get_session() == null, "接单前不应开始配送计时")
 	var hud := _orders.get_hud()
-	_expect(hud.get_objective_text() == "手机收到新订单", "HUD 未显示新订单提醒")
-	_expect(hud.get_detail_text().contains("Y 接单"), "HUD 未显示 Y 接单")
-	_expect(hud.get_detail_text().contains("N 拒单"), "HUD 未显示 N 拒单")
+	_expect(hud.get_objective_text().contains("手机收到新订单"), "HUD 未显示新订单提醒")
+	_expect(hud.get_objective_text().contains("Y 接单"), "HUD 未显示 Y 接单")
+	_expect(hud.get_objective_text().contains("N 拒单"), "HUD 未显示 N 拒单")
 	if order == null:
 		return
 
@@ -93,7 +97,7 @@ func _check_first_offer() -> void:
 		_expect(screen.contains(order.customer.display_name), "手机屏幕缺少顾客店名")
 	_expect(screen.contains("总路程"), "手机屏幕缺少总路程")
 	_expect(screen.contains("km"), "手机屏幕缺少公里单位")
-	_expect(screen.contains("配送费 ¥"), "手机屏幕缺少配送费")
+	_expect(screen.contains("预计收入 ¥"), "手机屏幕缺少预计收入")
 	_expect(screen.contains("限时"), "手机屏幕缺少时限")
 
 	var total_km := maxf(order.get_total_path_length_m(), 0.0) / 1000.0
@@ -105,19 +109,37 @@ func _check_first_offer() -> void:
 
 	var accept_button := _phone.find_child("AcceptButton", true, false) as Button
 	var reject_button := _phone.find_child("RejectButton", true, false) as Button
-	_expect(accept_button != null and accept_button.text == "Y 接单", "手机缺少 Y 接单按钮")
-	_expect(reject_button != null and reject_button.text == "N 拒单", "手机缺少 N 拒单按钮")
+	_expect(
+		accept_button != null and accept_button.text.contains("立即接单")
+		and accept_button.text.contains("Y"),
+		"手机缺少立即接单按钮"
+	)
+	_expect(
+		reject_button != null and reject_button.text.contains("拒绝")
+		and reject_button.text.contains("N"),
+		"手机缺少拒绝按钮"
+	)
 
 	_expect(_orders.accept_order(), "手机接单失败")
-	_expect(not _phone.is_offer_visible(), "接单后手机应消失")
+	_expect(not _phone.is_offer_visible(), "接单后应离开接单界面")
+	_expect(_phone.is_active_visible(), "配送中手机应继续显示在车把左侧")
+	_expect(_phone.visible, "配送中手机模型应可见")
 	_expect(_orders.get_session() != null and _orders.get_session().is_active(), "接单后订单未开始")
 	var session := _orders.get_session()
 	if session != null:
+		var active_screen := _phone.get_screen_text()
+		_expect(active_screen.contains("配送中"), "配送中手机缺少状态标题")
+		_expect(
+			active_screen.contains(session.get_objective_text()),
+			"配送中手机缺少当前目标"
+		)
+		_expect(active_screen.contains("距离"), "配送中手机缺少距离")
+		_expect(active_screen.contains("剩余"), "配送中手机缺少剩余时间")
 		session.advance(session.time_limit + 1.0)
 	_expect(hud.is_result_visible(), "配送超时后应显示结算")
-	_expect(not _phone.is_offer_visible(), "结算时手机应隐藏")
+	_expect(not _phone.is_phone_visible(), "结算时手机应隐藏")
 	_expect(_orders.return_to_start_menu(), "应能返回主菜单")
-	_expect(not _phone.is_offer_visible(), "主菜单不应显示手机")
+	_expect(not _phone.is_phone_visible(), "主菜单不应显示手机")
 
 
 func _check_reject_and_timeout() -> void:
@@ -153,6 +175,49 @@ func _check_reject_and_timeout() -> void:
 	_expect(_orders.is_offer_visible(), "倒计时换单后新订单应显示在手机上")
 	_expect(_orders.accept_order(), "自动换单后的订单应能接单")
 	_expect(_orders.get_session() != null and _orders.get_session().is_active(), "接单后会话未启动")
+	_expect(_phone.is_active_visible(), "接单后手机应切到配送模式并继续显示")
+
+
+func _check_clicks() -> void:
+	_expect(_orders.return_to_start_menu(), "点击测试前应能返回主菜单")
+	_expect(_orders.start_game(), "点击测试前应能重新开始")
+	await _wait_for_offer()
+	await process_frame
+	await process_frame
+	var seed_before := _orders.get_order_seed()
+	_click_screen_point(Vector2(99.0, 482.0))
+	_expect(_orders.get_session() == null, "点击拒绝按钮不应开始配送")
+	_expect(_orders.get_order_seed() > seed_before, "点击拒绝按钮后应生成下一单")
+	await _wait_for_offer()
+	await process_frame
+	await process_frame
+	_expect(_orders.is_offer_visible(), "点击拒绝后应显示新订单")
+	_click_screen_point(Vector2(250.0, 482.0))
+	_expect(
+		_orders.get_session() != null and _orders.get_session().is_active(),
+		"点击立即接单按钮应开始配送"
+	)
+	_expect(_phone.is_active_visible(), "点击接单后手机应切到配送模式")
+
+
+func _click_screen_point(logical_point: Vector2) -> void:
+	## 把屏幕逻辑坐标投回三维手机表面，再走真实的点击转发路径。
+	var screen := _phone.find_child("Screen", true, false) as MeshInstance3D
+	if screen == null:
+		_expect(false, "找不到手机屏幕网格")
+		return
+	var local_point := Vector3(
+		(logical_point.x / OrderPhone.SCREEN_LOGICAL_SIZE.x - 0.5)
+		* OrderPhone.SCREEN_QUAD_SIZE.x,
+		(0.5 - logical_point.y / OrderPhone.SCREEN_LOGICAL_SIZE.y)
+		* OrderPhone.SCREEN_QUAD_SIZE.y,
+		0.0
+	)
+	var screen_position := _player.camera.unproject_position(
+		screen.global_transform * local_point
+	)
+	_phone._push_pointer(screen_position, true)
+	_phone._push_pointer(screen_position, false)
 
 
 func _wait_for_offer() -> void:
