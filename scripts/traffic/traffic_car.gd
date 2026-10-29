@@ -273,7 +273,7 @@ func _set_model(choice: int) -> void:
 	var collision: CollisionShape3D = get_node_or_null("CollisionShape3D")
 	if collision != null:
 		var shape := BoxShape3D.new()
-		shape.size = Vector3(box.size.x * factor, box.size.y * factor, box.size.z * factor)
+		shape.size = Vector3(maxf(box.size.x * factor, 0.01), box.size.y * factor, minf(box.size.z * factor, COLLISION_SIZE.z))
 		collision.shape = shape
 		collision.position = Vector3(0, shape.size.y * 0.5 + 0.025, 0)
 	var hit_shape: CollisionShape3D = get_node_or_null("HitBox/HitShape")
