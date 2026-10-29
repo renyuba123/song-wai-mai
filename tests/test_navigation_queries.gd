@@ -43,6 +43,7 @@ func _check_empty_service() -> void:
 
 
 func _check_main_scene() -> void:
+	GameSeeds.pin(118, 1)
 	var packed := load("res://scenes/main/main.tscn") as PackedScene
 	if packed == null:
 		_expect(false, "无法加载主场景")

@@ -19,7 +19,8 @@ const CUSTOMER_COLOR := Color(0.15, 0.85, 0.95, 1.0)
 const CUSTOMER_HIT_RADIUS_M := 3.0
 const CUSTOMER_HIT_MIN_SPEED_MPS := 7.0
 
-@export var initial_order_seed := 1
+## 第一个订单的种子。0 表示每局随机（正常游戏）；大于 0 时固定，方便在编辑器里复现。
+@export var initial_order_seed := 0
 
 var _world: WorldGenerator = null
 var _navigation: NavigationService = null
@@ -63,7 +64,7 @@ func setup(
 	if not _configured:
 		_hud.show_error("订单系统缺少世界、导航或玩家")
 		return
-	_order_seed = initial_order_seed
+	_order_seed = initial_order_seed if initial_order_seed > 0 else GameSeeds.order_seed()
 	_current_order = null
 	_session = null
 	_pending_offer = false

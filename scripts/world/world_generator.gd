@@ -19,6 +19,12 @@ var secondary_redline_m := 30.0
 var local_redline_m := 18.0
 var allow_difficult_entrance_exceptions := false
 
+## 城市种子是随机选的，生成校验失败时自动换下一个；固定种子（编辑器预览、
+## 测试、录制脚本）保持失败即报错，不会悄悄换成别的城市。
+var allow_seed_retry := false
+
+const SEED_RETRY_ATTEMPTS := 3
+
 @onready var road_builder: RoadBuilder = $RoadBuilder
 @onready var streaming: CityStreaming = $CityStreaming
 @onready var city_builder: CityBuilder = $CityBuilder
@@ -54,13 +60,28 @@ func _regenerate_editor_preview() -> void:
 
 
 func regenerate() -> void:
-	network = RoadGenerator.generate(
-		Vector2(map_width_m, map_height_m), seed, road_density,
-		Vector3(main_redline_m, secondary_redline_m, local_redline_m),
-		allow_difficult_entrance_exceptions
-	)
-	city = CityGenerator.generate(network)
-	var city_errors := city.validate(network)
+	var attempts := 0
+	var city_errors: Array[String] = []
+	while true:
+		network = RoadGenerator.generate(
+			Vector2(map_width_m, map_height_m), seed, road_density,
+			Vector3(main_redline_m, secondary_redline_m, local_redline_m),
+			allow_difficult_entrance_exceptions
+		)
+		city = CityGenerator.generate(network)
+		city_errors = city.validate(network)
+		report = network.validate()
+		attempts += 1
+		if report.valid and city_errors.is_empty():
+			break
+		if not allow_seed_retry:
+			break
+		if attempts >= SEED_RETRY_ATTEMPTS:
+			printerr("[种子] 连续 %d 个随机种子都没通过生成校验，保留最后一个：%d" % [attempts, seed])
+			break
+		var previous_seed := seed
+		seed = GameSeeds.random_seed()
+		print("[种子] 种子 %d 生成校验未通过，换下一个：%d" % [previous_seed, seed])
 	city_report = {
 		"valid": city_errors.is_empty(),
 		"errors": city_errors,
@@ -69,7 +90,6 @@ func regenerate() -> void:
 		"sites": city.sites.size(),
 		"entrances": network.entrances.size(),
 	}
-	report = network.validate()
 	road_builder.build(network)
 	var layout := CityPopulationLayout.generate(city, streaming.chunk_size)
 	SiteNaming.apply(city, layout)

@@ -61,6 +61,7 @@ godot --headless --path . --script res://tests/test_navigation_queries.gd
 godot --headless --path . --script res://tests/test_city.gd
 godot --headless --path . --script res://tests/test_city_catalog.gd
 godot --headless --path . --script res://tests/test_god_view.gd
+godot --headless --path . --script res://tests/test_game_seeds.gd
 godot --headless --path . --script res://tests/test_orders.gd
 godot --headless --path . --script res://tests/test_menu_ui.gd
 godot --headless --path . --script res://tests/test_phone_orders.gd
@@ -74,7 +75,7 @@ godot --headless --path . --script res://tests/test_pause.gd
 godot --headless --path . --script res://tests/test_pedestrians.gd
 ```
 
-前两条检查路网生成、校验、寻路和主场景启动；中间三条分别检查共享数据契约、输入映射与玩家移动、导航查询接口；`test_city` 检查城市确定性、反向数据、主场景城市装配和站点可达性；`test_city_catalog` 检查模型目录可加载、包围盒有效、分类数量和种子 118 的模型多样性；`test_god_view` 检查测试用上帝视角只在调试构建创建、开关时相机和玩家状态正确切换并恢复；`test_orders` 检查订单生成、状态机、开始/接单/结算界面和撞车失败语义；`test_menu_ui` 单独挂载订单 HUD，检查开始界面的标题、副标题、种子和按钮，以及成功/失败结算页面的取送路线、总路程、用时、剩余时间、收入和卡片是否超出可视区域；`test_phone_orders` 检查三维手机的挂载位置、屏幕内容、倒计时、Y/N、点击接单/拒单、配送中常驻和主菜单隐藏；`test_site_readability` 检查站点店名确定性、三维店名牌、当前目标星标以及接单/取餐/送达时的 HUD 与信标文本；`test_game_settings` 检查设置默认值、范围裁剪、保存重载和实时应用；`test_economy` 检查配送收入公式、行人赔偿和账户重置；`test_accident_research` 检查事故记录面板的统计、触发和 JSONL 记录；`test_traffic` 检查车道数学、确定性车流、出生安全、命中 Area3D 和主场景撞车信号链；`test_traffic_signals` 检查信号路口识别、相位边界、车辆停车规则和信号灯模型资源；`test_pause` 检查暂停菜单、设置页、临时配置持久化和恢复流程；`test_pedestrians` 检查人行道行走、信号等待、横穿提交和横穿途中不中断。新增脚本后先执行一次 `godot --headless --path . --import`，让 Godot 注册 `class_name` 并生成 `.gd.uid`。
+前两条检查路网生成、校验、寻路和主场景启动；中间三条分别检查共享数据契约、输入映射与玩家移动、导航查询接口；`test_city` 检查城市确定性、反向数据、主场景城市装配和站点可达性；`test_city_catalog` 检查模型目录可加载、包围盒有效、分类数量和种子 118 的模型多样性；`test_god_view` 检查测试用上帝视角只在调试构建创建、开关时相机和玩家状态正确切换并恢复；`test_game_seeds` 检查每局随机种子、固定种子和启动参数/环境变量覆盖；`test_orders` 检查订单生成、状态机、开始/接单/结算界面和撞车失败语义；`test_menu_ui` 单独挂载订单 HUD，检查开始界面的标题、副标题、种子和按钮，以及成功/失败结算页面的取送路线、总路程、用时、剩余时间、收入和卡片是否超出可视区域；`test_phone_orders` 检查三维手机的挂载位置、屏幕内容、倒计时、Y/N、点击接单/拒单、配送中常驻和主菜单隐藏；`test_site_readability` 检查站点店名确定性、三维店名牌、当前目标星标以及接单/取餐/送达时的 HUD 与信标文本；`test_game_settings` 检查设置默认值、范围裁剪、保存重载和实时应用；`test_economy` 检查配送收入公式、行人赔偿和账户重置；`test_accident_research` 检查事故记录面板的统计、触发和 JSONL 记录；`test_traffic` 检查车道数学、确定性车流、出生安全、命中 Area3D 和主场景撞车信号链；`test_traffic_signals` 检查信号路口识别、相位边界、车辆停车规则和信号灯模型资源；`test_pause` 检查暂停菜单、设置页、临时配置持久化和恢复流程；`test_pedestrians` 检查人行道行走、信号等待、横穿提交和横穿途中不中断。新增脚本后先执行一次 `godot --headless --path . --import`，让 Godot 注册 `class_name` 并生成 `.gd.uid`。
 
 ## 2. 所有人：日常操作流程
 
@@ -271,6 +272,7 @@ scenes/traffic/
 - 路网按等级优先生长：先铺主干路，再从主干路节点向两侧长出次干路，随后补支路并在本地街区内部补一排垂直支路；所有方向允许小幅转弯，因此路网是斜向、不规则的，不再有全局正交轴线。
 - 所有随机都使用 `RandomNumberGenerator` 并显式设置 `seed`，不要用全局 `randi()`。城市生成使用 `network.seed_value ^ CityGenerator.CITY_RNG_SALT`，不修改路网节点、路段或种子。
 - 同一组参数和种子必须生成同一份路网和城市；`tests/test_city.gd` 会逐字段比较。
+- 每局开始时由 `GameSeeds` 重新选城市种子和第一个订单种子（1 到 999983），正常游戏不再固定 118；`main.tscn` 里的 `World.seed = 118` 只作为编辑器预览默认值。需要复现某一局时，在 `--` 之后加 `--city-seed` / `--order-seed`，或设置环境变量 `SWM_CITY_SEED` / `SWM_ORDER_SEED`；测试和 `tools/record_sample_session.gd` 用 `GameSeeds.pin(城市, 订单)` 固定。城市种子是随机选的且生成校验失败时，`WorldGenerator` 会自动换种子重试；固定种子不重试，避免悄悄换成别的城市。
 - 新增加固生成规则时，优先扩展 `CityContent` 或新增独立资源，不要把逻辑塞进 `RoadBuilder` / `CityBuilder`。
 - 生成失败、路网为空、路径不存在时要安全返回，不要让整个主场景崩溃；入口地块不足或玩家起点不可用时，让城市校验失败并输出明确错误。
 - 地块沿所有路段（含支路）两侧生成临街地块，每条路段最多一个出入口；地块临街宽 18～40 米、进深 18～28 米。每个临街地块背后再补两排无出入口的街区内部建筑，与已有地块相交时跳过；临街地块上限 640、总地块上限 1800，建筑与地块一一对应。

@@ -44,6 +44,7 @@ tests/
   test_city.gd              城市地块、建筑、站点与可达性测试
   test_city_catalog.gd      城市模型目录完整性、数量与种子多样性测试
   test_god_view.gd          测试用上帝视角开关与状态恢复测试
+  test_game_seeds.gd        每局随机城市/订单种子、启动参数与环境变量覆盖测试
   test_orders.gd            订单生成、状态机、开始/接单/结算界面测试
   test_menu_ui.gd           开始界面和结算页面的文案、统计与布局测试
   test_phone_orders.gd      三维接单手机、屏幕倒计时、Y/N、点击接单/拒单与配送中常驻测试
@@ -81,6 +82,7 @@ godot --headless --path . --script res://tests/test_navigation_queries.gd
 godot --headless --path . --script res://tests/test_city.gd
 godot --headless --path . --script res://tests/test_city_catalog.gd
 godot --headless --path . --script res://tests/test_god_view.gd
+godot --headless --path . --script res://tests/test_game_seeds.gd
 godot --headless --path . --script res://tests/test_orders.gd
 godot --headless --path . --script res://tests/test_menu_ui.gd
 godot --headless --path . --script res://tests/test_phone_orders.gd
@@ -96,6 +98,14 @@ godot --headless --path . --script res://tests/test_pause.gd
 ```
 
 路网、道路绘制、碰撞和导航共用同一份 `RoadNetwork`。所有距离单位为米，**1 个 Godot 世界单位 = 1 米**。相同参数和随机种子生成相同的路网。
+
+每局开始时城市和订单种子都会重新随机（`GameSeeds`），启动日志会打印 `[种子] 城市 … · 订单 …`。要复现某一局，把种子传回去：
+
+```powershell
+godot --path . -- --city-seed 118 --order-seed 1
+# 编辑器里不方便加参数时用环境变量
+$env:SWM_CITY_SEED=118; $env:SWM_ORDER_SEED=1; godot --path .
+```
 
 ## 当前实现范围
 
