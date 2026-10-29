@@ -8,6 +8,10 @@ class_name TelemetryClient
 ## 位置采样同时记录速度、当前道路和该道路的 NPC 数量，
 ## 任务开始时记录起止点与目标点，方便分析页直接画出地图、速度热力
 ## 轨迹和计时点位置。页面关闭时用 sendBeacon 兜底发送尚未上报的事件。
+##
+## 本地调试：启动时加 `-- --record`（或设置环境变量 SWM_RECORD=1），
+## 桌面版也会采集同样的数据，运行中每 30 秒和退出时写到
+## `exports/recordings/<会话 ID>/`，可直接交给 render_behavior_png.py 出图。
 
 const ENDPOINT := "https://passive-sailfish-d0e1nvt8175333a.service.tcloudbase.com/log"
 const TOKEN := "1355f19d6d7fad23e8701d45"
@@ -19,9 +23,14 @@ const MAX_QUEUE := 2000
 const MAX_PROPS_KEYS := 24
 const MAX_STRING := 120
 const NEAR_CAR_RADIUS_M := 80.0
+const RECORD_FLAG := "--record"
+const RECORD_ENV := "SWM_RECORD"
+const LOCAL_SAVE_INTERVAL_S := 30.0
 
 var active := false
 var session_id := ""
+var local_recording := false
+var local_record_dir := ""
 
 var _orders: OrderManager = null
 var _player: PlayerController = null
@@ -40,10 +49,38 @@ var _start_offset_ms := 0
 var _start_unix_ms := 0
 var _started := false
 var _last_state := -1
+var _local_events: Array = []
+var _local_started_at := ""
+var _local_save_accum := 0.0
 
 
 static func is_web_build() -> bool:
 	return OS.has_feature("web")
+
+
+## 启动参数或环境变量是否要求本地记录。参数用 `-- --record` 传入，
+## 环境变量 SWM_RECORD 接受 1/true/yes，方便从编辑器或脚本启动时打开。
+static func recording_requested(args: PackedStringArray, env_value: String) -> bool:
+	if args.has(RECORD_FLAG):
+		return true
+	var value := env_value.strip_edges().to_lower()
+	return value == "1" or value == "true" or value == "yes"
+
+
+## Web 构建始终采集并上报，本地记录只在桌面调试时开启。
+static func is_local_recording() -> bool:
+	if is_web_build():
+		return false
+	if recording_requested(OS.get_cmdline_user_args(), OS.get_environment(RECORD_ENV)):
+		return true
+	return recording_requested(OS.get_cmdline_args(), "")
+
+
+## 编辑器 / 项目目录运行时写 res://exports，导出后的可执行文件写 user://。
+static func local_recording_root() -> String:
+	if OS.has_feature("template"):
+		return "user://recordings"
+	return "res://exports/recordings"
 
 
 ## 平面速度，单位米每秒。PlayerController 的 velocity.y 受重力影响，不能直接取长度。
@@ -82,8 +119,10 @@ func setup(
 	# 保证道路编号与 NPC 拥挤度仍然有数据来源。
 	_world = world if world != null else _find_world()
 	_traffic = traffic if traffic != null else _find_traffic()
-	active = is_web_build()
-	if active:
+	var web := is_web_build()
+	local_recording = is_local_recording()
+	active = web or local_recording
+	if web:
 		_http = HTTPRequest.new()
 		_http.name = "Http"
 		_http.timeout = 10.0
@@ -92,7 +131,11 @@ func setup(
 		if Engine.has_singleton("JavaScriptBridge"):
 			_web_bridge = Engine.get_singleton("JavaScriptBridge")
 	start_session()
-	if active:
+	if local_recording:
+		local_record_dir = local_recording_root().path_join(session_id)
+		_local_started_at = Time.get_datetime_string_from_system()
+		print("[记录] 本地记录已开启，退出时写入 %s" % local_record_dir)
+	if web:
 		_install_web_backlog()
 		# 页面刚打开就先报一次，快速退出的访客也能计入。
 		flush()
@@ -142,6 +185,8 @@ func record(event_name: String, props: Dictionary = {}) -> void:
 	if _queue.size() >= MAX_QUEUE:
 		_queue.pop_front()
 	_queue.append(event)
+	if local_recording:
+		_local_events.append(event)
 	_push_web_event(event)
 
 
@@ -156,6 +201,102 @@ func make_payload(events: Array) -> Dictionary:
 		"start": _start_unix_ms,
 		"events": events,
 	}
+
+
+## 本地记录：写出与 Web 导出同格式的 analytics.json，并复制一份分析页副本，
+## 运行中每 30 秒和退出时各写一次，重复写会覆盖同一目录。
+func write_local_recording() -> void:
+	if not local_recording or local_record_dir.is_empty():
+		return
+	if _local_events.is_empty():
+		return
+	var sample := _make_local_sample()
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(local_record_dir))
+	var path := local_record_dir.path_join("analytics.json")
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	if file == null:
+		printerr("[记录] 无法写入 %s：%s" % [path, FileAccess.get_open_error()])
+		return
+	file.store_string(JSON.stringify(sample, "  "))
+	file.close()
+	_write_local_preview(sample)
+	print(
+		"[记录] 已写入 %s（事件 %d 条）"
+		% [ProjectSettings.globalize_path(path), _local_events.size()]
+	)
+
+
+func _make_local_sample() -> Dictionary:
+	var events := _local_events.duplicate(true)
+	var meta := {
+		"label": "本地游玩记录（--record 调试开关）",
+		"demo": false,
+		"generated_at": Time.get_datetime_string_from_system(),
+	}
+	var network := get_network()
+	if network != null:
+		meta["city"] = network.seed_value
+		meta["mapw"] = roundi(network.map_size.x)
+		meta["maph"] = roundi(network.map_size.y)
+	var summary := {"seconds": 0, "result": "unknown"}
+	for event in events:
+		if event.get("n", "") != "finish":
+			continue
+		var props: Dictionary = event.get("p", {})
+		summary["seconds"] = int(props.get("sec", 0))
+		summary["result"] = "ok" if props.get("ok", false) else "failed"
+	return {
+		"meta": meta,
+		"sessions": [{
+			"id": session_id,
+			"started_at": _local_started_at,
+			"events": events,
+			"summary": summary,
+		}],
+	}
+
+
+## 分析页从仓库里复制，城市底图和数据内联进 sample-data.js；导出后的可执行文件
+## 读不到 res:// 资源时静默跳过，analytics.json 仍可单独交给 render_behavior_png.py 出图。
+func _write_local_preview(sample: Dictionary) -> void:
+	var page_dir := "res://exhibition/analytics"
+	var preview := local_record_dir.path_join("preview")
+	var data_dir := preview.path_join("data")
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(data_dir))
+	for file_name in ["index.html", "analytics.css", "analytics.js"]:
+		_copy_text(page_dir.path_join(file_name), preview.path_join(file_name))
+	var city := int(sample.get("meta", {}).get("city", 118))
+	var city_path := page_dir.path_join("data").path_join("city-%d.json" % city)
+	if not FileAccess.file_exists(city_path):
+		city_path = page_dir.path_join("data").path_join("city-118.json")
+	var city_text := FileAccess.get_file_as_string(city_path)
+	if city_text.is_empty():
+		return
+	var script := "window.SWM_CITY = %s;\nwindow.SWM_SAMPLE = %s;\n" % [
+		city_text, JSON.stringify(sample)
+	]
+	_copy_text_text(
+		"/* 由 TelemetryClient 本地记录生成，请勿手工修改。 */\n" + script,
+		data_dir.path_join("sample-data.js")
+	)
+
+
+func _copy_text(from: String, to: String) -> void:
+	_copy_text_text(FileAccess.get_file_as_string(from), to)
+
+
+func _copy_text_text(text: String, to: String) -> void:
+	if text.is_empty():
+		return
+	var file := FileAccess.open(to, FileAccess.WRITE)
+	if file == null:
+		return
+	file.store_string(text)
+	file.close()
+
+
+func _exit_tree() -> void:
+	write_local_recording()
 
 
 ## 把队列里最多 MAX_BATCH 条事件发出去；同一时间只允许一个请求。
@@ -193,6 +334,12 @@ func _process(delta: float) -> void:
 		if _checkpoint_accum >= CHECKPOINT_INTERVAL_S:
 			_checkpoint_accum = fmod(_checkpoint_accum, CHECKPOINT_INTERVAL_S)
 			_record_checkpoint(session)
+	if local_recording:
+		# 定时落盘，游戏崩溃或强退时也能拿到大部分数据。
+		_local_save_accum += delta
+		if _local_save_accum >= LOCAL_SAVE_INTERVAL_S:
+			_local_save_accum = 0.0
+			write_local_recording()
 	_flush_accum += delta
 	if _flush_accum >= FLUSH_INTERVAL_S:
 		_flush_accum = 0.0

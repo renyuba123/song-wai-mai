@@ -1587,6 +1587,28 @@ PR #31 合并后，从 `origin/main` 的 `7c3d412` 起 `feature/jzy070407-menu-r
 
 本条记录随 `docs/jzy070407-sync-20261029-e` 分支提交、推送并建 PR。
 
+## 2026-10-29 22:03（Asia/Shanghai）桌面版加本地记录调试开关 --record
+
+本轮需求（原文）：“加一个调试开关”。承接上一问“目前本地版本能不能实现数据记录与图像生成？”的结论：桌面版 `TelemetryClient` 只在 Web 构建里采集，手动游玩不会留下任何数据，只能靠 `tools/record_sample_session.gd` 自动跑一单。
+
+**做法：**
+
+- `TelemetryClient` 增加本地记录开关：启动参数 `-- --record` 或环境变量 `SWM_RECORD=1/true/yes` 都能打开；Web 构建下这个开关无效，原有上报逻辑不变。
+- 打开后 `active` 置真，采集内容与 Web 版一致：开局环境、接单/取单/送达/被撞事件、每 2 秒位置采样、每 30 秒计时点。桌面不创建 `HTTPRequest`，`flush()` 保持空转，数据不会联网。
+- 运行中每 30 秒落盘一次，节点退出时再写一次，写到 `exports/recordings/<会话 ID>/analytics.json`，并复制一份分析页到 `preview/`；导出成可执行文件时 `res://` 只读，改写到 `user://recordings/`。
+- 写出的 JSON 与分析页、`tools/render_behavior_png.py` 使用同一种结构：`meta.demo` 为 `false`，`meta.label` 是“本地游玩记录（--record 调试开关）”，`sessions[0].summary` 带用时和结算结果。
+
+**验证：**
+
+- `--headless --path . --import` 退出码 0。
+- `test_telemetry` headless 退出码 0、PASS：新增用例覆盖 `--record` 参数、`SWM_RECORD` 环境变量（含大小写和空格）、默认关闭、以及开关打开后写出的 `analytics.json` 结构、会话 ID 和事件内容。
+- 用 `record_sample_session.gd` 加 `-- --record` 实跑一单：事件 52 条（pos 44、checkpoint 3、session/offer/start/pickup/finish 各 1），运行中依次落盘 17、32、48 条，退出时写满 52 条，生成 `exports/recordings/se7bbfa9182cc1d4f34ad4f93/analytics.json` 和 `preview/index.html`。
+- 用这份本地记录跑 `tools/render_behavior_png.py`，得到 2000×2000、1175 KB 的 `map.png`，说明本地记录与出图脚本可以直接对接。
+- `test_main_scene` 在 headless 下于导航网格烘焙阶段崩溃（`Attempting to initialize the wrong RID`，退出码 139），改窗口模式后退出码 0、PASS（nodes=91 lots=764 sites=32）。按已知环境现象记录，不是本轮改动引入。
+
+**修改文件：** `scripts/core/telemetry_client.gd`、`tests/test_telemetry.gd`、`docs/BEHAVIOR_DATA_EXPORT.md`、`docs/DEVELOPMENT_LOG.md`。
+
+本条记录随 `feature/jzy070407-local-record-flag` 分支提交、推送并建 PR。
 ## 2026-10-29 22:08（Asia/Shanghai）重新上传 Web 版并修复部署回滚
 
 本轮需求（原文）：“打开一下网页端”，随后是“重新上传新版本”和“直接更新服务器”。

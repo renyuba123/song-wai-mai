@@ -272,6 +272,40 @@ Godot_v4.7.2-stable_win64_console.exe --path . \
 任务起止点、计时点和道路拥挤度。`exports/` 已在 `.gitignore` 里，示例数据
 和真实导出一样不提交仓库。
 
+### 记录自己手动玩的一局（调试开关）
+
+自动录制只能演示链路。想记录自己手动骑的路线，启动时加 `-- --record`：
+
+```bash
+Godot_v4.7.2-stable_win64_console.exe --path . -- --record
+```
+
+从编辑器（F5）启动时没法加参数，改用环境变量：
+
+```bash
+SWM_RECORD=1 Godot_v4.7.2-stable_win64_console.exe --path .
+```
+
+开关打开后，`TelemetryClient` 会和 Web 版一样采集：开局环境、接单/送达/被撞事件、
+每 2 秒一个位置采样、每 30 秒一个计时点。不同之处是数据不联网，直接写到
+`exports/recordings/<会话 ID>/`：
+
+- `analytics.json`：与页面同款结构，`meta.demo` 为 `false`，`meta.label` 标成
+  “本地游玩记录”；
+- `preview/index.html`：分析页副本，用浏览器打开就能看地图、轨迹和计时点。
+
+运行中每 30 秒落盘一次，退出时再写一次，进程崩了也只会丢最后半分钟。
+导出成可执行文件运行时 `res://` 只读，输出目录改成系统的 `user://recordings/`
+（日志会打印完整路径）。`--record` 只影响本地采集，Web 版行为不变。
+
+拿到 `analytics.json` 后直接出图：
+
+```bash
+python tools/render_behavior_png.py \
+  --json exports/recordings/<会话 ID>/analytics.json \
+  --out exports/recordings/<会话 ID>/map.png
+```
+
 ## 常用查询
 
 在 DMC 的 SQL 窗口里执行，或者把 SQL 贴给 `tcb db execute`：
