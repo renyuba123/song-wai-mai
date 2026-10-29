@@ -895,6 +895,34 @@ Godot 4.7.2 `--headless --path . --import` 退出码 0，路网 150 个节点、
 
 本条记录随 `feature/jzy070407-route-fixes` 分支提交、推送并建 PR。
 
+## 2026-10-29 12:42（Asia/Shanghai）站点与订单可读性
+
+**本轮需求（原文）：** “按照大模块逐步继续，某一模块完成后给出下一模块方向”
+
+上一模块“城市模型库扩充与朝向校正”完成后给出的下一模块方向是“站点与订单可读性”：给商家/顾客站点加真实店名和入口标识，突出当前订单目标并弱化非目标站点，让玩家在模型丰富后的城市里能快速认出该去哪一家，而不是只看统一的任务光柱。上一轮用户提出的导航指引问题（高光提示线过高、无法实时演算）已在独立的 `feature/jzy070407-route-fixes` 分支和 PR #25 中处理，本轮没有重复修改路线代码。
+
+实现内容：
+
+- 新增 `SiteNaming`：为 7 个取餐店面、7 个送餐站点各准备 2 到 3 个中文店名，按最终选中的建筑模型取候选列表，再用站点编号做确定性哈希挑选。同一城市种子、同一布局总是得到同一组店名；接单界面、活动目标、三维店名牌共用 `CitySite.display_name`，`CitySite` 新增同名导出字段，单独生成没有布局的 `CityContent` 时保持为空。
+- 新增 `SiteSignage`：`WorldGenerator` 在运行时创建节点，布局生成后为每个站点在入口上方 3.2 米放置朝向镜头的 `Label3D`；商家用暖黄色、顾客用浅蓝色，160 米外淡出。当前订单目标加“★”、放大并始终可见（`no_depth_test`），其余站点的标牌降低透明度，避免整条街的店名同时抢眼。
+- 订单流程同步店名：接单界面的“取餐/送达”改为“城市广场（商家）”“拾光书店（顾客）”这种先店名后角色的格式；活动目标显示“前往「城市广场」取餐”“送达「拾光书店」”；没有店名时仍回退到原来的“商家 #007”“顾客 #012”。`OrderManager` 在接单、取餐、送达、重开、返回主菜单和结算时同步 `SiteSignage` 的高亮目标，目标信标继续用颜色区分取餐/送达。
+- 截图检查：在 1600×900 窗口靠近商家观察，店名牌中文渲染正常，当前目标“★ 城市广场”显示在信标上方；最初同时给信标加了“取餐点 · 城市广场”文字，两个标签在近距离互相压住且被信标柱遮挡，改成只保留三维店名牌后画面更干净，因此没有保留重复的信标文字。
+- 新增 `tests/test_site_readability.gd`：检查全部 32 个站点都有店名、店名与最终模型/编号确定一致、三维标牌与店名一致、接单界面包含双方店名和角色、取餐/送达阶段目标文本与星标切换、结算后取消高亮；未知模型不会凭空生成店名。更新 `tests/test_orders.gd` 中固定的“商家 #007”“顾客 #012”“送达顾客”断言，保留无店名回退用例并增加有店名用例。
+- `.github/workflows/repository-integrity.yml` 测试循环、`README.md`、`docs/USER_GUIDE.md` 加入 `test_site_readability` 和店名/标牌说明。
+
+修改文件：新增 `scripts/world/site_naming.gd`、`scripts/world/site_signage.gd`、`tests/test_site_readability.gd`；修改 `scripts/world/city_site.gd`、`scripts/world/world_generator.gd`、`scripts/orders/order_hud.gd`、`scripts/orders/order_session.gd`、`scripts/orders/order_manager.gd`、`tests/test_orders.gd`、`.github/workflows/repository-integrity.yml`、`README.md`、`docs/USER_GUIDE.md`、`docs/DEVELOPMENT_LOG.md`。没有修改人流、车速、NPC 车行方向、主控电动车物理相关文件。
+
+**测试与校验：**
+
+- Godot 4.7.2 `--headless --path . --import` 退出码 0；路网校验通过（节点 150、路段 214），城市生成通过（地块 1637、建筑 1637、站点 32、出入口 98）。
+- 窗口渲染 1280×720：`test_site_readability` 输出 `PASS site readability`、退出码 0；`test_orders` 输出 `PASS orders starts=12` 和 `PASS orders`、退出码 0；`test_route_guidance` 输出 `PASS route guidance`、退出码 0。
+- headless：`test_site_readability` 打印 `PASS site readability`，随后以既有 Windows 退出阶段访问冲突 139 结束；`test_orders` 打印 `PASS orders`，同样在退出阶段 139；`test_city` 输出 `PASS city` 后 139；`test_contracts` 退出码 0。`test_route_guidance` 在 headless 下因导航烘焙后创建路线网格触发已知 RendererDummy/RID 问题，没有打印 PASS，改在窗口渲染下通过。以上均与既有 headless 环境现象一致，不视为断言失败。
+- `git diff --check` 通过。
+
+**后续方向：** 下一大模块计划做“交通与行人规则化”：让现有的汽车和行人不再只是各走各的，而是在路口按信号灯停走、车辆对前方行人和障碍减速，并让玩家能看懂什么时候可以安全过街。这样城市模型和站点已经可辨认，接下来补上街道本身的行为可信度。
+
+本条记录随 `feature/jzy070407-site-readability` 分支提交、推送并建 PR。
+
 ## 2026-10-29 12:45（Asia/Shanghai）展览三个二维码、游戏 Web 版与手机触屏
 
 本轮需求（原文）：“目前项目展览有一个要求：设置三个二维码，实现：1# 扫描后打开游戏本体 #2扫描后打开游戏演示视频 #3扫描后打开游戏中用户行为分析数据，请帮我处理一下”。追问确认：1 号尝试国内静态托管，2 号演示视频和 3 号行为分析暂时留占位；交付物只要三张二维码；手机端加简易触屏控制；部署由用户登录、我来执行。随后用户又问“国内部署能不能部署到微信小程序上？”。
@@ -924,7 +952,6 @@ Godot 4.7.2 `--headless --path . --import` 退出码 0，路网 150 个节点、
 **部署与微信小程序：**
 
 - 国内静态托管试过 EdgeOne Pages，单文件上限 25 MiB，放不下 39.5 MB 的 `index.wasm`，已排除。改用腾讯云 CloudBase 静态托管，命令行上传没有这个单文件限制，`@cloudbase/cli` 已通过 npmmirror 安装。
-- 试用局域网 HTTP 地址时浏览器提示 “Secure Context - Check web server configuration (use HTTPS)”。查 `index.js` 确认安全上下文是无条件检查，HTTP 下引擎不会启动；localhost 例外，CloudBase 默认域名是 HTTPS 不受影响。安卓 Chrome 可用 `chrome://flags/#unsafely-treat-insecure-origin-as-secure` 临时放行局域网地址，iOS 无对应开关。展览文档已补这一节。
 - 目前卡在账号登录：需要用户执行 `tcb login` 并选择或新建环境，之后运行 `tcb hosting deploy build/web / -e <环境 ID>` 得到访问地址，再回填 `links.json` 并重新生成 1 号二维码。
 - 微信小程序评估：Godot 没有官方小游戏导出，主包 4 MB、分包总量 30 MB 与我们 39.5 MB 的 wasm 差距太大，不采用。可行路线是认证企业小程序用 `web-view` 套 H5，但需要企业主体、ICP 备案域名和业务域名校验文件，二维码还得用小程序码才能扫码直进。结论是先以 H5 为主方案，微信内置浏览器可以直接运行；若主办方强制要求小程序入口，再补 `web-view` 页面骨架。
 
@@ -934,6 +961,45 @@ Godot 4.7.2 `--headless --path . --import` 退出码 0，路网 150 个节点、
 
 - CloudBase 登录、创建环境并部署，回填 1 号二维码正式链接。
 - 2 号演示视频、3 号行为分析页面地址到位后替换占位链接并重新生成。
+
+## 2026-10-29 12:56（Asia/Shanghai）远端同步检查
+
+本轮需求（原文）：“检查 song-wai-mai 仓库的远端更新：进入 E:/Project/Game Work Team/song-wai-mai，先确认工作区状态，再执行 git fetch origin --prune。如果 origin/main 或 origin/refactor/modular-base 有新提交，按 CONTRIBUTING.md 和每轮工作规则安全整合（有未提交改动时先保留或提交，不覆盖），运行相关 Godot 测试，把本轮同步和测试结果追加到 docs/DEVELOPMENT_LOG.md，提交并推送；若出现冲突或权限问题，停止并向用户说明，不要强推。”
+
+主检出 `song-wai-mai` 当前在 `feature/jzy070407-traffic-cars`，工作区干净，没有未提交改动。`git fetch origin --prune` 通过 HTTPS 执行成功，没有出现握手失败；远端没有 `refactor/modular-base` 分支。`origin/main` 当前为 `dcc92dd`（合并 PR #26 展览二维码与手机触屏）。上次同步记录写入后，远端依次合入城市模型库扩充（#24，`72dcc6a`）、导航指引修正（#25，`91f5b9b`）和展览二维码/Web 导出/触屏控制（#26，`dcc92dd`）。
+
+主检出的本地 `main` 仍指向 `17c87a9`，是 `origin/main` 的祖先，可以直接快进；但主检出当前在别人的功能分支上，按工作区规则没有在其中切换分支或改写 `main` 引用，也没有覆盖任何未提交改动。最新 `origin/main` 已在 lead 工作树的 `feature/jzy070407-site-readability` 中通过合并提交 `4429a2d` 安全整合，PR #27 因此恢复为可合并；本轮同步本身没有产生冲突，也没有强推。
+
+本轮同步记录和测试在 lead 工作树新建的 `docs/jzy070407-sync-20261029-b` 分支上完成，分支从 `origin/main` 的 `dcc92dd` 创建，只改开发日志，不改代码。
+
+**测试与校验：**
+
+- Godot 4.7.2 `--headless --path . --import` 退出码 0；路网校验通过（节点 150、路段 214），城市生成通过（地块 1637、建筑 1637、站点 32、出入口 98）。
+- headless：`test_road_network`、`test_city_catalog`（`models=59 distinct_in_seed_118=55`）、`test_touch_controls`、`test_input_actions`、`test_contracts` 均打印 PASS、退出码 0；`test_city` 打印两组 PASS 后在退出阶段以既有访问冲突 139 结束；`test_navigation_queries` 在导航烘焙阶段触发既有 RendererDummy/RID 问题，未打印 PASS。
+- 窗口渲染 1280×720：`test_main_scene`、`test_navigation_queries`、`test_orders`、`test_pause`、`test_route_guidance` 全部打印 PASS、退出码 0。
+- 以上 139 与无 PASS 的 headless 现象均与既有记录一致，不视为本次同步引入的断言失败。
+
+本条记录随 `docs/jzy070407-sync-20261029-b` 分支提交、推送并建 PR。
+
+## 2026-10-29 13:19（Asia/Shanghai）接单手机界面
+
+本轮需求（原文）：“这个图片上的手机界面为什么还没有？”、“优先做这个模块”。用户给的截图里，左上角是“手机收到新订单 · Y 接单 / N 拒单”，画面中间偏下是一台斜放在车把前的手机，屏幕显示“新外卖订单”、商家 `merchant_004`、顾客 `#009`、“总路程 12.7km”、“配送费 ¥9.34”、绿色“接单 Y”按钮、灰色拒单按钮和“7s”倒计时。本轮按这张图把接单界面做成场景里的三维手机，不再用屏幕中央的平面弹窗。
+
+实现放在新文件 `scripts/orders/order_phone.gd`：`OrderManager.setup()` 把手机挂到玩家相机下，收到订单时出现在视线下方。手机屏幕用 `SubViewport`（360×640）加圆角浅色底板渲染，显示取餐/送达店名、总路程、配送费、限时和 10 秒倒计时；屏幕贴图设为无光照、带透明，手机外壳是黑色方块和摄像头点。按键新增 `order_accept`（Y）和 `order_reject`（N），`interact`（E）保留为接单兼容键；鼠标和触屏点击会从相机射线投到手机屏幕平面，再换算成 `SubViewport` 像素坐标转发给屏幕里的按钮，因此可以直接点“Y 接单”。倒计时归零按拒单处理，立即按新种子生成下一单；拒单和超时都不会退回开始菜单。
+
+`OrderHUD` 去掉了原来的接单弹层和接单按钮，只保留左上角“手机收到新订单 / Y 接单 · N 拒单”的提醒；开始菜单、等待、配送、结算和错误状态仍由 HUD 负责。接单后手机和 HUD 提醒一起隐藏，活动订单、路线、暂停和撞车失败逻辑不变。手机由代码挂到现有相机上，没有改 `player.tscn`、车辆、行人或导航文件；`project.godot` 只新增 Y/N 两个输入动作。
+
+新增 `tests/test_phone_orders.gd`：检查手机挂在玩家相机下、开始菜单隐藏、首单屏幕文字与 `OrderPhone.format_offer_text()` 一致、店名/总路程/配送费/限时/倒计时/按钮文字齐全、配送费公式、Y 接单后手机隐藏且订单开始、N 拒单后种子递增并换单、倒计时归零自动换单、回主菜单后隐藏手机。`test_input_actions` 的期望动作增加到 9 个，`README.md`、`docs/USER_GUIDE.md` 和 CI 测试清单同步加入 `test_phone_orders`。
+
+**测试与校验：**
+
+- Godot 4.7.2 `--headless --path . --import` 退出码 0；路网校验通过（节点 150、路段 214），城市生成通过（地块 1637、建筑 1637、站点 32、出入口 98）。
+- headless：`test_input_actions`（`PASS input actions count=9`）、`test_phone_orders`（`PASS phone orders`）、`test_orders`（`PASS orders`）、`test_main_scene`（`PASS main scene`）都先打印 PASS，后三个在退出阶段以既有访问冲突 139 结束；`test_pause` 本轮 headless 在第二次按 Esc 恢复时触发 `Attempting to initialize the wrong RID`，未打印 PASS。
+- 窗口渲染 1280×720：`test_pause`、`test_orders`、`test_phone_orders`、`test_route_guidance`、`test_site_readability` 全部打印 PASS、退出码 0。
+- 窗口渲染 1600×900 截图确认：手机在视线下方完整可见，圆角屏幕显示“新外卖订单”、取餐“城市广场”、送达“城市银行”、总路程 2.4 km、配送费 ¥5.40、“剩余 10 秒”、绿色“Y 接单”和灰色“N 拒单”；左上角 HUD 为紧凑的两行提醒。另用临时脚本模拟点击屏幕接单按钮，接单成功（`session=true controls=true`），临时脚本和截图已删除，不进入提交。
+- 以上 139 和 headless 的 RID 报错与既有记录一致，按本机 headless 环境问题处理，不视为断言失败。
+
+本条记录随 `feature/jzy070407-phone-order` 分支提交、推送并建 PR。
 
 ## 2026-10-29 13:35（Asia/Shanghai）CloudBase 部署完成与公网验证
 
@@ -954,3 +1020,101 @@ Godot 4.7.2 `--headless --path . --import` 退出码 0，路网 150 个节点、
 
 - 体验版默认域名首次访问会先显示“页面访问提示”，需要访客点一次“确定访问”，之后同一浏览器在 Cookie 有效期内不再出现。按官方文档，移除中间页唯一合规方式是绑定已完成 ICP 备案的自定义域名；默认域名不适合正式大规模分发。
 - 当前 1 号二维码先指向该地址，扫码后多点一次即可进入游戏；若拿到备案域名，改 `links.json` 重新生成即可，二维码文件名不变。
+
+## 2026-10-29 13:42（Asia/Shanghai）仿照片复刻接单手机
+
+本轮需求（原文）：“与预期不符合，请仿照照片复刻”；“车辆运行时，手机的界面也应出现在左侧相应位置”。
+
+对照用户给的参考照片重新量了布局：左上角是一块约占屏幕宽度 40% 的深蓝色半透明面板，金色描边、圆角，里面只有一行“手机收到新订单 · Y 接单 / N 拒单”，下方留大片空白；画面中间偏下、车把左侧是一台约 91×145 像素的小手机，屏幕里是白色圆角卡片，标题“新外卖订单”，橙色小条加“商家 · 店名”，然后是“取餐 · 地块 N 取餐点”“送达 · 地块 N 送达站点”“总路程”“预计收入”，底部并排灰色“拒绝 N”和绿色“立即接单 Y”，最下面是倒计时提示。
+
+`scripts/orders/order_phone.gd` 按这张照片重写：
+
+- 手机尺寸、缩放和位置改为更小、更靠左下；屏幕贴图改为 720×1280，UI 仍按 360×640 排布后放大两倍渲染，缩到手机大小时文字边缘更干净。
+- 屏幕改成浅灰底加白色圆角卡片，卡片带淡阴影；状态栏显示时间、信号和电量；标题、橙色商家标记、地块取餐/送达信息、总路程、绿色预计收入、并排按钮和底部倒计时都按照片层级排列。
+- 新增 `Mode.OFFER` 和 `Mode.ACTIVE` 两种状态。接单后手机不再隐藏，而是切到“配送中”页面，继续显示在车把左侧；页面显示当前目标、距离、剩余时间和 E 交互提示。配送结束、结算、返回主菜单或换单时再隐藏。
+- 鼠标/触屏点击仍然从相机射线投到手机屏幕，再换算成 `SubViewport` 像素；屏幕分辨率改为 720×1280 后，按钮点击按两倍坐标映射，已验证能点中“拒绝”和“立即接单”。
+
+`scripts/orders/order_hud.gd` 把接单状态的左上角面板放大为照片里的单行提醒，字体改小以适应面板宽度；配送、等待、结算和错误状态恢复原来的紧凑面板和字号。`scripts/orders/order_manager.gd` 在接单和重开本单时调用 `OrderPhone.show_active()`，并在刷新 HUD 时同步刷新手机配送页面。
+
+`tests/test_phone_orders.gd` 同步更新：检查“预计收入”、按钮文字“拒绝 N”“立即接单 Y”、接单后手机进入配送模式并显示“配送中/目标/距离/剩余”，结算和主菜单隐藏手机；新增有窗口时的真实点击转发测试，分别点“拒绝”和“立即接单”。headless 下 `SubViewport` 推送鼠标事件会触发已知 RID 崩溃，所以点击测试只在有渲染窗口时执行，headless 仍跑其余断言。`README.md` 和 `docs/USER_GUIDE.md` 同步描述新的手机外观和配送中常驻行为。
+
+**测试与校验：**
+
+- Godot 4.7.2 `--headless --path . --import` 退出码 0；路网校验通过（节点 150、路段 214），城市生成通过（地块 1637、建筑 1637、站点 32、出入口 98）。
+- headless：`test_phone_orders`（`PASS phone orders`）、`test_orders`（`PASS orders`）、`test_site_readability`（`PASS site readability`）、`test_main_scene`（`PASS main scene`）、`test_input_actions`（`PASS input actions count=9`）均打印 PASS；前四个在退出阶段以既有访问冲突 139 结束，`test_input_actions` 退出码 0。
+- 窗口渲染 1280×720：`test_phone_orders` 打印 `PASS phone orders`、退出码 0，点击“拒绝”后换单、点击“立即接单”后进入配送均通过。
+- 窗口渲染 1600×900 截图比对参考照片：左上角深蓝金边面板约 640×208 像素，单行提醒位置和照片一致；手机约 91×145 像素，位于画面约 44.5% 宽、68% 高处，白色卡片、橙色商家标记、绿色收入、并排按钮和底部倒计时都可辨认。配送截图确认手机继续留在车把左侧并显示“配送中”。
+- 以上 headless 139 与 RID 报错与既有记录一致，按本机环境问题处理，不视为断言失败。
+
+本条记录随 `feature/jzy070407-phone-replica` 分支提交、推送并建 PR。
+
+## 2026-10-29 14:39（Asia/Shanghai）接收包更新：合并斜向分级路网原型
+
+本轮需求（原文）：“接收包有更新，提取有用项合并”。
+
+检查了新到的 `交接包接收/song-wai-mai-main.zip`（约 51 MB，2026-10-29 13:54）。解压后快照的 `main`、`手机`、`upload-cars` 三个分支和三个 stash 都看过了：模型和贴图共 102 个 LFS 指针与当前 `assets` 完全一致，没有新增美术资源；`手机` 分支上的 `a86b892 feat: restore phone order notification UI` 是更早的并行手机界面，已被已经合并的照片复刻手机取代，合并它只会回退，因此没有采用。真正有用的是 `stash@{2}` 里未合并的路网原型。
+
+`stash@{2}` 的改动按当前代码重新落地，没有直接套用整个 stash：
+
+- `scripts/world/road_generator.gd` 换成“等级优先生长”：先生成一条沿随机基准方向的主干路，再从主干路节点向两侧长次干路，然后在次干路上按间距分叉支路，最后从支路内部节点补一代垂直支路；每一步都允许小幅噪声转弯，交叉处按事务方式切分旧路段，靠近已有节点时吸附并复用节点，生长完再裁掉只有一端的支路短头。新路网是斜向、不规则的，不再有全局正交轴线，`x_axes`、`y_axes` 保留字段但为空。
+- `scripts/world/road_builder.gd` 的道路、路口改用朝向角旋转放置；跨出地图边界的网格和碰撞体通过 `clipped_footprint()` 与地图矩形求交，路面视觉改成三角化多边形，碰撞改成 `ConvexPolygonShape3D`。只擦到边界、面积接近零的薄片直接按未裁切处理，避免退化的凸包影响导航。
+- `scripts/world/road_network.gd` 的校验补上节点越界、路段字段和端点、重复路段、任意角度相交检测；道路间距说明改成按每条路段统计偏离推荐值，不再依赖轴线。
+- `scripts/world/city_builder.gd` 的人行道、入口步道也按路段朝向旋转，并在靠近地图边缘时裁切；`scripts/world/city_generator.gd` 的地块改为按路段净距逐条检查，斜向街区把临街退让加上 `MAX_FRONTAGE * |sin·cos|`，内部补排同样做道路净距检查；`_inside_block()` 改用地图边界判定。
+- 新增 `CityPopulationLayout.door_point()`：沿朝向射线求与轴对齐包围盒的真实边界。斜向摆放下原来用“半宽乘朝向”算出的门点会落在包围盒里面，入口步道会穿进模型；建筑绘制、烘焙脚本和两个布局测试都改用这个函数。
+
+测试同步调整：
+
+- `tests/test_road_network.gd` 新增 64 组布局的生长扫描、确定性重复、不同种子几何差异、任意角度相交谓词、事务式交叉口切分、重复路段和越界负例。
+- `tests/test_contracts.gd` 不再要求轴线非空，改为检查兼容字段仍是数组；`tests/test_city.gd` 的大地图地块下限从 1200 调整为 1000，因为斜向分级街区更长更宽、可放下的临街地块比旧正交网格少，但种子 42、2400 米仍有 1038 个地块。
+- `tests/test_city_streaming.gd` 和 `tests/test_city_population.gd` 的道路侵占检查从“道路端点包围盒”改成“地块矩形与路段中心线的净距”，避免斜向道路被轴对齐包围盒误判。`test_city_population.gd` 原来读取的种子 118 烘焙场景是按旧正交路网生成的，已经过期；本机 headless 重新烘焙会触发已知的 `RendererDummy` 网格 RID 崩溃，因此改为直接验证运行时 `CityPopulationLayout` 的 764 栋建筑、1528 个装饰、32 个站点。
+
+**测试与校验：**
+
+- Godot 4.7.2 `--headless --path . --import` 退出码 0，没有脚本解析错误。
+- headless：`test_road_network` 退出码 0，`PASS seed=42 nodes=96 edges=149`、`PASS seed=1 nodes=19 edges=21`、`PASS seed=73 nodes=177 edges=306`，生长扫描 64 组布局、确定性和负例全部通过；`test_contracts` 退出码 0；`test_city_population` 退出码 0，`PASS population: 32 sites, 764 buildings, 1528 decorations; seed 118 layout`；`test_city` 的两个种子地块/建筑/入口/站点检查通过（1038 地块、137 地块），进入主场景导航烘焙后与本机既有问题一样以 139 结束，没有打印断言失败；`test_main_scene`、`test_orders`、`test_traffic_streaming` 先打印 PASS，也在退出阶段以 139 结束。
+- `test_city_streaming` 的四个种子里，种子 118 的布局空间检查（道路净距、模型重叠、站点入口步道）没有失败，随后在加载模型的 headless 阶段以 139 结束。用 `origin/main` 的干净工作树复跑同一测试也停在完全相同的位置，确认这是本机 `RendererDummy` 环境问题，不是本轮路网改动引入的。
+- `test_navigation_queries`、`test_traffic`、`test_pedestrians`、`test_pause`、`test_route_guidance` 本轮在 headless 下都在主场景资源加载阶段触发同一类 RID 报错并退出 139，未打印 PASS；与既有环境记录一致，按环境问题处理。
+
+本条记录随 `feature/jzy070407-road-growth` 分支提交、推送并建 PR。
+
+## 2026-10-29 14:54（Asia/Shanghai）重做开始与结算页面
+
+本轮需求（原文）：“pr31已经合并 重做开始结束页面”。
+
+PR #31 合并后，从 `origin/main` 的 `7c3d412` 起 `feature/jzy070407-menu-redesign` 分支，只重做开始界面和配送结算页面；订单状态机、接单手机、路线指引、导航和 HUD 的既有接口都不改，原 `OrderHUD` 对外方法保持原样。
+
+- 新增 `scripts/ui/menu_backdrop.gd`：开始和结算共用的全屏动画背景，程序化绘制深蓝夜空渐变、城市剪影与零星窗灯、右下角透视网格、一条虚线配送路线和沿线缓慢移动的高亮脉冲。剪影用固定种子 20261029 生成，窗口尺寸变化时重建，不依赖额外贴图。
+- 开始界面改成从左上起排的品牌行“城市外卖 · NIGHT SHIFT”、大号金色标题“大城市送外卖”、一条短金线、两行副标题“在程序化生成的城市里接单、取餐、送达。”“穿过真实车流，按时完成每一单。”、三枚特性标签“程序化城市”“实时车流”“第一人称配送”、一块玻璃质感操作说明面板（移动 WASD / 左侧摇杆、视角 鼠标 / 右侧拖动、交互 E 取餐 / 送达、暂停 · 重开 Esc · R）、城市种子标签、操作提示和主按钮“开始接单  →”。原来居中的大块面板和说明列表被替换掉。
+- 结算界面改成居中的暗色卡片：顶部英文眉标“配送成功 · DELIVERY COMPLETE”或“配送失败 · DELIVERY FAILED”，下方圆形徽标（成功 ✓ 薄荷绿，失败 ! 珊瑚红），标题“订单完成”/“订单失败”，取餐和送达分两行显示（“取餐 · 店名（商家）”“送达 · 店名（顾客）”），三张统计卡“总路程”“用时”“剩余时间”（失败时剩余时间显示“未完成”），金色“本单收入 ¥xx.xx”（失败为 ¥0.00），再下面是城市种子、订单种子和剩余时间或失败原因，底部“下一单（R）”和“返回主菜单”两个按钮及提示。原有的 `订单完成`、`订单失败`、失败原因文案和测试接口都没有变。
+- 响应式：按视口宽度和高度分成三档。窄屏（宽度小于 560）收窄边距、缩小标题字号，主按钮拉满内容宽度，隐藏操作面板改显示一行触摸提示；紧凑档（宽度小于 900 或高度小于 760）隐藏三枚特性标签、缩小字号和间距，避免 1152×648 下按钮跑出屏幕。结算卡片宽度收到 720 或视口宽度减边距，同样按档缩放徽标和字号。
+- 文字标签不再使用 `autowrap_mode`，固定文案直接用 `\n` 换行。原因是 Label 自动换行会先按宽度 0 计算最小高度，副标题一度把内容撑到 1257 像素高，headless 和窄屏都会溢出。
+- 新增 `tests/test_menu_ui.gd`：只挂载独立的 `OrderHUD` 和合成订单，不加载主场景和模型，检查开始界面的标题、副标题、按钮、种子、模态状态和内容矩形，成功结算的标题、两行取送路线、总路程 1490 m、用时 0:00、剩余时间 8:27、收入、城市种子和卡片边界，失败结算的标题、撞车原因、“未完成”、¥0.00 和商家名。`README.md`、`docs/USER_GUIDE.md` 和 `.github/workflows/repository-integrity.yml` 的测试清单都已加入该脚本。
+
+**测试与校验：**
+
+- Godot 4.7.2 `--headless --path . --import` 退出码 0，路网校验和城市生成通过，没有脚本解析错误。
+- headless：`test_menu_ui` 打印 `PASS menu ui start`、`PASS menu ui success`、`PASS menu ui failure`、`PASS menu ui`，退出码 0；`test_orders` 打印 `PASS orders starts=12`、`PASS orders`，退出阶段以 139 结束。`test_pause` 和 `test_phone_orders` 在主场景导航烘焙阶段或退出阶段触发既有 RID 报错，`test_phone_orders` 已打印 `PASS phone orders`，`test_pause` 未打印 PASS；把 `order_hud.gd` 换回 `origin/main` 版本复跑 `test_pause` 仍停在相同位置，确认与本轮界面改动无关，按本机 headless 环境问题处理。
+- 窗口渲染 1600×900 截图核对：开始界面标题、两行副标题、三枚标签、四行操作面板、种子、提示和“开始接单”按钮全部在屏幕内；成功结算卡片显示两行取送路线、三张统计卡、¥5.07 和两个按钮；失败结算卡片显示“订单失败”、撞车原因、¥0.00 和“未完成”。另以 390×844 竖屏截图确认窄屏下按钮满宽、操作面板隐藏、没有空玻璃面板残留。临时截图脚本用完已删除，不进入提交。
+- 竖屏手机上整块界面仍偏小，这是 `project.godot` 现有 `canvas_items` + `expand` 拉伸和默认横屏视口的项目级行为，本轮没有改共享文件，留到设置/移动端适配时统一处理。
+
+本条记录随 `feature/jzy070407-menu-redesign` 分支提交、推送并建 PR。
+
+## 2026-10-29 14:57（Asia/Shanghai）检查远端更新：PR #32 已合并
+
+本轮需求（原文）：“检查 song-wai-mai 仓库的远端更新：进入 E:/Project/Game Work Team/song-wai-mai，先确认工作区状态，再执行 git fetch origin --prune。如果 origin/main 或 origin/refactor/modular-base 有新提交，按 CONTRIBUTING.md 和每轮工作规则安全整合（有未提交改动时先保留或提交，不覆盖），运行相关 Godot 测试，把本轮同步和测试结果追加到 docs/DEVELOPMENT_LOG.md，提交并推送；若出现冲突或权限问题，停止并向用户说明，不要强推。”
+
+检查结果：
+
+- `song-wai-mai` 主检出的工作区是干净的，当前停在 `feature/jzy070407-traffic-cars`，没有未提交改动，也没有 stash。
+- `git fetch origin --prune` 成功。`origin/main` 从 `7c3d412` 前进到 `af924d6`，新增的只有 `9f90cb7 feat: redesign start and result screens` 和合并提交 `af924d6 Merge pull request #32 from renyuba123/feature/jzy070407-menu-redesign`，也就是上一轮重做开始/结算页面的 PR #32；没有其他人的新提交。
+- `origin/refactor/modular-base` 远端已经不存在，`git branch -r` 里没有 refactor 或 modular 相关分支，无需整合。
+- 没有切换 `song-wai-mai` 当前分支。只执行了 `git fetch origin main:main`，把本地 `main` 从 `17c87a9` 快进到 `af924d6`，不触碰工作区，不覆盖任何未提交内容。
+- 由于主检出停在别的分支，本轮同步记录在 `worktrees/lead` 里从最新 `origin/main` 新建 `docs/jzy070407-sync-20261029-c` 分支写入，避免在主检出里切换分支。
+
+**测试与校验：**
+
+- 在最新 `origin/main` 上执行 `--headless --path . --import`，退出码 0；城市生成通过，地块 764、建筑 764、站点 32、出入口 141。
+- headless：`test_menu_ui` 打印 `PASS menu ui start`、`PASS menu ui success`、`PASS menu ui failure`、`PASS menu ui`，退出码 0；`test_orders` 打印 `PASS orders starts=12`、`PASS orders`；`test_main_scene` 打印 `PASS main scene nodes=91 lots=764 sites=32 starts=12 vehicles=4 order_seed=1 sky=true`。后两个在退出阶段以既有访问冲突 139 结束，按本机 headless 环境问题处理，不视为断言失败。
+- 本轮没有冲突，也没有权限问题。
+
+本条记录随 `docs/jzy070407-sync-20261029-c` 分支提交、推送并建 PR。

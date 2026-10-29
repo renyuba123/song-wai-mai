@@ -8,6 +8,8 @@ enum Kind { MERCHANT, RESIDENTIAL }
 
 @export var id: StringName = &""
 @export var kind: Kind = Kind.MERCHANT
+## 由 SiteNaming 在布局生成后写入；单独生成 CityContent 时可以为空。
+@export var display_name: String = ""
 @export var position: Vector3 = Vector3.ZERO
 @export var facing_yaw: float = 0.0
 @export var lot_id: int = -1

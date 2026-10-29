@@ -62,10 +62,13 @@ godot --headless --path . --script res://tests/test_city.gd
 godot --headless --path . --script res://tests/test_city_catalog.gd
 godot --headless --path . --script res://tests/test_god_view.gd
 godot --headless --path . --script res://tests/test_orders.gd
+godot --headless --path . --script res://tests/test_menu_ui.gd
+godot --headless --path . --script res://tests/test_phone_orders.gd
+godot --headless --path . --script res://tests/test_site_readability.gd
 godot --headless --path . --script res://tests/test_traffic.gd
 ```
 
-前两条检查路网生成、校验、寻路和主场景启动；中间三条分别检查共享数据契约、输入映射与玩家移动、导航查询接口；`test_city` 检查城市确定性、反向数据、主场景城市装配和站点可达性；`test_city_catalog` 检查模型目录可加载、包围盒有效、分类数量和种子 118 的模型多样性；`test_god_view` 检查测试用上帝视角只在调试构建创建、开关时相机和玩家状态正确切换并恢复；`test_orders` 检查订单生成、状态机、开始/接单/结算界面和撞车失败语义；`test_traffic` 检查车道数学、确定性车流、出生安全、命中 Area3D 和主场景撞车信号链。新增脚本后先执行一次 `godot --headless --path . --import`，让 Godot 注册 `class_name` 并生成 `.gd.uid`。
+前两条检查路网生成、校验、寻路和主场景启动；中间三条分别检查共享数据契约、输入映射与玩家移动、导航查询接口；`test_city` 检查城市确定性、反向数据、主场景城市装配和站点可达性；`test_city_catalog` 检查模型目录可加载、包围盒有效、分类数量和种子 118 的模型多样性；`test_god_view` 检查测试用上帝视角只在调试构建创建、开关时相机和玩家状态正确切换并恢复；`test_orders` 检查订单生成、状态机、开始/接单/结算界面和撞车失败语义；`test_menu_ui` 单独挂载订单 HUD，检查开始界面的标题、副标题、种子和按钮，以及成功/失败结算页面的取送路线、总路程、用时、剩余时间、收入和卡片是否超出可视区域；`test_phone_orders` 检查三维手机的挂载位置、屏幕内容、倒计时、Y/N、点击接单/拒单、配送中常驻和主菜单隐藏；`test_site_readability` 检查站点店名确定性、三维店名牌、当前目标星标以及接单/取餐/送达时的 HUD 与信标文本；`test_traffic` 检查车道数学、确定性车流、出生安全、命中 Area3D 和主场景撞车信号链。新增脚本后先执行一次 `godot --headless --path . --import`，让 Godot 注册 `class_name` 并生成 `.gd.uid`。
 
 ## 2. 所有人：日常操作流程
 
@@ -232,7 +235,7 @@ scenes/traffic/
 - `edges`：路段（`a`、`b`、`kind`）
 - `widths`：三类道路红线宽度
 - `seed_value`、`density`、`map_size`
-- `x_axes`、`y_axes`：道路轴线
+- `x_axes`、`y_axes`：旧版正交路网轴线字段，仅保留兼容性；分级生长路网不再填充，读取方不要依赖它们非空
 - `entrances`：地块出入口；阶段一由 `CityGenerator` 写入 `edge_id`、`offset`、`width`、`facing_yaw`、`lot_id`
 - `SURFACE_Y`：地面、车行道和人行道的统一可走顶面高度（0 米）；视觉网格可以略高，但碰撞体必须齐平
 - `CARRIAGEWAY_RATIO`、`sidewalk_offset(redline)`：车行道占红线比例和人行道中心距
@@ -259,6 +262,7 @@ scenes/traffic/
 ### 4.2 生成规则
 
 - 使用 `RoadGenerator.generate(...)` 生成路网，使用 `CityGenerator.generate(network)` 生成城市内容；不要在别的模块里复制一套生成逻辑。
+- 路网按等级优先生长：先铺主干路，再从主干路节点向两侧长出次干路，随后补支路并在本地街区内部补一排垂直支路；所有方向允许小幅转弯，因此路网是斜向、不规则的，不再有全局正交轴线。
 - 所有随机都使用 `RandomNumberGenerator` 并显式设置 `seed`，不要用全局 `randi()`。城市生成使用 `network.seed_value ^ CityGenerator.CITY_RNG_SALT`，不修改路网节点、路段或种子。
 - 同一组参数和种子必须生成同一份路网和城市；`tests/test_city.gd` 会逐字段比较。
 - 新增加固生成规则时，优先扩展 `CityContent` 或新增独立资源，不要把逻辑塞进 `RoadBuilder` / `CityBuilder`。
@@ -323,7 +327,9 @@ project.godot
 - 输入映射由整合者统一维护；正式功能必须通过 `InputMap` 动作读取，不要直接轮询物理按键。
 - 玩家出生点由 `CityContent.player_start` 提供，`main.gd` 在 `world.regenerate()` 后把玩家放到该位置和朝向；订单开始后 `OrderManager` 再把玩家放到订单起点。玩家模块只负责“被放在哪里之后怎么走”，不要退回固定节点或原点。
 - 开始界面、待接订单和结算界面显示期间，`OrderManager` 调用 `PlayerController.set_controls_enabled(false)` 关闭移动和视角并释放鼠标；接单或重开时再恢复。新增菜单时沿用这个开关，不要在各处直接改鼠标模式。
+- 新订单展示在车把左侧的三维手机 `OrderPhone` 上：屏幕用 `SubViewport` 渲染，卡片显示取餐/送达店名、总路程、预计收入和限时，底部并排“拒绝 N”“立即接单 Y”按钮，并有 10 秒倒计时。按 **Y** 接单、**N** 拒单，鼠标或触屏可以直接点屏幕上的按钮；倒计时归零走拒单流程并自动生成下一单，不会回到开始菜单。接单后手机不消失，而是切到“配送中”页面，继续显示当前目标、距离、剩余时间和 E 交互提示。手机由 `OrderManager` 在代码里挂到玩家相机上，不改 `player.tscn`。
 - 交通撞到玩家时，`main.gd` 把 `traffic.player_hit` 转给 `OrderManager.notify_player_hit()`。只有当前订单处于活动状态且玩家在物理处理时才会调用 `OrderSession.fail(HIT_BY_CAR)`；撞车失败保留剩余时间和真实用时，结算正文显示“被来往汽车撞倒，配送失败”。玩家被撞后表现为控制冻结并进入失败结算，按 R 继续下一单。
+- 站点的 `display_name` 由 `SiteNaming.apply()` 在布局生成后写入，HUD 的接单信息、活动目标和三维店名牌读同一份数据。店名牌由 `WorldGenerator` 在运行时创建；当前订单目标显示“★”并始终可见，其它站点标签在 160 米外淡出，接近目标时不用再靠编号找店。
 
 阶段零已经定义的输入动作：
 
@@ -331,7 +337,9 @@ project.godot
 |---|---|---|
 | `move_forward` / `move_back` | W / S | 前后移动 |
 | `move_left` / `move_right` | A / D | 左右移动 |
-| `interact` | E | 开始游戏、接单、取餐、送达 |
+| `interact` | E | 开始游戏、取餐、送达；待接订单时作为接单兼容键 |
+| `order_accept` | Y | 在手机上接单 |
+| `order_reject` | N | 在手机上拒单，立即生成下一单 |
 | `pause` | Esc | 配送中暂停/继续；暂停层显示城市与订单种子，可重开本单或返回主菜单 |
 | `restart` | R | 开始游戏、接单、重开本单或生成下一单 |
 
