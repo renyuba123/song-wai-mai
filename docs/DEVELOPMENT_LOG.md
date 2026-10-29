@@ -1558,3 +1558,31 @@ PR #31 合并后，从 `origin/main` 的 `7c3d412` 起 `feature/jzy070407-menu-r
 `docs/DEVELOPMENT_LOG.md`。
 
 本条记录随 `feature/jzy070407-render-png` 分支提交、推送并建 PR。
+
+## 2026-10-29 21:10（Asia/Shanghai）检查远端更新：main 已合入 #42、#43、#44，同步轮测试通过
+
+本轮需求（原文）：“检查 song-wai-mai 仓库的远端更新：进入 E:/Project/Game Work Team/song-wai-mai，先确认工作区状态，再执行 git fetch origin --prune。如果 origin/main 或 origin/refactor/modular-base 有新提交，按 CONTRIBUTING.md 和每轮工作规则安全整合（有未提交改动时先保留或提交，不覆盖），运行相关 Godot 测试，把本轮同步和测试结果追加到 docs/DEVELOPMENT_LOG.md，提交并推送；若出现冲突或权限问题，停止并向用户说明，不要强推。”
+
+**远端检查：**
+
+- `song-wai-mai/` 主检出停在 `feature/jzy070407-traffic-cars`（`f392124`），工作区干净，没有未提交改动。按工作区规则不在主检出上切分支，本轮只在 `worktrees/lead` 操作。
+- `git fetch origin --prune` 后，`origin/main` 由 `6c121e6` 前进到 `b2901e2`：依次合入 PR #42（第四个交接包）、#43（游戏本体录制行为分析示例）、#44（导出数据直接生成地图 PNG）。`origin/refactor/modular-base` 在远端不存在，没有可对比的分支。
+- 本终端上一轮的 `feature/jzy070407-handoff-package-4` 已经通过 PR #42 合进 main，本轮没有需要再合并的代码；从 `origin/main` 新建 `docs/jzy070407-sync-20261029-e` 只追加本记录。
+
+**自动部署：**
+
+- 仓库 Actions secrets `TCB_SECRET_ID`、`TCB_SECRET_KEY` 已于 20:51 通过 `gh secret set` 写入，值没有进入仓库、日志或聊天以外的任何文件。
+- `deploy-web.yml` 的部署任务带并发组：PR #42、#43 的两次 push 触发都被后一次排队取消，属于预期行为，不是构建失败。最新一次手动触发的运行正在进行。
+- 静态站点 `https://passive-sailfish-d0e1nvt8175333a-1451076912.tcloudbaseapp.com/` 返回 HTTP 200。
+
+**测试与校验（Godot 4.7.2，代码为 `origin/main` 的 `b2901e2`）：**
+
+- `--headless --path . --import` 退出码 0，没有脚本解析错误。
+- headless 退出码 0 且打印 PASS：`test_road_network`、`test_contracts`、`test_input_actions`、`test_player_handling`、`test_city_catalog`、`test_menu_ui`、`test_game_settings`、`test_economy`、`test_accident_research`、`test_traffic_signals`、`test_touch_controls`、`test_telemetry`。
+- 窗口渲染模式退出码 0 且打印 PASS：`test_navigation_queries`、`test_city`、`test_site_readability`、`test_god_view`、`test_phone_orders`、`test_traffic_streaming`、`test_city_population`、`test_city_streaming`、`test_main_scene`、`test_orders`、`test_pause`、`test_traffic`、`test_pedestrians`。
+- 本轮合并进来的 #43、#44 只新增 `tools/` 下的脚本和文档，没有改 GDScript；上面的结果覆盖主场景、订单、交通、行人与行为采集。
+- 没有冲突，也没有权限问题。
+
+**修改文件：** `docs/DEVELOPMENT_LOG.md`。
+
+本条记录随 `docs/jzy070407-sync-20261029-e` 分支提交、推送并建 PR。
