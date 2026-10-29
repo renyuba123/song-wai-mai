@@ -1,11 +1,20 @@
-
 extends CharacterBody3D
 class_name PlayerController
 
-## 第一人称移动 + 电鸡车头转向动画
+## 第一人称骑行：油门、刹车和摩托车式转向。
+## W/S 控制车速，A/D 转车把并带动整车转向；转率随车速变化，静止时不能原地转身。
 
 @export_group("Movement")
-@export var move_speed := 5.0
+## 最高车速（米/秒）。
+@export var move_speed := 9.0
+## 倒车最高速度（米/秒）。
+@export var reverse_speed := 3.0
+## 拧油门时的加速度（米/秒²）。
+@export var acceleration := 10.0
+## 按 S 减速和倒车的减速度（米/秒²）。
+@export var brake_deceleration := 18.0
+## 松开油门后的滑行减速度（米/秒²）。
+@export var coast_deceleration := 4.5
 @export var mouse_sensitivity := 0.0025
 @export var gravity := 9.8
 
@@ -24,16 +33,16 @@ class_name PlayerController
 @export var steering_pivot: Node3D
 
 ## 车头最大左右转向角度
-@export var max_steer_angle := 25.0
+@export var max_steer_angle := 30.0
 
-## 鼠标转向对车头的影响程度
-@export var steer_response := 3.0
+## 车把转到满舵的最大角速度（度/秒），按下 A/D 时按这个速度跟手。
+@export var steer_speed := 160.0
 
-## 车头跟随目标角度的平滑速度
-@export var steer_smooth_speed := 12.0
+## 满舵且车速达到 steer_full_speed 时整车的转向角速度（度/秒）。
+@export var max_turn_rate := 105.0
 
-## 鼠标停止后车头回正的速度（度/秒）
-@export var steer_return_speed := 25.0
+## 车速达到该值才给满舵转率；车速越低转得越慢，静止时不能转身。
+@export var steer_full_speed := 5.0
 
 @onready var camera: Camera3D = $Camera3D
 @onready var body_model: Node3D = get_node_or_null("电鸡模型")
@@ -42,8 +51,11 @@ class_name PlayerController
 var controls_enabled := true
 
 var _pitch := 0.0
-var _steer_target := 0.0
 var _steer_base_y := 0.0
+
+## 当前车速（米/秒，负数为倒车）和车把角度（弧度，左正右负）。
+var _speed := 0.0
+var _steer_angle := 0.0
 
 
 func _ready() -> void:
@@ -65,7 +77,7 @@ func set_controls_enabled(enabled: bool) -> void:
 		_capture_mouse_if_supported()
 	else:
 		Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
-		_steer_target = 0.0
+		_steer_angle = 0.0
 
 
 ## 触屏设备没有可捕获的鼠标，保持可见指针，视角交给 TouchControls。
@@ -129,15 +141,6 @@ func _apply_look_radians(
 	camera.rotation.x = _pitch
 	_update_body_visibility()
 
-	# 3. 根据视角左右移动控制车头
-	_steer_target += yaw_delta * steer_response
-
-	_steer_target = clampf(
-		_steer_target,
-		deg_to_rad(-max_steer_angle),
-		deg_to_rad(max_steer_angle)
-	)
-
 
 ## 低头越过阈值时隐藏自己的车，避免第一人称视野被车身占满。
 func _update_body_visibility() -> void:
@@ -149,22 +152,11 @@ func _process(delta: float) -> void:
 	if steering_pivot == null:
 		return
 
-	# 平滑跟随转向目标
-	var weight := 1.0 - exp(
-		-steer_smooth_speed * delta
-	)
-
+	# 车把跟 A/D：平滑到当前转向角，松键后自然回正。
 	steering_pivot.rotation.y = lerp_angle(
 		steering_pivot.rotation.y,
-		_steer_base_y + _steer_target,
-		weight
-	)
-
-	# 停止鼠标移动后逐渐回正
-	_steer_target = move_toward(
-		_steer_target,
-		0.0,
-		deg_to_rad(steer_return_speed) * delta
+		_steer_base_y + _steer_angle,
+		1.0 - exp(-24.0 * delta)
 	)
 
 
@@ -178,29 +170,59 @@ func _physics_process(delta: float) -> void:
 			"move_back"
 		)
 
-	var direction := (
-		transform.basis * Vector3(
-			input.x,
-			0.0,
-			input.y
-		)
-	).normalized()
+	_update_speed(-input.y, delta)
+	_update_steering(input.x, delta)
 
-	if direction.length_squared() > 0.0:
-		velocity.x = direction.x * move_speed
-		velocity.z = direction.z * move_speed
-	else:
-		velocity.x = move_toward(
-			velocity.x, 0.0, move_speed
-		)
-		velocity.z = move_toward(
-			velocity.z, 0.0, move_speed
-		)
+	var forward := -transform.basis.z
+	forward.y = 0.0
+	if forward.length_squared() > 0.000001:
+		forward = forward.normalized()
+	velocity.x = forward.x * _speed
+	velocity.z = forward.z * _speed
 
 	if not is_on_floor():
 		velocity.y -= gravity * delta
 
 	move_and_slide()
+
+
+func _update_speed(throttle: float, delta: float) -> void:
+	## throttle 正向为油门、负向先刹车再倒车；松开后按滑行阻力减速。
+	var target := 0.0
+	var rate := coast_deceleration
+	if throttle > 0.01:
+		target = move_speed * throttle
+		rate = acceleration if _speed < target else coast_deceleration
+	elif throttle < -0.01:
+		target = reverse_speed * throttle
+		rate = brake_deceleration
+	_speed = move_toward(_speed, target, rate * delta)
+
+
+func _update_steering(steer_axis: float, delta: float) -> void:
+	## A/D 直接控制车把角度，再由车速换算出整车转率。
+	var max_steer_rad := deg_to_rad(max_steer_angle)
+	if max_steer_rad <= 0.0:
+		return
+	# 动作里 move_left 为负 x，所以左转取正角度。
+	var target_angle := -steer_axis * max_steer_rad
+	_steer_angle = move_toward(
+		_steer_angle,
+		target_angle,
+		deg_to_rad(steer_speed) * delta
+	)
+	if absf(_speed) < 0.05:
+		return
+	var speed_ratio := clampf(absf(_speed) / steer_full_speed, 0.0, 1.0)
+	var steer_ratio := _steer_angle / max_steer_rad
+	var yaw_delta := (
+		deg_to_rad(max_turn_rate)
+		* steer_ratio
+		* speed_ratio
+		* signf(_speed)
+		* delta
+	)
+	rotate_y(yaw_delta)
 
 
 func reset_to(start: SpawnPoint) -> void:
@@ -217,7 +239,8 @@ func reset_to(start: SpawnPoint) -> void:
 	velocity = Vector3.ZERO
 
 	_pitch = 0.0
-	_steer_target = 0.0
+	_speed = 0.0
+	_steer_angle = 0.0
 
 	camera.rotation.x = 0.0
 	_update_body_visibility()

@@ -335,15 +335,15 @@ project.godot
 
 | 动作 | 按键 | 用途 |
 |---|---|---|
-| `move_forward` / `move_back` | W / S | 前后移动 |
-| `move_left` / `move_right` | A / D | 左右移动 |
+| `move_forward` / `move_back` | W / S | 油门 / 刹车、倒车 |
+| `move_left` / `move_right` | A / D | 转车把，带整车转向 |
 | `interact` | E | 开始游戏、取餐、送达；待接订单时作为接单兼容键 |
 | `order_accept` | Y | 在手机上接单 |
 | `order_reject` | N | 在手机上拒单，立即生成下一单 |
 | `pause` | Esc | 配送中暂停/继续；暂停层显示城市与订单种子，可重开本单或返回主菜单 |
 | `restart` | R | 开始游戏、接单、重开本单或生成下一单 |
 
-移动使用 `Input.get_vector("move_left", "move_right", "move_forward", "move_back")`，不要退回 `Input.is_physical_key_pressed`。
+输入使用 `Input.get_vector("move_left", "move_right", "move_forward", "move_back")`，不要退回 `Input.is_physical_key_pressed`。前进后退是油门/刹车，左右是车把转向：`PlayerController` 按车速换算整车转率，车速为零时不能原地转身；车模的 `Empty` 车把节点跟着 A/D 转，改转向手感调 `max_steer_angle`、`steer_speed`、`max_turn_rate` 和 `steer_full_speed` 四个导出参数。地面不再画路线指引条带，方向交给 HUD 箭头和小地图。
 
 ### 5.3 测试用上帝视角
 

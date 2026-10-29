@@ -11,7 +11,6 @@ height = 1.8
 script = ExtResource("1_player")
 steering_pivot = NodePath("电鸡模型/Empty")
 max_steer_angle = 30.0
-steer_response = 1.0
 
 [node name="电鸡模型" parent="." unique_id=690155907 instance=ExtResource("2_dovo2")]
 transform = Transform3D(-1, 0, 8.742278e-08, 0, 1, 0, -8.742278e-08, 0, -1, 0, 0.8, 0)

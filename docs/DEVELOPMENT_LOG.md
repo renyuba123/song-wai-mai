@@ -1175,3 +1175,33 @@ PR #31 合并后，从 `origin/main` 的 `7c3d412` 起 `feature/jzy070407-menu-r
 - 合并过程没有出现无法判断的冲突，也没有权限问题。
 
 本条记录随 `feature/jzy070407-exhibition-qr` 分支提交、推送并更新 PR。
+
+## 2026-10-29 19:55（Asia/Shanghai）去掉地面路线指引，改成摩托车式骑行
+
+本轮需求（原文）：“删去地面引导的导航指示线，同时提高车速，修复电动车的物理引擎：当按下左/右移键时，车把对应转动，使之更符合常见游戏中摩托类似物的物理引擎效果”。
+
+同一条消息里用户说明 NPC 汽车行进方向、人类模型、车流量和车速、撞人判定，以及人行道和马路贴图、红绿灯系统都已经改好、正在等更新包，这几块本轮一律没有碰。
+
+**删掉地面路线指引：**
+
+- `scripts/orders/route_guide.gd` 和 `tests/test_route_guidance.gd` 整份删除，`OrderManager` 里的 `_route_guide` 成员、`_ensure_route_guide()`、`_refresh_route()`、`get_route_guide()` 以及各处 `hide_route()` 调用一并去掉。
+- CI 测试清单和 README 的测试表、命令示例同步删掉 `test_route_guidance`。
+- 方向仍然由 HUD 的方向箭头和小地图路线给出，去的是贴在地面的那条黄色条带。
+
+**车速和操控：**
+
+- `PlayerController` 的 `move_speed` 从 5.0 提到 9.0（约 32 km/h），新增 `reverse_speed`（3.0）、`acceleration`（10.0）、`brake_deceleration`（18.0）、`coast_deceleration`（4.5）。W/S 现在是油门和刹车：按住 W 线性加速到最高车速，松手按滑行阻力减速，按 S 先刹车再倒车。
+- 移动不再是“世界坐标里平移”：车头方向就是前进方向，`velocity` 只沿车身前向给速度。
+- A/D 现在直接控制车把：`_steer_angle` 按 `steer_speed`（160 度/秒）跟手转到 `max_steer_angle`（30 度），车模的 `Empty` 车把节点跟着转，松键自动回正。
+- 整车转向由车速换算：`max_turn_rate`（105 度/秒）乘车把比例，再乘 `clamp(车速 / steer_full_speed, 0, 1)`，所以车速越低越难转、静止时完全不能原地转身，倒车时转向方向跟着车速符号反过来。
+- 鼠标和触屏视角不再顺手带车把（原 `steer_response` 参数删掉，`player.tscn` 里的赋值也去掉），视角只管看，车把只听 A/D。
+- 开始界面的操作说明改成“油门 · 刹车 W / S · 摇杆上下”“车把 · 转向 A / D · 摇杆左右”，触屏提示改成“左侧摇杆：上下油门、左右转向”。
+
+**测试与校验：**
+
+- 新增 `tests/test_player_handling.gd`，覆盖满油门接近且不超过最高车速、按 A 时车把和整车同向左转、松手车把回正、松油门滑行停下、静止按 A 不转身、按 S 倒车六个断言；已加入 CI 清单和 README。headless 运行退出码 0，打印 `PASS player handling`。
+- headless：`test_input_actions`（`PASS input actions count=9`）、`test_touch_controls`、`test_menu_ui`（四条 PASS）、`test_contracts`、`test_telemetry` 退出码 0；`test_orders`、`test_phone_orders`、`test_site_readability` 先打印 PASS，退出阶段以既有访问冲突 139 结束；`test_pause`、`test_main_scene`、`test_traffic`、`test_god_view` 在 headless 下没有打印 PASS（导航烘焙后的 Dummy 渲染器 RID 问题），改用真实窗口渲染复跑，四个都打印 `PASS pause`、`PASS main scene nodes=91 lots=764 sites=32 starts=12 vehicles=4 order_seed=1 sky=true`、`PASS traffic`、`PASS god view debug=true`，退出码都是 0。
+- 以上 139 和 RID 报错与既有记录一致，按本机 headless 环境问题处理，不视为断言失败。
+- 真实窗口启动过一次，确认开始界面、城市生成和接单流程能正常进入；键盘注入在切回终端后会丢焦点，操控手感最终以 `test_player_handling` 的断言为准。
+
+本条记录随 `feature/jzy070407-scooter-handling` 分支提交、推送并建 PR。
