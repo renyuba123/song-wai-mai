@@ -95,7 +95,7 @@ func show_start_menu(city_seed: int) -> void:
 	clear_error()
 	_start_seed_label.text = "城市种子 %d" % city_seed
 	_start_action_hint.text = (
-		"点击开始接单 · 左侧摇杆移动，右侧拖动视角"
+		"点击开始接单 · 左侧摇杆骑行，右侧拖动视角"
 		if TouchControls.is_touch_device()
 		else "按 Enter / E 开始 · 配送中按 Esc 暂停"
 	)
@@ -563,13 +563,14 @@ func _build_start_layer() -> void:
 	_start_controls_grid.add_theme_constant_override("v_separation", 7)
 	_start_controls_grid.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	controls_margin.add_child(_start_controls_grid)
-	_add_control_row("移动", "WASD / 左侧摇杆")
+	_add_control_row("油门 · 刹车", "W / S · 摇杆上下")
+	_add_control_row("车把 · 转向", "A / D · 摇杆左右")
 	_add_control_row("视角", "鼠标 / 右侧拖动")
 	_add_control_row("交互", "E 取餐 / 送达")
 	_add_control_row("暂停 · 重开", "Esc · R")
 
 	_start_touch_hint = _make_label(16, MUTED_UI)
-	_start_touch_hint.text = "左侧摇杆移动 · 右侧拖动视角\nE 取餐 / 送达"
+	_start_touch_hint.text = "左侧摇杆：上下油门、左右转向\n右侧拖动视角 · E 取餐 / 送达"
 	_start_touch_hint.visible = false
 	_start_content.add_child(_start_touch_hint)
 

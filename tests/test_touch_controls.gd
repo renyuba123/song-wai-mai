@@ -61,14 +61,19 @@ func _check_touch_look() -> void:
 	var view_size := root.get_visible_rect().size
 	_expect(view_size.x > 0.0 and view_size.y > 0.0, "视口尺寸应大于零")
 
-	var yaw_before := player.rotation.y
+	var heading_before := player.rotation.y
+	var yaw_before := player.camera.rotation.y
 	player.apply_look_touch(Vector2(view_size.x, 0.0))
 	_expect(
 		is_equal_approx(
-			wrapf(player.rotation.y - yaw_before, -PI, PI),
+			wrapf(player.camera.rotation.y - yaw_before, -PI, PI),
 			wrapf(-player.touch_yaw_per_screen, -PI, PI)
 		),
-		"横拖一屏宽应恰好转过 touch_yaw_per_screen：%s" % player.rotation.y
+		"横拖一屏宽应恰好转过 touch_yaw_per_screen：%s" % player.camera.rotation.y
+	)
+	_expect(
+		is_equal_approx(player.rotation.y, heading_before),
+		"转动视角不应改变车头方向"
 	)
 
 	player.apply_look_touch(Vector2(0.0, view_size.y * 4.0))
@@ -77,8 +82,8 @@ func _check_touch_look() -> void:
 		"触屏低头应被限制在 touch_pitch_limit：%s" % player.camera.rotation.x
 	)
 	_expect(
-		not player.body_model.visible,
-		"低头超过阈值时应隐藏自己的车模"
+		player.body_model.visible,
+		"低头时车模应保持可见"
 	)
 
 	player.apply_look_touch(Vector2(0.0, -view_size.y * 8.0))
@@ -88,7 +93,7 @@ func _check_touch_look() -> void:
 	)
 	_expect(
 		player.body_model.visible,
-		"抬头看平后车模应重新显示"
+		"抬头看平后车模仍应可见"
 	)
 
 	player.apply_look_touch(Vector2(0.0, view_size.y * 8.0))
@@ -99,10 +104,10 @@ func _check_touch_look() -> void:
 	)
 
 	player.set_controls_enabled(false)
-	var yaw_disabled := player.rotation.y
+	var yaw_disabled := player.camera.rotation.y
 	player.apply_look_touch(Vector2(view_size.x, 0.0))
 	_expect(
-		is_equal_approx(player.rotation.y, yaw_disabled),
+		is_equal_approx(player.camera.rotation.y, yaw_disabled),
 		"菜单期间触屏视角不应生效"
 	)
 
