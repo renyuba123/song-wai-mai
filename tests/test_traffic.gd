@@ -9,7 +9,7 @@ const MAP_SIZE := Vector2(1200.0, 1200.0)
 const MAP_SEED := 1
 const MAP_DENSITY := 1.0
 const EPS := 0.001
-const HORN_STREAM := preload("res://assets/audio/traffic_horn.ogg")
+const HORN_STREAM := preload("res://assets/audio/universfield-car-horn-02-153260.mp3")
 
 var _failed := false
 

@@ -262,7 +262,7 @@ func _set_model(choice: int) -> void:
 	var model_rotation := Basis(Vector3.UP, MODEL_VISUAL_YAW)
 	var rotated_box := Transform3D(model_rotation, Vector3.ZERO) * box
 	# Bounds include imported root transforms. Scale uniformly and rest the lowest vertex on the road.
-	var factor := minf(1.9 / box.size.x, 4.2 / box.size.z)
+	var factor := minf(1.9 / box.size.x, 4.2 / box.size.z) * 1.6
 	var origin := -rotated_box.get_center() * factor
 	origin.y = -rotated_box.position.y * factor + 0.025
 	_model.transform = Transform3D(
@@ -273,7 +273,7 @@ func _set_model(choice: int) -> void:
 	var collision: CollisionShape3D = get_node_or_null("CollisionShape3D")
 	if collision != null:
 		var shape := BoxShape3D.new()
-		shape.size = Vector3(box.size.x * factor, box.size.y * factor, box.size.z * factor)
+		shape.size = Vector3(maxf(box.size.x * factor, 0.01), box.size.y * factor, minf(box.size.z * factor, COLLISION_SIZE.z))
 		collision.shape = shape
 		collision.position = Vector3(0, shape.size.y * 0.5 + 0.025, 0)
 	var hit_shape: CollisionShape3D = get_node_or_null("HitBox/HitShape")

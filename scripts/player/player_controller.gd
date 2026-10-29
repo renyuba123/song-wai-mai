@@ -17,6 +17,9 @@ const PEDESTRIAN_HIT_CENTER := Vector3(0.0, 0.9, -0.45)
 @export_group("Movement")
 ## 最高车速（米/秒）。交接包把车流提速到 18 m/s，主控需要更快才能穿插。
 @export var move_speed := 23.0
+## 按住 Shift 且向前行驶时的速度、加速度倍率（松开恢复原值）。
+@export var shift_boost_speed_multiplier := 1.5
+@export var shift_boost_acceleration_multiplier := 1.5
 ## 倒车最高速度（米/秒）。
 @export var reverse_speed := 3.0
 ## 起步时的加速度（米/秒²），越接近最高车速加速越弱。
@@ -57,6 +60,14 @@ const PEDESTRIAN_HIT_CENTER := Vector3(0.0, 0.9, -0.45)
 ## 车速达到该值才给满舵转率；车速越低转得越慢，静止时不能转身。
 @export var steer_full_speed := 5.0
 
+@export_group("Speedometer")
+@export var speedometer_needle: Node3D
+## 表盘满刻度对应的实际车速（公里/小时）。
+@export_range(1.0, 300.0, 1.0) var speedometer_max_kmh := 130.0
+## 指针在零速和满刻度时相对模型原始姿态的角度。
+@export_range(-180.0, 180.0, 1.0) var needle_zero_angle := 90.0
+@export_range(-180.0, 180.0, 1.0) var needle_max_angle := -90.0
+
 @onready var camera: Camera3D = $Camera3D
 @onready var body_model: Node3D = get_node_or_null("电鸡模型")
 
@@ -67,6 +78,7 @@ var _pitch := 0.0
 ## 相机相对车头的水平转角；视角自由转动，不影响行进方向。
 var _yaw := 0.0
 var _steer_base_y := 0.0
+var _needle_base_y := 0.0
 var _pedestrian_hit_area: Area3D = null
 var _pedestrian_slowdown_remaining := 0.0
 var _hit_pedestrian_ids := {}
@@ -89,6 +101,9 @@ func _ready() -> void:
 		_steer_base_y = steering_pivot.rotation.y
 	else:
 		push_warning("未指定 Steering Pivot！")
+	if speedometer_needle:
+		_needle_base_y = speedometer_needle.rotation.y
+		speedometer_needle.rotation.y = _needle_base_y + deg_to_rad(needle_zero_angle)
 
 
 func set_controls_enabled(enabled: bool) -> void:
@@ -162,6 +177,7 @@ func _apply_look_radians(
 
 
 func _process(delta: float) -> void:
+	_update_speedometer(delta)
 	if steering_pivot == null:
 		return
 
@@ -170,6 +186,23 @@ func _process(delta: float) -> void:
 		steering_pivot.rotation.y,
 		_steer_base_y + _steer_angle,
 		1.0 - exp(-24.0 * delta)
+	)
+
+
+func _update_speedometer(delta: float) -> void:
+	if speedometer_needle == null:
+		return
+	# CharacterBody3D 的实际位移速度可反映碰撞后的车速；忽略垂直下落。
+	var actual_velocity := get_real_velocity()
+	var speed_kmh := Vector2(actual_velocity.x, actual_velocity.z).length() * 3.6
+	var speed_ratio := clampf(speed_kmh / maxf(speedometer_max_kmh, 1.0), 0.0, 1.0)
+	var target_angle := _needle_base_y + deg_to_rad(
+		lerpf(needle_zero_angle, needle_max_angle, speed_ratio)
+	)
+	speedometer_needle.rotation.y = lerpf(
+		speedometer_needle.rotation.y,
+		target_angle,
+		1.0 - exp(-12.0 * delta)
 	)
 
 
@@ -312,13 +345,18 @@ func _update_speed(throttle: float, delta: float) -> void:
 	## throttle 正向为油门、负向先刹车再倒车。
 	## 加速力随车速上升而衰减，滑行时按滚阻加风阻减速，接近真实车辆的手感。
 	## 撞到行人的 2.5 秒内最高车速按倍率压低，油门输入仍然有效。
+	var shift_boosting := controls_enabled and throttle > 0.01 and Input.is_key_pressed(KEY_SHIFT)
 	var max_speed := move_speed * get_pedestrian_speed_multiplier()
+	if shift_boosting:
+		max_speed *= shift_boost_speed_multiplier
 	if throttle > 0.01:
 		if _speed < 0.0:
 			_speed = move_toward(_speed, 0.0, brake_deceleration * delta)
 		else:
 			var ratio := clampf(_speed / max_speed, 0.0, 1.0)
 			var drive := acceleration * throttle * (1.0 - ratio)
+			if shift_boosting:
+				drive *= shift_boost_acceleration_multiplier
 			_speed = minf(_speed + drive * delta, max_speed)
 	elif throttle < -0.01:
 		if _speed > 0.0:
