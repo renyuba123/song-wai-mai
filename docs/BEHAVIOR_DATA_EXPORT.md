@@ -212,6 +212,32 @@ python tools/build_behavior_page_data.py --demo \
   --out exhibition/analytics/data/sample-data.js --js
 ```
 
+### 用游戏本体录一单示例
+
+上面的演示轨迹是脚本按路网推算出来的。想确认采集链路和页面画的是游戏里
+真正发生的事，可以让游戏本体自己跑一单：
+
+```bash
+Godot_v4.7.2-stable_win64_console.exe --path . \
+  --rendering-method gl_compatibility \
+  --script res://tools/record_sample_session.gd
+```
+
+脚本加载正式的 `scenes/main/main.tscn`，用真实的 `NavigationService`、
+`OrderManager`、`OrderSession` 和 `TelemetryClient` 自动接单、沿寻路结果骑行、
+在商家和顾客处按交互，把速度控制在 2–9 米/秒并在路口前减速。为了少等，
+运行过程用 8 倍时间加速；导出时会把事件时间换算回游戏内用时。桌面构建不会
+创建 HTTPRequest，事件只留在本机队列里，不会上传到云函数。
+
+跑完写出：
+
+- `exports/game-sample/analytics.json`：页面同款 JSON，一个会话；
+- `exports/game-sample/preview/`：分析页副本和 `data/sample-data.js`。
+
+脚本最后用默认浏览器打开 `preview/index.html`，直接看到地图、速度热力轨迹、
+任务起止点、计时点和道路拥挤度。`exports/` 已在 `.gitignore` 里，示例数据
+和真实导出一样不提交仓库。
+
 ## 常用查询
 
 在 DMC 的 SQL 窗口里执行，或者把 SQL 贴给 `tcb db execute`：
