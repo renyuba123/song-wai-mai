@@ -140,6 +140,47 @@ func _run() -> void:
 		"应记录 finish 事件及结果"
 	)
 
+	# 本地调试开关：参数与环境变量都能打开，默认关闭。
+	_expect(
+		TelemetryClient.recording_requested(PackedStringArray(["--headless", "--record"]), ""),
+		"启动参数 --record 应开启本地记录"
+	)
+	_expect(
+		TelemetryClient.recording_requested(PackedStringArray(), "1")
+		and TelemetryClient.recording_requested(PackedStringArray(), " TRUE "),
+		"环境变量 SWM_RECORD 为 1/true 时应开启本地记录"
+	)
+	_expect(
+		not TelemetryClient.recording_requested(PackedStringArray(["--headless"]), "0")
+		and not TelemetryClient.recording_requested(PackedStringArray(), ""),
+		"没有开关时不应开启本地记录"
+	)
+	_expect(not telemetry.local_recording, "headless 测试默认不写出本地记录")
+
+	# 开关打开后写出的 JSON 应与页面数据同构，能直接交给 render_behavior_png.py。
+	telemetry.local_recording = true
+	telemetry.local_record_dir = "user://test-recordings/%s" % telemetry.session_id
+	telemetry.record("pos", {"x": 1.5, "z": -2.5})
+	telemetry.write_local_recording()
+	var record_path := telemetry.local_record_dir.path_join("analytics.json")
+	var written := FileAccess.get_file_as_string(record_path)
+	_expect(not written.is_empty(), "本地记录应写出 analytics.json")
+	var parsed: Variant = JSON.parse_string(written)
+	_expect(parsed is Dictionary and parsed.has("sessions"), "本地记录应是页面 JSON 结构")
+	_expect(
+		parsed != null and parsed.sessions[0].events.size() == 1
+		and parsed.sessions[0].events[0].p.x == 1.5,
+		"本地记录应只包含开关打开后的事件：%s" % [written]
+	)
+	_expect(parsed != null and parsed.meta.demo == false, "本地记录不应标成演示数据")
+	_expect(
+		parsed != null and parsed.sessions[0].id == telemetry.session_id,
+		"本地记录应带会话 ID"
+	)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(record_path))
+	telemetry.local_recording = false
+	telemetry.local_record_dir = ""
+
 	telemetry.queue_free()
 	await process_frame
 	if _failed:

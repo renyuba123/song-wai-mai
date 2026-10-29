@@ -1620,3 +1620,85 @@ PR #31 合并后，从 `origin/main` 的 `7c3d412` 起 `feature/jzy070407-menu-r
 **修改文件：** 新增 `scripts/core/game_seeds.gd`、`tests/test_game_seeds.gd`；修改 `scripts/core/main.gd`、`scripts/world/world_generator.gd`、`scripts/orders/order_manager.gd`、11 个主场景测试、`tools/record_sample_session.gd`、`tools/export_city_map.gd`、`tools/render_behavior_png.py`、`.github/workflows/repository-integrity.yml`、`README.md`、`docs/USER_GUIDE.md`、`docs/BEHAVIOR_DATA_EXPORT.md`、`docs/DEVELOPMENT_LOG.md`。
 
 本条记录随 `feature/jzy070407-random-seeds` 分支提交、推送并建 PR。
+## 2026-10-29 22:03（Asia/Shanghai）桌面版加本地记录调试开关 --record
+
+本轮需求（原文）：“加一个调试开关”。承接上一问“目前本地版本能不能实现数据记录与图像生成？”的结论：桌面版 `TelemetryClient` 只在 Web 构建里采集，手动游玩不会留下任何数据，只能靠 `tools/record_sample_session.gd` 自动跑一单。
+
+**做法：**
+
+- `TelemetryClient` 增加本地记录开关：启动参数 `-- --record` 或环境变量 `SWM_RECORD=1/true/yes` 都能打开；Web 构建下这个开关无效，原有上报逻辑不变。
+- 打开后 `active` 置真，采集内容与 Web 版一致：开局环境、接单/取单/送达/被撞事件、每 2 秒位置采样、每 30 秒计时点。桌面不创建 `HTTPRequest`，`flush()` 保持空转，数据不会联网。
+- 运行中每 30 秒落盘一次，节点退出时再写一次，写到 `exports/recordings/<会话 ID>/analytics.json`，并复制一份分析页到 `preview/`；导出成可执行文件时 `res://` 只读，改写到 `user://recordings/`。
+- 写出的 JSON 与分析页、`tools/render_behavior_png.py` 使用同一种结构：`meta.demo` 为 `false`，`meta.label` 是“本地游玩记录（--record 调试开关）”，`sessions[0].summary` 带用时和结算结果。
+
+**验证：**
+
+- `--headless --path . --import` 退出码 0。
+- `test_telemetry` headless 退出码 0、PASS：新增用例覆盖 `--record` 参数、`SWM_RECORD` 环境变量（含大小写和空格）、默认关闭、以及开关打开后写出的 `analytics.json` 结构、会话 ID 和事件内容。
+- 用 `record_sample_session.gd` 加 `-- --record` 实跑一单：事件 52 条（pos 44、checkpoint 3、session/offer/start/pickup/finish 各 1），运行中依次落盘 17、32、48 条，退出时写满 52 条，生成 `exports/recordings/se7bbfa9182cc1d4f34ad4f93/analytics.json` 和 `preview/index.html`。
+- 用这份本地记录跑 `tools/render_behavior_png.py`，得到 2000×2000、1175 KB 的 `map.png`，说明本地记录与出图脚本可以直接对接。
+- `test_main_scene` 在 headless 下于导航网格烘焙阶段崩溃（`Attempting to initialize the wrong RID`，退出码 139），改窗口模式后退出码 0、PASS（nodes=91 lots=764 sites=32）。按已知环境现象记录，不是本轮改动引入。
+
+**修改文件：** `scripts/core/telemetry_client.gd`、`tests/test_telemetry.gd`、`docs/BEHAVIOR_DATA_EXPORT.md`、`docs/DEVELOPMENT_LOG.md`。
+
+本条记录随 `feature/jzy070407-local-record-flag` 分支提交、推送并建 PR。
+## 2026-10-29 22:08（Asia/Shanghai）重新上传 Web 版并修复部署回滚
+
+本轮需求（原文）：“打开一下网页端”，随后是“重新上传新版本”和“直接更新服务器”。
+
+**过程：**
+
+- 线上仍是 14:58 的旧构建。手动触发 `Deploy web build` 后，合并 #43、#44、#45 的推送又连续触发部署；工作流并发组取消旧任务，最后落在 main `6a5326c` 的运行 `40880026526`。
+- 该运行在 `tcb hosting deploy --safe --verify` 阶段上传完 8 个文件后报
+  `一致性校验失败：missing=/index.apple-touch-icon.png,...,/index.wasm`，触发安全回滚；
+  回滚没有恢复完整旧站，静态托管只剩 3 个 `.import` 文件，首页变成 404。
+- 新建 `fix/jzy070407-web-deploy-verify`，把部署命令改为
+  `--concurrency 5 --retry-count 5 --entry index.html`，去掉 `--safe --verify`，
+  并把探活扩展到 `index.pck` 和 `index.wasm`。在该分支手动运行工作流
+  `40884175865`，部署成功。
+- 本机 `tcb` 已登录，但本机只有 mono 版 Godot，无法导出 Web；尝试重新下载标准版
+  Godot 和 CI artifact 都因 GitHub 网络中断失败，因此没有走本地重传，等 CI 直接完成。
+
+**验证：**
+
+- 运行 `40884175865` 结论 success，工作流自带的页面、`index.pck`、`index.wasm` 探活均通过。
+- 线上首页 HTTP 200，`index.html` 5,450 字节、`index.pck` 32,061,440 字节、
+  `index.wasm` 39,514,754 字节，`Last-Modified` 均为 2026-10-29 13:42 UTC。
+- 下载线上 `index.pck`，按 PCK v4 目录取出 `scripts/core/telemetry_client.gdc`，
+  用 zstd 解出 39,544 字节；里面能查到 `checkpoint`、`sendBeacon`、`road`、`cars`、
+  `near`、`speed`、`left`、`pickup`、`finish`，确认线上已是记录位置、道路和计时点的新版本。
+- 重新打开线上网页端，页面正常加载。
+
+**修改文件：** `.github/workflows/deploy-web.yml`、`docs/WEB_DEPLOY.md`、
+`docs/DEVELOPMENT_LOG.md`。
+
+本条记录随 `fix/jzy070407-web-deploy-verify` 分支提交、推送并建 PR。
+## 2026-10-29 21:45（Asia/Shanghai）修正 Web 自动部署的云端路径：去掉 `/`，让一致性校验能对上
+
+现象：配置好 `TCB_SECRET_ID`、`TCB_SECRET_KEY` 后，`main` 合并 #42/#43/#44 触发的部署任务在 `Deploy to CloudBase hosting` 一步失败，日志为：
+
+```text
+一致性发布失败，已自动回滚，备份保留于 .cloudbase-backup/…/：
+一致性校验失败：missing=/index.apple-touch-icon.png,/index.audio.worklet.js,…,/index.html,/index.js,/index.pck,/index.png,/index.wasm; mismatched=[]
+```
+
+排查：
+
+- 用同一对密钥在本地 `tcb login` 后执行 `tcb hosting list -e passive-sailfish-d0e1nvt8175333a`，根目录只有 `__auth/*`、`cloud-admin/index.html` 和三个 `index.*.png.import` 残留，游戏文件已经随回滚删除，线上首页返回的是 COS 的 `NoSuchKey` 404 页面。
+- 读 CloudBase CLI 3.8.10 的 `uploadDirectoryConsistent`：本地清单的 Key 用 `path.join(cloudPath, 相对路径)` 生成，`cloudPath` 是 `/` 时会拼出 `/index.html`；远端清单直接取 COS 的 Key，没有前导斜杠。两边用带斜杠和不带斜杠的字符串比较，所有文件都被判成 missing，`--safe` 随即回滚。上传本身没有问题，是校验拼接的写法导致的误判。
+- CLI 自带示例写的是 `tcb hosting deploy ./dist`（省略云端路径即上传到根目录），工作流多写了一个 `/`。
+
+修改：
+
+- `.github/workflows/deploy-web.yml` 的发布命令改为 `tcb hosting deploy build/web -e "$TCB_ENV_ID" --concurrency 10 --safe --verify`，并加注释说明不能传 `/`。
+- `docs/WEB_DEPLOY.md` 同步修改命令示例，补上这段原因说明，避免以后又照着旧写法加回斜杠。
+
+验证：
+
+- 本机与 CI 用的是同一个 CLI 版本（3.8.10），本地 `tcb hosting list` 与线上首页 404 的结果相互印证了回滚确实生效。
+- 工作流改动只涉及发布命令和文档，`--import` 与全部 Godot 测试在上一轮 `b2901e2` 上已经通过，这次没有改 GDScript。
+- 修复是否生效要等下一次部署运行回填；触发方式为在 `main` 合并后自动执行，或在 Actions 里手动 Run workflow。
+
+**修改文件：** `.github/workflows/deploy-web.yml`、`docs/WEB_DEPLOY.md`、`docs/DEVELOPMENT_LOG.md`。
+
+本条记录随 `fix/jzy070407-web-deploy-path` 分支提交、推送并建 PR。
