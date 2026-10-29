@@ -792,3 +792,14 @@ GitHub Actions 报 `resident count grows after revisit`。实测首次访问商�
 - 合并只在 `docs/DEVELOPMENT_LOG.md` 产生冲突，按时间顺序保留本条记录和人行道导航记录（`10:13`），合并提交 `b52018c`。
 
 **提交与分支：** 从 `origin/main` `a25b008` 建立 `feature/jzy070407-route-guidance`；功能与日志提交 `d24d158 feat(orders): add ground route guidance`，随后合并 `origin/main` `b872b50` 得到 `b52018c`；推送后向 `main` 建 PR，不直接推送 `main`，不强推。
+## 2026-10-29 10:57（Asia/Shanghai）远端同步检查
+
+本轮按要求检查 `song-wai-mai` 仓库的远端更新：“检查 song-wai-mai 仓库的远端更新：进入 E:/Project/Game Work Team/song-wai-mai，先确认工作区状态，再执行 git fetch origin --prune。如果 origin/main 或 origin/refactor/modular-base 有新提交，按 CONTRIBUTING.md 和每轮工作规则安全整合（有未提交改动时先保留或提交，不覆盖），运行相关 Godot 测试，把本轮同步和测试结果追加到 docs/DEVELOPMENT_LOG.md，提交并推送；若出现冲突或权限问题，停止并向用户说明，不要强推。”
+
+主检出当前在 `feature/jzy070407-traffic-cars`，工作区干净，没有未提交改动。`git fetch origin --prune` 因本机网络走 HTTPS 时 schannel 握手失败而没有完成，随后用 GitHub SSH 地址做一次性拉取，把远端全部分支更新到 `origin/*` 引用并清理已删除的远端分支，`origin` 地址没有修改。拉取结果：`origin/main` 从 a25b008 前进到 b872b50，只包含人行道导航分支的 b67fbcf 及其合并提交 #18；远端和本地都没有 `refactor/modular-base` 分支。
+
+主检出按工作区规则留给整合终端和定时同步任务，本轮没有在其中切换分支或改写本地 `main` 引用，本地 `main` 仍指向 a25b008。同步校验、测试和本条日志在 lead 工作树新建的 `docs/jzy070407-sync-20261029` 分支上完成，分支从 `origin/main` 的 b872b50 创建，不改任何代码。
+
+Godot 4.7.2 headless 导入退出码 0，路网校验 150 个节点、214 条路段、通过，城市生成 1637 个地块、1637 栋建筑、32 个站点、98 个出入口、通过。测试结果：`test_road_network`、`test_city`、`test_contracts`、`test_navigation_queries`、`test_orders`、`test_main_scene`、`test_input_actions`、`test_traffic`、`test_city_population`、`test_god_view`、`test_traffic_streaming` 全部 PASS，退出码 0；`test_city_streaming` 退出码 1，原因是城市 GLB 仍是 LFS pointer，属于已知的模型下载阻塞，与本轮同步无关。
+
+本条记录首次提交时没有冲突；随后 PR #19 合并、`main` 前进到 a94d952，本分支按协作规则合并最新 `main`，在日志末尾追加位置出现冲突。按“保留双方记录、按时间排序”处理：10:35 的暂停菜单记录在前，10:57 的同步记录在后，并重新运行导入和相关测试。没有向 `main` 推送或强推。本记录随 `docs/jzy070407-sync-20261029` 分支提交并推送。
