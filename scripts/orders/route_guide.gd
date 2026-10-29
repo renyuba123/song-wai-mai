@@ -2,13 +2,15 @@ extends MeshInstance3D
 class_name RouteGuide
 
 ## 地面路线指引：把 NavigationService.find_path() 的结果画成贴地条带。
-## 重算只在 update_route() 判定需要时发生（目标变化、传送、明显偏航、
-## 节流窗口到期），不在每个物理帧调用 A*。
+## 重算只在 update_route() 判定需要时发生（目标变化、传送、玩家沿路线前进、
+## 明显偏航、节流窗口到期），不在每个物理帧调用 A*。
 ## 坐标约定：顶点直接写世界坐标，因此节点 top_level = true。
 
 const ROUTE_WIDTH := 0.8
-const ROUTE_LIFT_M := 0.06
-const RECOMPUTE_INTERVAL_S := 0.4
+## 车行道视觉顶面在 SURFACE_Y + 0.01，条带只抬高 1.5 厘米，避免看起来悬空。
+const ROUTE_LIFT_M := 0.015
+## 约 5 Hz；玩家每前进 1 米就重算一次，让路线跟随当前位置。
+const RECOMPUTE_INTERVAL_S := 0.2
 
 ## 玩家偏离当前路线超过该距离才认为“明显偏航”。
 const DEVIATION_THRESHOLD_M := 6.0
@@ -22,7 +24,7 @@ const TARGET_MOVE_EPS_M := 0.5
 ## 过短的重复路径段会产生零长度切线，构建条带前剔除。
 const MIN_SEGMENT_LENGTH_M := 0.05
 
-## 偏航重算还要求玩家相对上次重算位置移动过，避免原地反复寻路。
+## 玩家相对上次重算位置前进该距离后重算，避免静止时反复寻路。
 const MIN_REBUILD_TRAVEL_M := 1.0
 
 const ROUTE_COLOR := Color(1.0, 0.72, 0.28, 1.0)
@@ -87,8 +89,11 @@ func update_route(
 		elif (
 			_last_rebuild_player.is_finite()
 			and _distance_xz(_last_rebuild_player, player_position) >= MIN_REBUILD_TRAVEL_M
-			and distance_to_path_xz(player_position, _path) > DEVIATION_THRESHOLD_M
 		):
+			# 玩家沿路线前进后从当前位置重新寻路，路线随移动实时更新。
+			needs_rebuild = true
+		elif distance_to_path_xz(player_position, _path) > DEVIATION_THRESHOLD_M:
+			# 被推到路线外但位移不大时，也按节流间隔纠正。
 			needs_rebuild = true
 
 	_last_player_position = player_position
@@ -214,7 +219,8 @@ func _build_ribbon() -> void:
 		var tangent := _tangent_at(index)
 		var side := Vector3(-tangent.z, 0.0, tangent.x) * (ROUTE_WIDTH * 0.5)
 		var point := _path[index]
-		var y := point.y + ROUTE_LIFT_M
+		# 导航网格与道路都在 SURFACE_Y；固定贴路面，不跟随导航点高度悬空。
+		var y := RoadNetwork.SURFACE_Y + ROUTE_LIFT_M
 		_mesh.surface_add_vertex(Vector3(point.x + side.x, y, point.z + side.z))
 		_mesh.surface_add_vertex(Vector3(point.x - side.x, y, point.z - side.z))
 		_vertex_count += 2

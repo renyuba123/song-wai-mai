@@ -841,6 +841,60 @@ Godot 4.7.2 `--headless --path . --import` 退出码 0，路网 150 个节点、
 
 分发暂停：按用户要求，暂停向其他终端派发新任务，等待下一次声明。本条记录随新分支提交、推送并建 PR。
 
+## 2026-10-29 12:15（Asia/Shanghai）城市模型库扩充与朝向校正
+
+**本轮需求（原文）：** “按照大模块逐步继续，某一模块完成后给出下一模块方向”
+
+按模块推进的第一个大模块是“城市模型库扩充与朝向校正”，目标是在其他人分别调整人流、车速、NPC 车行方向和主控电动车物理模型的同时，把城市精细建筑的重复感和朝向问题先解决掉，让后续有模型的 demo 更像一座城市。
+
+实现内容：
+
+- 重新筛选 `assets/models/其他建筑模型/`：先给整个目录渲染接触表，再逐个保留有完整体量的建筑。建筑池从原来的 3 个其他建筑扩展到 43 个，明确排除地面片、围墙、桥、信号塔、广场和摊位，避免把没有门面或体积的物件当成建筑。清单写在 `scripts/dev/build_city_catalog.gd`，包围盒仍由脚本重新测量生成，不手工修改。
+- 补上此前遗漏的 `mall.glb`，取餐店面从 6 个增加到 7 个；送餐站点保持 7 个。`city_model_catalog.gd` 现为 59 个条目：7 个取餐、7 个送餐、43 个其他建筑、1 个树木、1 个灯杆。
+- 朝向校正：给取餐/送餐共 14 个店面分别渲染局部 +Z 和 −Z 两侧接触表，确认店面都在局部 +Z；现有 `Basis(UP, yaw + PI)` 已把 +Z 映射到临街方向，因此不需要给任何店铺追加单独偏航。另用街景和俯视截图检查了商家、顾客和远景下的模型比例、街道朝向与多样性。
+- 新增 `tests/test_city_catalog.gd`：检查每个目录条目路径非空、资源存在、没有重复路径、包围盒三轴有效、各分类数量下限；再用种子 118 生成完整布局，要求至少用到 40 种不同建筑模型，并确认两次生成的布局签名一致。当前输出 `PASS city catalog models=59 distinct_in_seed_118=55 buildings=1637`。
+- `.github/workflows/repository-integrity.yml` 测试循环、`README.md`、`docs/USER_GUIDE.md` 加入 `test_city_catalog`；`docs/CITY_STREAMING.md` 更新模型目录数量、筛选方式、朝向核对结论、缓存上限和仍需人工检查的 43 个新建筑。
+
+修改文件：`scripts/dev/build_city_catalog.gd`、`scripts/world/city_model_catalog.gd`、新增 `tests/test_city_catalog.gd`、`.github/workflows/repository-integrity.yml`、`README.md`、`docs/CITY_STREAMING.md`、`docs/USER_GUIDE.md`、`docs/DEVELOPMENT_LOG.md`。没有修改人流、车速、NPC 车行方向、主控电动车物理相关文件，也没有提交工作区里其他人员正在改的 `project.godot`、`scripts/core/main.gd`、`scripts/player/player_controller.gd`、`scripts/ui/`、`assets/fonts/`、`exhibition/`、`export_presets.cfg`、`tests/test_touch_controls.gd`。
+
+**测试与校验：**
+
+- Godot 4.7.2 `--headless --path . --import` 退出码 0；路网校验通过（节点 150、路段 214），城市生成通过（地块 1637、建筑 1637、站点 32、出入口 98）。
+- `test_city_catalog`：`PASS city catalog models=59 distinct_in_seed_118=55 buildings=1637`，退出码 0。
+- `test_main_scene`：`PASS main scene nodes=150 lots=1637 sites=32 starts=12 vehicles=11 order_seed=1 sky=true`，随后进程以 139 退出；错误发生在打印 PASS 之后，属于已知的 Windows headless 退出阶段访问冲突。
+- `test_city_streaming`：headless 运行时在导航烘焙后实例化精细模型时出现 `RendererDummy`/RID 访问冲突，未打印 PASS；改用窗口渲染运行同一脚本，完整通过四个种子，输出 `PASS city streaming`，退出码 0。种子 118/1/42/2026 的商家附近精细实例分别为 261/273/164/192，缓存模型 46–48 个，批次峰值 2.783/2.148/2.119/2.742 毫秒，生成耗时 145/162/167/156 毫秒。headless 崩溃点与本次模型目录改动无关：最小复现为“城市生成 + `navigation.build()` 后再创建任意 `MeshInstance3D`”，不创建精细模型也会损坏 dummy 渲染器的网格 RID；按既有环境问题记录，不把退出码当作断言失败。
+
+**后续方向：** 下一大模块计划做“站点与订单可读性”——给商家/顾客站点加真实店名和入口标识，突出当前订单目标并弱化非目标建筑，让玩家在扩展后的城市里能快速认出该去哪一家，而不是只看统一的任务光柱。
+
+本条记录随 `feature/jzy070407-city-dressing` 分支提交、推送并建 PR。
+
+## 2026-10-29 12:27（Asia/Shanghai）修正地面路线悬空与实时跟随
+
+**本轮需求（原文）：** “继续修改下一步，同时导航指引功能有问题：1.高光提示线过高，建议修改到路面表面；2.无法实时演算”
+
+**问题定位：**
+
+- 路线条带之前用 `point.y + 0.06`。实测 `NavigationServer3D.map_get_path()` 返回的导航点高度约为 `1.96` 米，条带因此悬在路面约 2 米高处，不是简单的 6 厘米抬升。
+- 旧逻辑只有“玩家距离路线超过 6 米”且“相对上次重算移动超过 1 米”时才重算。玩家正常沿路线前进时永远不会满足偏航条件，路线起点停在上一次的位置，看起来就像没有实时演算。
+
+**修改内容：**
+
+- `route_guide.gd` 的条带高度改为固定的 `RoadNetwork.SURFACE_Y + ROUTE_LIFT_M`，不再跟随导航点高度。抬升从 0.06 米降到 0.015 米，只比车行道视觉顶面高约 5 毫米，避免悬空和 z-fighting。
+- 重算间隔从 0.4 秒降到 0.2 秒。玩家相对上次重算位置前进 1 米后，在下一次节流窗口到期时立即从当前位置重新调用 `find_path()`，路线起点跟随玩家移动；被推出路线超过 6 米时仍会按节流间隔纠正；传送、重开和订单目标变化继续立即重算。
+- 仍然不在每个物理帧调用 A*：正常骑行约 5 Hz 重算，静止时只做距离判断。
+- `tests/test_route_guidance.gd` 增加条带顶点高度检查、原地等待节流窗口不重算、沿路线前进 1.5 米后实时重算且新路线从新位置开始；原有偏航、传送、目标切换和隐藏断言保留。
+- `README.md` 的路线测试说明同步更新。
+
+修改文件：`scripts/orders/route_guide.gd`、`tests/test_route_guidance.gd`、`README.md`、`docs/DEVELOPMENT_LOG.md`。未修改订单 HUD、导航服务、交通、行人或玩家控制。
+
+**测试与校验：**
+
+- 窗口渲染运行 `test_route_guidance`：`PASS route guidance`，退出码 0。
+- 另用临时街景探针检查：路线黄色条带完整贴在车行道表面，电动车和建筑比例正常；探针与截图已删除，不进入提交。
+- headless 运行同一测试仍会在导航烘焙后创建路线网格时触发 RendererDummy/RID 访问冲突（退出码 139），与上一模块记录的最小复现一致，属于本机 Windows headless 环境问题；窗口渲染结果和断言通过。
+
+本条记录随 `feature/jzy070407-route-fixes` 分支提交、推送并建 PR。
+
 ## 2026-10-29 12:45（Asia/Shanghai）展览三个二维码、游戏 Web 版与手机触屏
 
 本轮需求（原文）：“目前项目展览有一个要求：设置三个二维码，实现：1# 扫描后打开游戏本体 #2扫描后打开游戏演示视频 #3扫描后打开游戏中用户行为分析数据，请帮我处理一下”。追问确认：1 号尝试国内静态托管，2 号演示视频和 3 号行为分析暂时留占位；交付物只要三张二维码；手机端加简易触屏控制；部署由用户登录、我来执行。随后用户又问“国内部署能不能部署到微信小程序上？”。
@@ -862,7 +916,8 @@ Godot 4.7.2 `--headless --path . --import` 退出码 0，路网 150 个节点、
 **校验：**
 
 - Godot 4.7.2 `--headless --path . --import` 退出码 0；路网校验 150 个节点、214 条路段通过，城市生成 1637 个地块、1637 栋建筑、32 个站点、98 个出入口通过。
-- `test_touch_controls` 输出 `PASS touch controls`、退出码 0；`test_orders`、`test_pause`、`test_input_actions`、`test_main_scene`、`test_route_guidance` 均 PASS、退出码 0。
+- `test_touch_controls` 输出 `PASS touch controls`、退出码 0；合并 `main` 前 `test_orders`、`test_pause`、`test_input_actions`、`test_main_scene`、`test_route_guidance` 均 PASS、退出码 0。
+- 合并 `main` 的 91f5b9b 后重新导入并复跑：`test_touch_controls`、`test_city_catalog` 仍 PASS、退出码 0；`test_orders`、`test_main_scene` 先打印 PASS，退出阶段以访问冲突（退出码 139）结束；`test_pause`、`test_route_guidance` 在本机 Windows headless 的导航烘焙阶段崩溃（退出码 139），与 main 上 12:27 路线修正一轮记录的最小复现一致，属于既有 headless 环境问题，不是本轮二维码或触屏改动引入。
 - Web 导出成功，`build/web/` 共约 66 MB：`index.wasm` 约 39.5 MB，`index.pck` 约 28.5 MB。
 - 用 Edge 无头浏览器加 CDP 手机模拟（390×844、Android UA、5 点触控）加载新构建：开始界面显示触屏文案；点“开始游戏”、点“接单”后摇杆和 `E`/`R`/`Ⅱ` 按钮出现；左下拖动摇杆后目标距离从 502 m 变为 497 m；右侧拖动后视角转动。截图在 `.cache/mobile-*.png`。
 
@@ -871,6 +926,8 @@ Godot 4.7.2 `--headless --path . --import` 退出码 0，路网 150 个节点、
 - 国内静态托管试过 EdgeOne Pages，单文件上限 25 MiB，放不下 39.5 MB 的 `index.wasm`，已排除。改用腾讯云 CloudBase 静态托管，命令行上传没有这个单文件限制，`@cloudbase/cli` 已通过 npmmirror 安装。
 - 目前卡在账号登录：需要用户执行 `tcb login` 并选择或新建环境，之后运行 `tcb hosting deploy build/web / -e <环境 ID>` 得到访问地址，再回填 `links.json` 并重新生成 1 号二维码。
 - 微信小程序评估：Godot 没有官方小游戏导出，主包 4 MB、分包总量 30 MB 与我们 39.5 MB 的 wasm 差距太大，不采用。可行路线是认证企业小程序用 `web-view` 套 H5，但需要企业主体、ICP 备案域名和业务域名校验文件，二维码还得用小程序码才能扫码直进。结论是先以 H5 为主方案，微信内置浏览器可以直接运行；若主办方强制要求小程序入口，再补 `web-view` 页面骨架。
+
+**合并：** 提交前同步到 `origin/main` 的 91f5b9b，与城市模型库、路线修正两轮改动合并；CI 测试清单按并集处理，同时保留 `test_city_catalog` 和 `test_touch_controls`，开发日志按时间顺序排列。
 
 **待办：**
 

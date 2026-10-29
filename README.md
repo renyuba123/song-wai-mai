@@ -41,9 +41,10 @@ tests/
   test_input_actions.gd     输入动作与玩家移动测试
   test_navigation_queries.gd 导航查询接口测试
   test_city.gd              城市地块、建筑、站点与可达性测试
+  test_city_catalog.gd      城市模型目录完整性、数量与种子多样性测试
   test_god_view.gd          测试用上帝视角开关与状态恢复测试
   test_orders.gd            订单生成、状态机、开始/接单/结算界面测试
-  test_route_guidance.gd    地面路线可见性、偏航/传送/目标切换重算与节流测试
+  test_route_guidance.gd    地面路线可见性、贴路面高度、移动实时重算、偏航/传送/目标切换与节流测试
   test_traffic.gd           车道、确定性车流、命中检测与撞车失败测试
 docs/
   ROADMAP.md            已确认的开发路线图
@@ -67,6 +68,7 @@ godot --headless --path . --script res://tests/test_contracts.gd
 godot --headless --path . --script res://tests/test_input_actions.gd
 godot --headless --path . --script res://tests/test_navigation_queries.gd
 godot --headless --path . --script res://tests/test_city.gd
+godot --headless --path . --script res://tests/test_city_catalog.gd
 godot --headless --path . --script res://tests/test_god_view.gd
 godot --headless --path . --script res://tests/test_orders.gd
 godot --headless --path . --script res://tests/test_route_guidance.gd
@@ -87,6 +89,7 @@ godot --headless --path . --script res://tests/test_traffic.gd
 - `CityGenerator` 从真实路段生成 `CityContent`：地块、出入口、建筑、商家/顾客站点和玩家起点；相同城市种子结果一致。
 - `CityContent.validate(network)` 校验地块重叠、建筑归属、出入口退让、站点交叉引用和玩家起点安全位置。
 - `CityBuilder` 绘制人行道、方块建筑和站点标记；人行道与建筑有碰撞，但阶段一不加入导航源，导航网格仍只覆盖车行道。
+- 城市模型目录扩展到 59 种精细资源：7 个取餐店面（新增 `mall`）、7 个送餐站点、43 个其他建筑，以及树木和灯杆。种子 118 的 1637 栋建筑实际用到 55 种不同模型；取餐/送餐店面朝向已通过 +Z/−Z 接触表核对。
 - `World` 场景包含 `WorldEnvironment`，引用 `sky_environment.tres` 的程序化天空，提供可见天空、环境光和反射；主场景和路网演示共用。
 - 调试/测试构建中按 **F3** 打开测试用上帝视角：正交俯视、WASD 平移、滚轮缩放，再按 F3 返回玩家。正式导出不会创建该节点，也不注册额外输入动作。
 - 阶段二订单闭环已经可用：随机起点、商家和顾客，接单后从起点出发，靠近商家按 **E** 取餐，靠近顾客按 **E** 送达，超时失败；相同城市/订单种子结果一致。
@@ -112,6 +115,6 @@ godot --headless --path . --script res://tests/test_traffic.gd
 
 ## Pull Request 检查
 
-`.github/workflows/repository-integrity.yml` 会在 Pull Request 上运行 `git lfs fsck --pointers`，发现损坏的 LFS 指针时让检查失败。它还会读取同一目标分支上的其他开放 Pull Request；如果多个 PR 同时修改同一个 `.tscn`，会在对应文件上给出 GitHub Actions 警告，提醒合并前一起检查场景文件。同一任务会安装固定版本 Godot 4.7.2，执行 headless 导入并运行全部九个测试脚本，任一测试非零退出都会让检查失败。
+`.github/workflows/repository-integrity.yml` 会在 Pull Request 上运行 `git lfs fsck --pointers`，发现损坏的 LFS 指针时让检查失败。它还会读取同一目标分支上的其他开放 Pull Request；如果多个 PR 同时修改同一个 `.tscn`，会在对应文件上给出 GitHub Actions 警告，提醒合并前一起检查场景文件。同一任务会安装固定版本 Godot 4.7.2，执行 headless 导入并运行全部测试脚本，任一测试非零退出都会让检查失败。
 
 团队协作规则、每轮日志和远端同步要求见 [CONTRIBUTING.md](CONTRIBUTING.md)。各角色从环境准备到交付的具体步骤和注意事项见 [docs/USER_GUIDE.md](docs/USER_GUIDE.md)。

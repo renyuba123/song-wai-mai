@@ -1,7 +1,7 @@
 extends SceneTree
 
-## 地面路线指引测试：可见性、节流、偏航/传送/目标切换重算，
-## 以及订单结束和返回菜单后的隐藏。
+## 地面路线指引测试：可见性、贴路面高度、沿路线前进时实时重算、节流、
+## 偏航/传送/目标切换重算，以及订单结束和返回菜单后的隐藏。
 
 const DEVIATION_OFFSET_M := 9.0
 
@@ -157,9 +157,34 @@ func _check_throttle_and_rebuilds() -> void:
 	_guide.update_route(player_position, target, 0.0, true)
 	var baseline := _guide.get_rebuild_count()
 
+	_check_ribbon_on_road_surface()
+
 	for _index in 5:
 		_guide.update_route(player_position, target, 0.02, false)
 	_expect(_guide.get_rebuild_count() == baseline, "原地重复更新不应重算路线")
+	_guide.update_route(player_position, target, 0.2, false)
+	_expect(
+		_guide.get_rebuild_count() == baseline,
+		"原地等待节流窗口到期也不应重算路线"
+	)
+
+	# 玩家沿路线前进 1.5 米后，下一次节流窗口到期应从新位置重算。
+	var walking_position := _position_ahead_on_route(player_position, 1.5)
+	_guide.update_route(
+		walking_position, target, RouteGuide.RECOMPUTE_INTERVAL_S, false
+	)
+	_expect(
+		_guide.get_rebuild_count() == baseline + 1,
+		"沿路线前进后应在节流窗口内实时重算"
+	)
+	var walked_path := _guide.get_route_path()
+	var walked_start := _navigation.get_closest_point(walking_position)
+	_expect(
+		walked_path.size() >= 2 and walked_path[0].distance_to(walked_start) < 2.0,
+		"实时重算后的路线应从玩家新位置开始"
+	)
+	player_position = walking_position
+	baseline = _guide.get_rebuild_count()
 
 	var path := _guide.get_route_path()
 	var off_route := Vector3.INF
@@ -207,6 +232,39 @@ func _check_throttle_and_rebuilds() -> void:
 		_guide.get_target().distance_to(new_target) <= RouteGuide.TARGET_MOVE_EPS_M,
 		"路线目标没有切换到新目标"
 	)
+
+
+func _check_ribbon_on_road_surface() -> void:
+	var mesh: Mesh = _guide.mesh
+	_expect(
+		mesh != null and mesh.get_surface_count() > 0,
+		"可见路线应至少有一个网格表面"
+	)
+	if mesh == null or mesh.get_surface_count() == 0:
+		return
+	var arrays := mesh.surface_get_arrays(0)
+	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	_expect(not vertices.is_empty(), "路线条带不应为空")
+	var expected_y := RoadNetwork.SURFACE_Y + RouteGuide.ROUTE_LIFT_M
+	for vertex in vertices:
+		if not is_equal_approx(vertex.y, expected_y):
+			_expect(
+				false,
+				"路线条带应贴在路面，顶点高度 %.4f 不是 %.4f"
+				% [vertex.y, expected_y]
+			)
+			break
+
+
+func _position_ahead_on_route(from: Vector3, distance: float) -> Vector3:
+	var direction := Vector3.FORWARD
+	var path := _guide.get_route_path()
+	if path.size() >= 2:
+		direction = path[1] - path[0]
+		direction.y = 0.0
+	if direction.length_squared() < 0.000001:
+		direction = Vector3.FORWARD
+	return from + direction.normalized() * distance
 
 
 func _check_hidden_after_finish() -> void:
