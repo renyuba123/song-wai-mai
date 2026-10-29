@@ -2,7 +2,7 @@
 extends Node3D
 class_name CityBuilder
 
-## 阶段一城市可视化：人行道、方块建筑和站点标记。
+## 常驻城市表现：人行道、实际模型包围盒的低细节建筑、入口和站点标记。
 ## 人行道与建筑碰撞体使用 WORLD_STATIC，但不加入 navigation_source，
 ## 因此阶段一导航网格仍然只覆盖道路。
 
@@ -17,12 +17,16 @@ const GENERATED_META := &"world_generator_generated"
 var _sidewalk_body: StaticBody3D = null
 var _building_body: StaticBody3D = null
 var _materials := {}
+var population_layout: CityPopulationLayout
+var _lod_visuals := {}
 
 
 func build(network: RoadNetwork, city: CityContent) -> void:
 	_clear()
 	if network == null or city == null:
 		return
+	if population_layout == null or population_layout.seed_value != city.seed_value:
+		population_layout = CityPopulationLayout.generate(city)
 	_materials = {
 		"sidewalk": _material(SIDEWALK_COLOR),
 		"merchant": _material(MERCHANT_COLOR),
@@ -107,24 +111,26 @@ func _build_buildings(city: CityContent) -> void:
 	_add_generated_child(_building_body)
 
 	for building in city.buildings:
-		var rect: Rect2 = building.rect
-		var height := float(building.height_m)
-		var point := rect.get_center()
+		var item: Dictionary = population_layout.buildings[int(building.id)]
 		var material: Material = _materials.vacant
 		if int(building.kind) == CitySite.Kind.MERCHANT:
 			material = _materials.merchant
 		elif int(building.kind) == CitySite.Kind.RESIDENTIAL:
 			material = _materials.residential
-		_visual_box(
-			Vector3(rect.size.x, height, rect.size.y),
-			Vector3(point.x, RoadNetwork.SURFACE_Y + height * 0.5, point.y),
-			material
-		)
-		_collision_box(
-			Vector3(rect.size.x, height + 0.02, rect.size.y),
-			Vector3(point.x, RoadNetwork.SURFACE_Y + height * 0.5 - 0.01, point.y),
-			_building_body
-		)
+		var visual := _visual_box(item.size, item.center, material)
+		_lod_visuals[int(building.id)] = visual
+		_collision_box(item.size, item.center, _building_body)
+		if not item.site_id.is_empty():
+			var rect: Rect2 = item.footprint
+			var door := rect.get_center() + Vector2(-sin(item.yaw), -cos(item.yaw)) * rect.size * 0.5
+			var target: Vector3 = item.target
+			var endpoint := Vector3(door.x, 0.025, door.y)
+			var paving := _visual_box(Vector3(2, 0.015, target.distance_to(endpoint)), (target + endpoint) * 0.5 + Vector3(0, 0.02, 0), _materials.sidewalk)
+			paving.rotation.y = item.yaw
+
+func set_detail_visible(id: int, detailed: bool) -> void:
+	if _lod_visuals.has(id) and is_instance_valid(_lod_visuals[id]):
+		_lod_visuals[id].visible = not detailed
 
 
 func _build_markers(city: CityContent) -> void:
@@ -153,6 +159,7 @@ func _clear() -> void:
 	_sidewalk_body = null
 	_building_body = null
 	_materials = {}
+	_lod_visuals.clear()
 
 
 func _add_generated_child(child: Node) -> void:
@@ -160,7 +167,7 @@ func _add_generated_child(child: Node) -> void:
 	add_child(child)
 
 
-func _visual_box(size: Vector3, position: Vector3, material: Material) -> void:
+func _visual_box(size: Vector3, position: Vector3, material: Material) -> MeshInstance3D:
 	var instance := MeshInstance3D.new()
 	var mesh := BoxMesh.new()
 	mesh.size = size
@@ -168,6 +175,7 @@ func _visual_box(size: Vector3, position: Vector3, material: Material) -> void:
 	instance.material_override = material
 	instance.position = position
 	_add_generated_child(instance)
+	return instance
 
 
 func _collision_box(size: Vector3, position: Vector3, body: StaticBody3D) -> void:

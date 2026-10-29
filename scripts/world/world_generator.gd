@@ -8,12 +8,8 @@ class_name WorldGenerator
 
 signal world_generated(network: RoadNetwork)
 
-@export var seed: int = 42:
-	set(value):
-		if seed == value:
-			return
-		seed = value
-		_queue_editor_regeneration()
+@export var seed: int = 42
+@export_tool_button("重新生成城市", "Reload") var regenerate_action = regenerate
 
 var map_width_m := 2400.0
 var map_height_m := 2400.0
@@ -24,6 +20,7 @@ var local_redline_m := 18.0
 var allow_difficult_entrance_exceptions := false
 
 @onready var road_builder: RoadBuilder = $RoadBuilder
+@onready var streaming: CityStreaming = $CityStreaming
 @onready var city_builder: CityBuilder = $CityBuilder
 
 var network: RoadNetwork = null
@@ -70,7 +67,9 @@ func regenerate() -> void:
 	}
 	report = network.validate()
 	road_builder.build(network)
+	city_builder.population_layout = CityPopulationLayout.generate(city, streaming.chunk_size)
 	city_builder.build(network, city)
+	streaming.configure(city_builder.population_layout, city_builder, city.player_start.position)
 	_print_report()
 	world_generated.emit(network)
 

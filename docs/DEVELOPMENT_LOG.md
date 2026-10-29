@@ -707,3 +707,25 @@ PASS main scene nodes=153 nav_polygons=624
 - 密度预览用临时脚本和截图已删除，未提交；没有恢复或提交任何手机新订单提示的临时设计，也没有修改同事正在开发的手机 UI。
 
 **提交与推送：** `ee6ba2f feat(world): raise urban density with infill buildings and more cars`，本条日志单独提交；推送到 `feature/jzy070407-traffic-cars` 并更新 PR [#15](https://github.com/renyuba123/song-wai-mai/pull/15)。没有强推，也没有直接推送 `main`。
+
+## 2026-10-29 01:30（Asia/Shanghai）城市建筑与场景装饰布置
+
+需求：在保留现有外卖配送功能的前提下，实际布置建筑和环境，优先保证 P0 配送地点和 P1 主要路线，可直接在编辑器展示。
+
+在独立分支 feature/city-population 实施。新增 scenes/city 的持久场景及站点映射、可复用烘焙脚本和空间回归测试；主场景挂载布局，CityBuilder 避免重复占位并隔离不同 Seed。覆盖 12 个商家、20 个送餐点、208 栋其他建筑和 174 处树木绿化，增加任务点入口铺装与标识。精细模型优先围绕实际首单导航路线。未修改订单、玩家、交通或导航实现。
+
+原有九组测试通过；空间回归检查重叠、道路占用、任务入口、运行时保留与 Seed 切换。最终布局调整后复验相关套件。未进行 GPU 视口验收，真实门向、材质和帧率仍需人工检查，详见 CITY_POPULATION.md。提交：本条日志随 feature/city-population 的城市布置提交一并保存。
+
+## 2026-10-29 01:53（Asia/Shanghai）任意 Seed 与玩家位置 Chunk Streaming
+
+需求：同一个 Seed 确定完整城市，玩家位置只决定资源加载；保留道路、配送、导航、交通和 Seed 118 成果。由 feature/city-population 的 9da09cc 创建 feature/city-streaming，未从旧 main 起步。
+
+新增纯布局数据、实测模型目录及更新工具、分帧流式加载模块；World 统一生成，CityBuilder 常驻简化视觉/碰撞与任务入口。主场景移除固定布局实例引用，静态场景/站点映射和烘焙工具仍保留。增加显式 Seed 刷新、全城简化/局部精细/全城精细编辑器模式。CI 增加历史布局和 streaming 测试。
+
+原有九组、历史静态样例及新四 Seed 测试通过。新测试覆盖全量空间、确定性、加载顺序、进出区块、探索上限和跨卸载配送。发现并处理编辑器资源导入与异步加载竞争：编辑器改用主线程分帧加载；测试按导航同步流程等待地图就绪。标准 headless 编辑器局部预览检查正常。性能数据和 GPU/门面/高速驾驶人工检查项见 CITY_STREAMING.md。本记录随城市 streaming 功能提交保存。
+
+## 2026-10-29 02:27（Asia/Shanghai）Streaming resident count 回归修复
+
+GitHub Actions 报 `resident count grows after revisit`。实测首次访问商家时，滞回加载保留了出生点附近的外圈区块；经城外完全卸载后返回商家只重新加载内圈。例如首次 314 个实例，返回 296 个，原相等断言以不同区块集合比较，因此错误文案中的 grows 也会由数量减少触发。
+
+保持原实例数量相等断言，改为先完全卸载初始出生点周围的精细层，再分别从空载状态访问和重访商家。流式模块卸载时同步释放区块节点，并在实例化前按稳定 ID 检查重复节点。新增弱引用释放检查和区块内 ID 唯一性检查。道路、布局 Seed、任务及原有简化碰撞未改变。运行全部十一组测试后提交。
