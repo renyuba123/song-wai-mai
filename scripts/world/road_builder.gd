@@ -9,6 +9,7 @@ const ROAD_COLORS := [Color("d66752"), Color("e8b65b"), Color("6bbdb1")]
 const CORRIDOR_COLOR := Color("3c4650")
 const GROUND_COLOR := Color("669473")
 const GENERATED_META := &"world_generator_generated"
+const ROAD_TEXTURE := preload("res://assets/textures/road_asphalt_02_diff_1k.jpg")
 
 var _map_size: Vector2
 
@@ -37,7 +38,7 @@ func build(network: RoadNetwork) -> void:
 	var corridor := _material(CORRIDOR_COLOR)
 	var surface := []
 	for color in ROAD_COLORS:
-		surface.append(_material(color))
+		surface.append(_road_material(color))
 	var ground_size := Vector3(network.map_size.x, 0.5, network.map_size.y)
 	var ground_position := Vector3(0.0, RoadNetwork.SURFACE_Y - 0.25, 0.0)
 	_visual_box(ground_size, ground_position, ground)
@@ -141,6 +142,15 @@ func _material(color: Color) -> StandardMaterial3D:
 	var material := StandardMaterial3D.new()
 	material.albedo_color = color
 	material.roughness = 1.0
+	return material
+
+
+func _road_material(color: Color) -> StandardMaterial3D:
+	var material := _material(color.lerp(Color.WHITE, 0.72))
+	material.albedo_texture = ROAD_TEXTURE
+	material.uv1_triplanar = true
+	material.uv1_scale = Vector3(0.08, 0.08, 0.08)
+	material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
 	return material
 
 

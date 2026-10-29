@@ -12,9 +12,20 @@ const ACCENT_COLOR := Color(1.0, 0.72, 0.28, 1.0)
 
 var _orders: OrderManager = null
 var _player: PlayerController = null
+var _settings: GameSettings = null
+var _traffic: TrafficSpawner = null
 var _overlay: Control = null
 var _seed_label: Label = null
 var _resume_button: Button = null
+var _pause_page: VBoxContainer = null
+var _settings_page: VBoxContainer = null
+var _volume_slider: HSlider = null
+var _volume_value: Label = null
+var _sensitivity_slider: HSlider = null
+var _sensitivity_value: Label = null
+var _density_slider: HSlider = null
+var _density_value: Label = null
+var _fullscreen_check: CheckBox = null
 var _controls_before_pause := false
 
 
@@ -25,9 +36,23 @@ func _ready() -> void:
 	_build()
 
 
-func setup(orders: OrderManager, player: PlayerController) -> void:
+func setup(
+	orders: OrderManager,
+	player: PlayerController,
+	settings: GameSettings = null,
+	traffic: TrafficSpawner = null
+) -> void:
 	_orders = orders
 	_player = player
+	_traffic = traffic
+	if settings == null:
+		settings = GameSettings.new()
+		settings.name = "GameSettings"
+		add_child(settings)
+		settings.load_settings()
+	_settings = settings
+	_settings.apply_to(_player, _traffic)
+	_sync_settings_controls()
 
 
 func can_pause() -> bool:
@@ -50,6 +75,28 @@ func is_pause_visible() -> bool:
 	return _overlay != null and _overlay.visible
 
 
+func is_settings_visible() -> bool:
+	return _settings_page != null and _settings_page.visible
+
+
+func open_settings() -> void:
+	if not is_pause_visible() or not is_instance_valid(_settings_page):
+		return
+	_sync_settings_controls()
+	_pause_page.visible = false
+	_settings_page.visible = true
+	var back := _settings_page.get_node_or_null("BackButton") as Button
+	if back != null:
+		back.grab_focus()
+
+
+func back_to_pause() -> void:
+	if not is_settings_visible():
+		return
+	_save_settings()
+	_show_pause_page()
+
+
 func open_pause() -> bool:
 	if is_pause_visible() or not can_pause():
 		return false
@@ -65,6 +112,7 @@ func open_pause() -> bool:
 func close_pause() -> void:
 	if not is_pause_visible():
 		return
+	_save_settings()
 	_exit_pause()
 	_restore_controls(_controls_before_pause)
 
@@ -107,7 +155,10 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not event.is_action_pressed("pause"):
 		return
 	if is_pause_visible():
-		close_pause()
+		if is_settings_visible():
+			back_to_pause()
+		else:
+			close_pause()
 	else:
 		# 开始菜单/接单/结算下按 Esc 不打开暂停层，也不让事件继续传给其它输入。
 		open_pause()
@@ -122,6 +173,7 @@ func _exit_tree() -> void:
 
 func _exit_pause() -> void:
 	_overlay.visible = false
+	_show_pause_page()
 	if is_inside_tree():
 		get_tree().paused = false
 
@@ -158,10 +210,10 @@ func _build() -> void:
 	panel.anchor_right = 0.5
 	panel.anchor_top = 0.5
 	panel.anchor_bottom = 0.5
-	panel.offset_left = -240
-	panel.offset_right = 240
-	panel.offset_top = -190
-	panel.offset_bottom = 190
+	panel.offset_left = -260
+	panel.offset_right = 260
+	panel.offset_top = -260
+	panel.offset_bottom = 260
 	panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	panel.add_theme_stylebox_override("panel", _panel_style())
 	_overlay.add_child(panel)
@@ -174,20 +226,27 @@ func _build() -> void:
 	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.add_child(margin)
 
-	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 14)
-	box.alignment = BoxContainer.ALIGNMENT_CENTER
-	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	margin.add_child(box)
+	var page_host := VBoxContainer.new()
+	page_host.name = "PageHost"
+	page_host.alignment = BoxContainer.ALIGNMENT_CENTER
+	page_host.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	margin.add_child(page_host)
+
+	_pause_page = VBoxContainer.new()
+	_pause_page.name = "PausePage"
+	_pause_page.add_theme_constant_override("separation", 14)
+	_pause_page.alignment = BoxContainer.ALIGNMENT_CENTER
+	_pause_page.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	page_host.add_child(_pause_page)
 
 	var title := _make_label(28, ACCENT_COLOR)
 	title.text = "已暂停"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	box.add_child(title)
+	_pause_page.add_child(title)
 
 	_seed_label = _make_label(16, MUTED_COLOR)
 	_seed_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	box.add_child(_seed_label)
+	_pause_page.add_child(_seed_label)
 
 	var hint := _make_label(14, MUTED_COLOR)
 	hint.text = (
@@ -196,19 +255,212 @@ func _build() -> void:
 		else "Esc 或“继续”返回游戏"
 	)
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	box.add_child(hint)
+	_pause_page.add_child(hint)
 
 	_resume_button = _make_button("继续")
 	_resume_button.pressed.connect(resume)
-	box.add_child(_resume_button)
+	_pause_page.add_child(_resume_button)
+
+	var settings_button := _make_button("设置")
+	settings_button.name = "SettingsButton"
+	settings_button.pressed.connect(open_settings)
+	_pause_page.add_child(settings_button)
 
 	var restart_button := _make_button("重开本单")
 	restart_button.pressed.connect(restart_order)
-	box.add_child(restart_button)
+	_pause_page.add_child(restart_button)
 
 	var menu_button := _make_button("返回主菜单")
 	menu_button.pressed.connect(return_to_menu)
-	box.add_child(menu_button)
+	_pause_page.add_child(menu_button)
+
+	_build_settings_page(page_host)
+
+
+func _build_settings_page(page_host: VBoxContainer) -> void:
+	_settings_page = VBoxContainer.new()
+	_settings_page.name = "SettingsPage"
+	_settings_page.add_theme_constant_override("separation", 16)
+	_settings_page.alignment = BoxContainer.ALIGNMENT_CENTER
+	_settings_page.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_settings_page.visible = false
+	page_host.add_child(_settings_page)
+
+	var title := _make_label(28, ACCENT_COLOR)
+	title.text = "设置"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_settings_page.add_child(title)
+
+	var volume_row := _make_slider_row(
+		_settings_page,
+		"主音量",
+		0.0,
+		1.0,
+		0.01,
+		GameSettings.DEFAULT_MASTER_VOLUME
+	)
+	_volume_slider = volume_row["slider"] as HSlider
+	_volume_slider.name = "VolumeSlider"
+	_volume_value = volume_row["value"] as Label
+	_volume_slider.value_changed.connect(_on_volume_changed)
+
+	var sensitivity_row := _make_slider_row(
+		_settings_page,
+		"鼠标灵敏度",
+		0.0005,
+		0.01,
+		0.0005,
+		GameSettings.DEFAULT_MOUSE_SENSITIVITY
+	)
+	_sensitivity_slider = sensitivity_row["slider"] as HSlider
+	_sensitivity_slider.name = "SensitivitySlider"
+	_sensitivity_value = sensitivity_row["value"] as Label
+	_sensitivity_slider.value_changed.connect(_on_sensitivity_changed)
+
+	var density_row := _make_slider_row(
+		_settings_page,
+		"交通密度",
+		0.1,
+		3.0,
+		0.1,
+		GameSettings.DEFAULT_TRAFFIC_DENSITY
+	)
+	_density_slider = density_row["slider"] as HSlider
+	_density_slider.name = "DensitySlider"
+	_density_value = density_row["value"] as Label
+	_density_slider.value_changed.connect(_on_density_changed)
+
+	_fullscreen_check = CheckBox.new()
+	_fullscreen_check.name = "FullscreenCheck"
+	_fullscreen_check.text = "全屏显示"
+	_fullscreen_check.custom_minimum_size = Vector2(0, 44)
+	_fullscreen_check.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_fullscreen_check.add_theme_font_size_override("font_size", 18)
+	_fullscreen_check.toggled.connect(_on_fullscreen_toggled)
+	_settings_page.add_child(_fullscreen_check)
+
+	var reset_button := _make_button("恢复默认")
+	reset_button.name = "ResetButton"
+	reset_button.pressed.connect(_reset_settings)
+	_settings_page.add_child(reset_button)
+
+	var back_button := _make_button("返回")
+	back_button.name = "BackButton"
+	back_button.pressed.connect(back_to_pause)
+	_settings_page.add_child(back_button)
+
+
+func _make_slider_row(
+	parent: VBoxContainer,
+	caption: String,
+	minimum: float,
+	maximum: float,
+	step: float,
+	initial: float
+) -> Dictionary:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 12)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(row)
+
+	var label := _make_label(17, TEXT_COLOR)
+	label.text = caption
+	label.custom_minimum_size.x = 116
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	row.add_child(label)
+
+	var slider := HSlider.new()
+	slider.min_value = minimum
+	slider.max_value = maximum
+	slider.step = step
+	slider.value = initial
+	slider.custom_minimum_size = Vector2(210, 34)
+	slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	slider.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	slider.mouse_filter = Control.MOUSE_FILTER_STOP
+	row.add_child(slider)
+
+	var value_label := _make_label(15, MUTED_COLOR)
+	value_label.custom_minimum_size.x = 62
+	value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	value_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	row.add_child(value_label)
+	return {"slider": slider, "value": value_label}
+
+
+func _show_pause_page() -> void:
+	if is_instance_valid(_settings_page):
+		_settings_page.visible = false
+	if is_instance_valid(_pause_page):
+		_pause_page.visible = true
+
+
+func _sync_settings_controls() -> void:
+	if _settings == null:
+		return
+	if _volume_slider != null:
+		_volume_slider.set_value_no_signal(_settings.master_volume)
+	if _sensitivity_slider != null:
+		_sensitivity_slider.set_value_no_signal(_settings.mouse_sensitivity)
+	if _density_slider != null:
+		_density_slider.set_value_no_signal(_settings.traffic_density)
+	if _fullscreen_check != null:
+		_fullscreen_check.set_pressed_no_signal(_settings.fullscreen)
+	_refresh_settings_labels()
+
+
+func _refresh_settings_labels() -> void:
+	if _volume_value != null and _settings != null:
+		_volume_value.text = "%d%%" % roundi(_settings.master_volume * 100.0)
+	if _sensitivity_value != null and _settings != null:
+		_sensitivity_value.text = "%.1f" % (_settings.mouse_sensitivity * 1000.0)
+	if _density_value != null and _settings != null:
+		_density_value.text = "%.1fx" % _settings.traffic_density
+
+
+func _on_volume_changed(value: float) -> void:
+	if _settings == null:
+		return
+	_settings.set_master_volume(value)
+	_settings.apply_to(_player, _traffic)
+	_refresh_settings_labels()
+
+
+func _on_sensitivity_changed(value: float) -> void:
+	if _settings == null:
+		return
+	_settings.set_mouse_sensitivity(value)
+	_settings.apply_to(_player, _traffic)
+	_refresh_settings_labels()
+
+
+func _on_density_changed(value: float) -> void:
+	if _settings == null:
+		return
+	_settings.set_traffic_density(value)
+	_settings.apply_to(_player, _traffic)
+	_refresh_settings_labels()
+
+
+func _on_fullscreen_toggled(value: bool) -> void:
+	if _settings == null:
+		return
+	_settings.set_fullscreen(value)
+	_settings.apply_to(_player, _traffic)
+
+
+func _reset_settings() -> void:
+	if _settings == null:
+		return
+	_settings.reset_to_defaults()
+	_settings.apply_to(_player, _traffic)
+	_settings.save_settings()
+	_sync_settings_controls()
+
+
+func _save_settings() -> void:
+	if _settings != null:
+		_settings.save_settings()
 
 
 func _make_label(font_size: int, color: Color) -> Label:

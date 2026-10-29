@@ -13,6 +13,7 @@ const VACANT_COLOR := Color("8c8f91")
 const MERCHANT_MARKER_COLOR := Color("f2c14e")
 const CUSTOMER_MARKER_COLOR := Color("4fc3c8")
 const GENERATED_META := &"world_generator_generated"
+const SIDEWALK_TEXTURE := preload("res://assets/textures/sidewalk_concrete_pavement_02_diff_1k.jpg")
 
 var _map_size: Vector2
 
@@ -31,7 +32,7 @@ func build(network: RoadNetwork, city: CityContent) -> void:
 	if population_layout == null or population_layout.seed_value != city.seed_value:
 		population_layout = CityPopulationLayout.generate(city)
 	_materials = {
-		"sidewalk": _material(SIDEWALK_COLOR),
+		"sidewalk": _sidewalk_material(),
 		"merchant": _material(MERCHANT_COLOR),
 		"residential": _material(RESIDENTIAL_COLOR),
 		"vacant": _material(VACANT_COLOR),
@@ -228,4 +229,13 @@ func _marker_material(color: Color) -> StandardMaterial3D:
 	material.emission_enabled = true
 	material.emission = color
 	material.emission_energy_multiplier = 0.4
+	return material
+
+
+func _sidewalk_material() -> StandardMaterial3D:
+	var material := _material(SIDEWALK_COLOR)
+	material.albedo_texture = SIDEWALK_TEXTURE
+	material.uv1_triplanar = true
+	material.uv1_scale = Vector3(0.16, 0.16, 0.16)
+	material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
 	return material

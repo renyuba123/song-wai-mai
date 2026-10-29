@@ -31,6 +31,7 @@ const TAILLIGHT_COLOR := Color("ff4a3d")
 const PRELOAD_ROUTE_SEGMENTS := 2
 const MAX_ADVANCE_STEPS := 4096
 const POINT_EPS := 0.0001
+const MODEL_VISUAL_YAW := PI
 
 var speed_mps := 8.0
 var cruise_speed_mps := 8.0
@@ -257,11 +258,17 @@ func _set_model(choice: int) -> void:
 	_model.name = "CarModel"
 	_model.add_child(scene.instantiate())
 	var box: AABB = info.bounds
+	# The source cars face +Z while road traffic uses Godot's -Z forward axis.
+	var model_rotation := Basis(Vector3.UP, MODEL_VISUAL_YAW)
+	var rotated_box := Transform3D(model_rotation, Vector3.ZERO) * box
 	# Bounds include imported root transforms. Scale uniformly and rest the lowest vertex on the road.
 	var factor := minf(1.9 / box.size.x, 4.2 / box.size.z)
-	var origin := -box.get_center() * factor
-	origin.y = -box.position.y * factor + 0.025
-	_model.transform = Transform3D(Basis.IDENTITY.scaled(Vector3.ONE * factor), origin)
+	var origin := -rotated_box.get_center() * factor
+	origin.y = -rotated_box.position.y * factor + 0.025
+	_model.transform = Transform3D(
+		model_rotation.scaled(Vector3.ONE * factor),
+		origin
+	)
 	add_child(_model)
 	var collision: CollisionShape3D = get_node_or_null("CollisionShape3D")
 	if collision != null:

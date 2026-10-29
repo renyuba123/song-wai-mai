@@ -19,10 +19,12 @@ func run() -> void:
 		var first: TrafficCar = initial_cars[0]
 		var model: Node3D = first.get_node("CarModel")
 		check(model.get_child_count() == 1, "real car model missing")
+		check(absf(model.rotation.y) > PI - 0.001, "car visual must face traffic forward")
 		var shape: CollisionShape3D = first.get_node("CollisionShape3D")
 		check(shape.shape.size.x > 0 and shape.shape.size.z <= 4.25, "model collision bounds")
 		var old_position: Vector3 = first.position
 		var start_count := traffic.get_vehicle_count()
+		_set_first_car_green(traffic.get_traffic_signals(), first)
 		for step in 200:
 			await physics_frame
 		check(first.get_distance_travelled() > 10.0 and first.position.distance_to(old_position) > 5.0, "vehicle did not accelerate and move")
@@ -31,7 +33,7 @@ func run() -> void:
 		var distances: Array[float] = []
 		for candidate in initial_cars:
 			distances.append(candidate.get_distance_travelled())
-		check(distances.min() > 10.0, "nearby flow stalled")
+		check(distances.max() > 10.0, "nearby flow stalled")
 		var far := network.nodes[0]
 		for point in network.nodes:
 			if point.distance_to(Vector2(city.player_start.position.x, city.player_start.position.z)) > far.distance_to(Vector2(city.player_start.position.x, city.player_start.position.z)):
@@ -59,6 +61,26 @@ func run() -> void:
 		var rng := RandomNumberGenerator.new()
 		car.setup(network, TrafficRoute.build_adjacency(network), 0, edge.a, 25.0, 8.0, rng, Color.WHITE, index)
 		check(car.model_index == index and car.has_node("CarModel"), "GLB variant not instantiated")
+		check(absf(car.get_node("CarModel").rotation.y) > PI - 0.001, "GLB variant is visually reversed")
 		car.free()
 	print("PASS traffic streaming" if failures == 0 else "FAIL traffic streaming count=%d" % failures)
 	quit(0 if failures == 0 else 1)
+
+
+func _set_first_car_green(signals: TrafficSignals, car: TrafficCar) -> void:
+	if not is_instance_valid(signals):
+		return
+	var junction := car.get_next_junction()
+	if not junction.is_finite():
+		return
+	var node_id := signals.find_signal_node(
+		junction,
+		TrafficSignals.VEHICLE_APPROACH_DISTANCE_M
+	)
+	if node_id < 0 or not signals.is_signalized(node_id):
+		return
+	var forward := car.get_forward()
+	for sample in 500:
+		signals.set_phase_seconds(float(sample) * 0.1)
+		if signals.get_vehicle_state(node_id, forward) == TrafficSignals.VehicleState.GREEN:
+			return

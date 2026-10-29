@@ -1,12 +1,23 @@
 extends AnimatableBody3D
 class_name Pedestrian
 
-## 行人占位：胶囊视觉 + 胶囊碰撞，沿人行道折线行走，
+## 行人：GLB 人形视觉 + 胶囊碰撞，沿人行道折线行走，
 ## 到路口按概率横穿到对侧，结束后继续沿对侧人行道走。
 ## 路径推进与 TrafficCar.advance() 同构，便于离树测试和固定步长模拟。
 
 const CAPSULE_RADIUS := 0.28
 const CAPSULE_HEIGHT := 1.7
+const PEDESTRIAN_MODEL_PATH := "res://assets/models/人物模型/zsky_stylized_character.glb"
+const PEDESTRIAN_MODEL_SCALE := 0.11
+## 模型轴心在身体中部。脚底在原始骨架坐标的 7.85 处，乘以缩放后上移贴地。
+const PEDESTRIAN_MODEL_OFFSET_Y := 0.8635
+const PEDESTRIAN_MODEL_YAW_DEGREES := 180.0
+const PEDESTRIAN_WALK_ANIMATION := "Armature|Walk"
+const PEDESTRIAN_IDLE_ANIMATION := "Armature|Iddle"
+const PEDESTRIAN_REFERENCE_SPEED := 1.8
+const PEDESTRIAN_ACCELERATION_MPS2 := 2.4
+const PEDESTRIAN_BRAKING_MPS2 := 4.8
+const MOTION_SPEED_EPS := 0.02
 const COLORS := [
 	Color("c95f4f"),
 	Color("4f7fbf"),
@@ -19,9 +30,10 @@ const PRELOAD_SEGMENTS := 2
 const MAX_ADVANCE_STEPS := 2048
 const POINT_EPS := 0.0001
 
-var speed_mps := 1.4
+var speed_mps := 1.8
 var crossing_chance := 0.35
 
+var _current_speed_mps := 0.0
 var _network: RoadNetwork = null
 var _adjacency: Array = []
 var _rng: RandomNumberGenerator = null
@@ -35,12 +47,15 @@ var _last_direction := Vector2.ZERO
 var _path: Array[Vector3] = []
 var _path_cursor := 0
 var _path_crossing: Array[bool] = []
+var _path_junction_nodes: Array[int] = []
 var _path_sides: Array[int] = []
 var _path_edges: Array[int] = []
+var _active_crossing_node := -1
 var _distance_travelled := 0.0
 var _appearance := 0
 var _color := Color.WHITE
 var _nodes_built := false
+var _animation_player: AnimationPlayer = null
 
 
 static func sidewalk_band(redline: float) -> Vector2:
@@ -141,6 +156,7 @@ func setup(
 	_band_ratio = clampf(band_ratio, 0.0, 1.0)
 	_plan_side = 1 if side >= 0 else -1
 	speed_mps = maxf(speed, 0.1)
+	_current_speed_mps = speed_mps * 0.35
 	crossing_chance = clampf(cross_chance, 0.0, 1.0)
 	_appearance = appearance
 	_color = COLORS[posmod(appearance, COLORS.size())]
@@ -150,9 +166,11 @@ func setup(
 
 	_path.clear()
 	_path_crossing.clear()
+	_path_junction_nodes.clear()
 	_path_sides.clear()
 	_path_edges.clear()
 	_path_cursor = 0
+	_active_crossing_node = -1
 
 	var lane := _lane_for(edge_id, from_node, _plan_side)
 	if lane.is_empty():
@@ -168,19 +186,14 @@ func setup(
 	_last_to_node = int(lane.to)
 	_last_direction = direction
 
-	_path.append(spawn_point)
-	_path_crossing.append(false)
-	_path_sides.append(_plan_side)
-	_path_edges.append(edge_id)
-	_path.append(lane.end)
-	_path_crossing.append(false)
-	_path_sides.append(_plan_side)
-	_path_edges.append(edge_id)
+	_append(spawn_point, _plan_side, edge_id, false)
+	_append(lane.end, _plan_side, edge_id, false)
 	_path_cursor = 1
 	for _step in PRELOAD_SEGMENTS:
 		_extend_path()
 	if is_inside_tree():
 		reset_physics_interpolation()
+	_update_animation()
 
 
 func advance(distance: float) -> void:
@@ -201,7 +214,7 @@ func advance(distance: float) -> void:
 		delta.y = 0.0
 		var segment_length := delta.length()
 		if segment_length <= POINT_EPS:
-			_path_cursor += 1
+			_finish_current_segment()
 			continue
 		var direction := delta / segment_length
 		var step_distance := minf(remaining, segment_length)
@@ -210,7 +223,28 @@ func advance(distance: float) -> void:
 		_distance_travelled += step_distance
 		remaining -= step_distance
 		if step_distance >= segment_length - POINT_EPS:
-			_path_cursor += 1
+			_finish_current_segment()
+
+
+func advance_motion(delta: float, may_walk: bool) -> void:
+	## 将路口等待、起步和停车接到平滑速度上，路径数学仍复用 advance()。
+	if delta <= 0.0 or _network == null:
+		return
+	var can_walk := may_walk or _active_crossing_node >= 0
+	var target_speed := speed_mps if can_walk else 0.0
+	var rate := (
+		PEDESTRIAN_ACCELERATION_MPS2
+		if target_speed >= _current_speed_mps
+		else PEDESTRIAN_BRAKING_MPS2
+	)
+	_current_speed_mps = move_toward(
+		_current_speed_mps,
+		target_speed,
+		rate * delta
+	)
+	if _current_speed_mps > MOTION_SPEED_EPS:
+		advance(_current_speed_mps * delta)
+	_update_animation()
 
 
 func get_spawn_edge_id() -> int:
@@ -224,11 +258,41 @@ func get_current_edge_id() -> int:
 
 
 func is_crossing() -> bool:
+	if _active_crossing_node >= 0:
+		return true
 	return (
 		_path_cursor >= 0
 		and _path_cursor < _path_crossing.size()
 		and _path_crossing[_path_cursor]
 	)
+
+
+func get_pending_crossing_node() -> int:
+	if _active_crossing_node >= 0:
+		return -1
+	if (
+		_path_cursor < 0
+		or _path_cursor >= _path_crossing.size()
+		or not _path_crossing[_path_cursor]
+		or _path_cursor >= _path_junction_nodes.size()
+	):
+		return -1
+	return _path_junction_nodes[_path_cursor]
+
+
+func needs_crossing_permission() -> bool:
+	return get_pending_crossing_node() >= 0
+
+
+func commit_crossing() -> int:
+	var node_id := get_pending_crossing_node()
+	if node_id >= 0:
+		_active_crossing_node = node_id
+	return node_id
+
+
+func get_active_crossing_node() -> int:
+	return _active_crossing_node
 
 
 func get_side() -> int:
@@ -256,6 +320,10 @@ func get_speed_mps() -> float:
 	return speed_mps
 
 
+func get_current_speed_mps() -> float:
+	return _current_speed_mps
+
+
 func get_distance_travelled() -> float:
 	return _distance_travelled
 
@@ -265,7 +333,7 @@ func get_pedestrian_color() -> Color:
 
 
 func get_signature() -> String:
-	return "%d|%d|%.4f|%.4f|%.4f|%.4f|%.4f|%.4f|%s" % [
+	return "%d|%d|%.4f|%.4f|%.4f|%.4f|%.4f|%.4f|%.4f|%s" % [
 		_spawn_edge_id,
 		get_side(),
 		position.x,
@@ -273,6 +341,7 @@ func get_signature() -> String:
 		position.z,
 		rotation.y,
 		speed_mps,
+		_current_speed_mps,
 		_distance_travelled,
 		str(_color),
 	]
@@ -294,7 +363,13 @@ func _extend_path() -> void:
 			current_lane.end
 			+ Vector3(left.x, 0.0, left.y) * (-2.0 * lateral * float(walking_side))
 		)
-		_append(opposite_end, walking_side, _last_edge_id, true)
+		_append(
+			opposite_end,
+			walking_side,
+			_last_edge_id,
+			true,
+			_last_to_node
+		)
 		_plan_side = -walking_side
 
 	var next_edge := TrafficRoute.choose_next_edge(
@@ -322,11 +397,30 @@ func _lane_for(edge_id: int, from_node: int, side: int) -> Dictionary:
 	return sidewalk_lane(_network, edge_id, from_node, side, lateral)
 
 
-func _append(point: Vector3, side: int, edge_id: int, is_crossing: bool) -> void:
+func _append(
+	point: Vector3,
+	side: int,
+	edge_id: int,
+	is_crossing: bool,
+	junction_node := -1
+) -> void:
 	_path.append(point)
 	_path_crossing.append(is_crossing)
+	_path_junction_nodes.append(junction_node)
 	_path_sides.append(side)
 	_path_edges.append(edge_id)
+
+
+func _finish_current_segment() -> void:
+	if (
+		_path_cursor >= 0
+		and _path_cursor < _path_crossing.size()
+		and _path_crossing[_path_cursor]
+		and _path_cursor < _path_junction_nodes.size()
+		and _path_junction_nodes[_path_cursor] == _active_crossing_node
+	):
+		_active_crossing_node = -1
+	_path_cursor += 1
 
 
 func _ensure_nodes() -> void:
@@ -349,25 +443,82 @@ func _ensure_nodes() -> void:
 
 
 func _build_visuals() -> void:
-	## 正式人形模型到位后只替换这里，路径、碰撞和公开接口不变。
-	var visual := MeshInstance3D.new()
+	var visual := Node3D.new()
 	visual.name = "PedestrianModel"
-	visual.position = Vector3(0.0, CAPSULE_HEIGHT * 0.5, 0.0)
-	var capsule := CapsuleMesh.new()
-	capsule.radius = CAPSULE_RADIUS
-	capsule.height = CAPSULE_HEIGHT
-	visual.mesh = capsule
-	var material := StandardMaterial3D.new()
-	material.albedo_color = _color
-	material.roughness = 0.8
-	visual.material_override = material
+
+	if ResourceLoader.exists(PEDESTRIAN_MODEL_PATH):
+		var scene := load(PEDESTRIAN_MODEL_PATH) as PackedScene
+		if scene != null:
+			var character := scene.instantiate() as Node3D
+			if character != null:
+				character.name = "Character"
+				character.position = Vector3(0.0, PEDESTRIAN_MODEL_OFFSET_Y, 0.0)
+				character.rotation_degrees.y = PEDESTRIAN_MODEL_YAW_DEGREES
+				character.scale = Vector3.ONE * PEDESTRIAN_MODEL_SCALE
+				visual.add_child(character)
+				_start_walk_animation(character)
+				add_child(visual)
+				return
+
+	_build_fallback_visual(visual)
 	add_child(visual)
 
 
-func _apply_color() -> void:
-	var visual := get_node_or_null("PedestrianModel") as MeshInstance3D
-	if visual == null:
+func _build_fallback_visual(visual: Node3D) -> void:
+	var fallback := MeshInstance3D.new()
+	fallback.name = "FallbackCapsule"
+	fallback.position = Vector3(0.0, CAPSULE_HEIGHT * 0.5, 0.0)
+	var capsule := CapsuleMesh.new()
+	capsule.radius = CAPSULE_RADIUS
+	capsule.height = CAPSULE_HEIGHT
+	fallback.mesh = capsule
+	var material := StandardMaterial3D.new()
+	material.albedo_color = _color
+	material.roughness = 0.8
+	fallback.material_override = material
+	visual.add_child(fallback)
+
+
+func _start_walk_animation(character: Node3D) -> void:
+	_animation_player = character.get_node_or_null("AnimationPlayer") as AnimationPlayer
+	if _animation_player == null:
 		return
-	var material := visual.material_override as StandardMaterial3D
+	var animation_name := StringName(PEDESTRIAN_WALK_ANIMATION)
+	if not _animation_player.has_animation(animation_name):
+		animation_name = StringName(PEDESTRIAN_IDLE_ANIMATION)
+	if not _animation_player.has_animation(animation_name):
+		return
+	_animation_player.speed_scale = _animation_speed_scale()
+	_animation_player.play(animation_name)
+
+
+func _update_animation() -> void:
+	if not is_instance_valid(_animation_player):
+		return
+	var moving := _current_speed_mps > MOTION_SPEED_EPS
+	var preferred := (
+		StringName(PEDESTRIAN_WALK_ANIMATION)
+		if moving
+		else StringName(PEDESTRIAN_IDLE_ANIMATION)
+	)
+	if (
+		_animation_player.current_animation != preferred
+		and _animation_player.has_animation(preferred)
+	):
+		_animation_player.play(preferred)
+	_animation_player.speed_scale = _animation_speed_scale()
+
+
+func _animation_speed_scale() -> float:
+	if _current_speed_mps <= MOTION_SPEED_EPS:
+		return 0.2
+	return clampf(_current_speed_mps / PEDESTRIAN_REFERENCE_SPEED, 0.35, 1.5)
+
+
+func _apply_color() -> void:
+	var fallback := get_node_or_null("PedestrianModel/FallbackCapsule") as MeshInstance3D
+	if fallback == null:
+		return
+	var material := fallback.material_override as StandardMaterial3D
 	if material != null:
 		material.albedo_color = _color

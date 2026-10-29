@@ -96,9 +96,9 @@ func _check_handling() -> void:
 		"松开 A 后车把应回正，实际 %.3f" % player.steering_pivot.rotation.y
 	)
 
-	# 5. 松开油门后滑行减速并停下。
+	# 5. 松开油门后滑行减速并停下。最高车速是 23 m/s，滑行到停需要更长时间。
 	Input.action_release("move_forward")
-	_physics_steps(player, 180)
+	_physics_steps(player, 420)
 	_expect(
 		_planar_speed(player) < 0.1,
 		"松开油门后应滑行停下，实际 %.2f" % _planar_speed(player)

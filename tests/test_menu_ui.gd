@@ -18,6 +18,7 @@ func _run() -> void:
 	await process_frame
 	await process_frame
 	_check_start_menu()
+	await _check_toast()
 	_check_success_result()
 	_check_failure_result()
 	if _failed:
@@ -45,6 +46,16 @@ func _check_start_menu() -> void:
 	_expect(_hud.is_any_modal_visible(), "开始界面应被视为模态界面")
 	_check_inside(_hud.get_start_content_rect(), "开始界面内容")
 	print("PASS menu ui start")
+
+
+func _check_toast() -> void:
+	var message := "撞到行人，赔偿 1000 元"
+	_hud.show_toast(message, 0.08)
+	_expect(_hud.get_toast_text() == message, "提示文本错误")
+	_expect(_hud.is_toast_visible(), "提示显示时应可见")
+	await create_timer(0.16).timeout
+	_expect(not _hud.is_toast_visible(), "提示应在计时结束后自动隐藏")
+	print("PASS menu ui toast")
 
 
 func _check_success_result() -> void:
