@@ -46,6 +46,8 @@ tests/
   test_god_view.gd          测试用上帝视角开关与状态恢复测试
   test_orders.gd            订单生成、状态机、开始/接单/结算界面测试
   test_menu_ui.gd           开始界面和结算页面的文案、统计与布局测试
+  test_delivery_wallet.gd   配送账户的初始余额、收入累计、撞车赔偿与重置测试
+  test_hud_panels.gd        右上角配送收支与输入自检面板的显示、数字与 F9 开关测试
   test_phone_orders.gd      三维接单手机、屏幕倒计时、Y/N、点击接单/拒单与配送中常驻测试
   test_site_readability.gd  站点店名确定性、三维标牌与订单目标高亮测试
   test_traffic.gd           车道、确定性车流、命中检测与撞车失败测试
@@ -76,6 +78,8 @@ godot --headless --path . --script res://tests/test_city_catalog.gd
 godot --headless --path . --script res://tests/test_god_view.gd
 godot --headless --path . --script res://tests/test_orders.gd
 godot --headless --path . --script res://tests/test_menu_ui.gd
+godot --headless --path . --script res://tests/test_delivery_wallet.gd
+godot --headless --path . --script res://tests/test_hud_panels.gd
 godot --headless --path . --script res://tests/test_phone_orders.gd
 godot --headless --path . --script res://tests/test_site_readability.gd
 godot --headless --path . --script res://tests/test_traffic.gd
@@ -101,6 +105,7 @@ godot --headless --path . --script res://tests/test_traffic.gd
 - 阶段二订单闭环已经可用：随机起点、商家和顾客，收到订单后在三维手机上按 **Y** 接单或 **N** 拒单，接单后从起点出发，靠近商家按 **E** 取餐，靠近顾客按 **E** 送达，超时失败；相同城市/订单种子结果一致。
 - 接单界面是一台挂在车把左侧的三维手机：`scripts/orders/order_phone.gd` 用 `SubViewport` 渲染屏幕，卡片显示取餐/送达店名、总路程、预计收入、限时和 10 秒倒计时，底部是“拒绝 N”和“立即接单 Y”按钮。按 **Y** 接单、按 **N** 拒单，也可以直接用鼠标或触屏点屏幕上的按钮；倒计时归零自动拒单并生成下一单。接单后手机切到“配送中”页面并继续留在左侧，显示目标、距离、剩余时间和 E 提示。左上角 HUD 在接单时显示单行“手机收到新订单 · Y 接单 / N 拒单”的提醒。
 - 游戏 UI 由 `scripts/orders/order_hud.gd` 和 `scripts/orders/order_phone.gd` 代码创建：开始界面、活动目标与倒计时、成功/失败结算，以及“下一单”“返回主菜单”按钮。菜单和结算期间关闭玩家移动并释放鼠标。
+- 右上角有两块常驻面板，结构对齐参考截图（标题 + 大号主数值 + 小行明细）：上面是“配送收支”，显示余额、本单收入、累计收入和累计赔偿；下面是“输入自检”，显示窗口焦点、输入是否激活、最近一次按键和角色速度/车头朝向，按 **F9** 隐藏或显示。配送收支的数字来自 `scripts/orders/delivery_wallet.gd`：每局初始余额 500，成功送达按手机上显示的预估收入入账，被汽车撞倒赔 50，超时不赔；从主菜单重新开始时账户重置。
 - 站点店名由 `SiteNaming` 按最终建筑模型和站点编号确定性分配，HUD 与三维标牌共用同一份 `CitySite.display_name`；`SiteSignage` 在每家店入口上方显示店名牌，当前订单目标加“★”并常显，其余站点的标牌降低透明度。
 - 交通系统按城市种子确定性生成方块占位汽车，每个路段最多一辆；`max_vehicles` 默认上限 256，当前 2400 米地图的 214 条路段都会生成汽车。车辆沿右侧车道双向行驶并在路口继续随机路线，不进入导航烘焙，也不与其它车辆或建筑碰撞，避免车流卡死。
 - 配送中碰到汽车会立即判定“被来往汽车撞倒，配送失败”，结算保留真实用时；主菜单、接单界面、结算界面和上帝视角下不会误判。行人、交通灯和车辆避让尚未实现。
