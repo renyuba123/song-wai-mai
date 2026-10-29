@@ -3,18 +3,23 @@ class_name PlayerController
 
 ## 第一人称骑行：油门、刹车和摩托车式转向。
 ## W/S 控制车速，A/D 转车把并带动整车转向；转率随车速变化，静止时不能原地转身。
+## 视角只在骑手头上转动，不改变车头方向和前进方向。
 
 @export_group("Movement")
 ## 最高车速（米/秒）。
 @export var move_speed := 9.0
 ## 倒车最高速度（米/秒）。
 @export var reverse_speed := 3.0
-## 拧油门时的加速度（米/秒²）。
+## 起步时的加速度（米/秒²），越接近最高车速加速越弱。
 @export var acceleration := 10.0
-## 按 S 减速和倒车的减速度（米/秒²）。
+## 刹车减速度（米/秒²）。
 @export var brake_deceleration := 18.0
-## 松开油门后的滑行减速度（米/秒²）。
-@export var coast_deceleration := 4.5
+## 倒车起步加速度（米/秒²）。
+@export var reverse_acceleration := 6.0
+## 滑行时固定的滚动阻力减速（米/秒²）。
+@export var coast_deceleration := 3.0
+## 滑行时随车速增加的风阻减速（米/秒²，满速时）。
+@export var coast_drag := 3.0
 @export var mouse_sensitivity := 0.0025
 @export var gravity := 9.8
 
@@ -25,8 +30,6 @@ class_name PlayerController
 @export var touch_pitch_per_screen := PI * 0.55
 ## 触屏低头极限，比鼠标小，避免镜头一路压到车顶。
 @export var touch_pitch_limit := deg_to_rad(60.0)
-## 低头超过这个角度时隐藏自己的车模，否则车身占满视野。
-@export var model_hide_pitch := deg_to_rad(-35.0)
 
 @export_group("Scooter Steering")
 ## 在 Inspector 中拖入 GLB 里的 Empty 节点
@@ -51,6 +54,8 @@ class_name PlayerController
 var controls_enabled := true
 
 var _pitch := 0.0
+## 相机相对车头的水平转角；视角自由转动，不影响行进方向。
+var _yaw := 0.0
 var _steer_base_y := 0.0
 
 ## 当前车速（米/秒，负数为倒车）和车把角度（弧度，左正右负）。
@@ -128,8 +133,8 @@ func _apply_look_radians(
 	if not controls_enabled or (yaw_delta == 0.0 and pitch_delta == 0.0):
 		return
 
-	# 1. 第一人称水平视角控制
-	rotate_y(yaw_delta)
+	# 1. 水平视角：只转相机，不改车头朝向和前进方向
+	_yaw = wrapf(_yaw + yaw_delta, -PI, PI)
 
 	# 2. 上下视角控制
 	_pitch = clampf(
@@ -138,14 +143,7 @@ func _apply_look_radians(
 		pitch_limit
 	)
 
-	camera.rotation.x = _pitch
-	_update_body_visibility()
-
-
-## 低头越过阈值时隐藏自己的车，避免第一人称视野被车身占满。
-func _update_body_visibility() -> void:
-	if body_model:
-		body_model.visible = _pitch > model_hide_pitch
+	camera.rotation = Vector3(_pitch, _yaw, 0.0)
 
 
 func _process(delta: float) -> void:
@@ -187,16 +185,28 @@ func _physics_process(delta: float) -> void:
 
 
 func _update_speed(throttle: float, delta: float) -> void:
-	## throttle 正向为油门、负向先刹车再倒车；松开后按滑行阻力减速。
-	var target := 0.0
-	var rate := coast_deceleration
+	## throttle 正向为油门、负向先刹车再倒车。
+	## 加速力随车速上升而衰减，滑行时按滚阻加风阻减速，接近真实车辆的手感。
 	if throttle > 0.01:
-		target = move_speed * throttle
-		rate = acceleration if _speed < target else coast_deceleration
+		if _speed < 0.0:
+			_speed = move_toward(_speed, 0.0, brake_deceleration * delta)
+		else:
+			var ratio := clampf(_speed / move_speed, 0.0, 1.0)
+			var drive := acceleration * throttle * (1.0 - ratio)
+			_speed = minf(_speed + drive * delta, move_speed)
 	elif throttle < -0.01:
-		target = reverse_speed * throttle
-		rate = brake_deceleration
-	_speed = move_toward(_speed, target, rate * delta)
+		if _speed > 0.0:
+			_speed = move_toward(
+				_speed, 0.0, brake_deceleration * -throttle * delta
+			)
+		else:
+			var ratio := clampf(-_speed / reverse_speed, 0.0, 1.0)
+			var drive := reverse_acceleration * -throttle * (1.0 - ratio)
+			_speed = maxf(_speed - drive * delta, -reverse_speed)
+	else:
+		var ratio := clampf(absf(_speed) / move_speed, 0.0, 1.0)
+		var drag := coast_deceleration + coast_drag * ratio * ratio
+		_speed = move_toward(_speed, 0.0, drag * delta)
 
 
 func _update_steering(steer_axis: float, delta: float) -> void:
@@ -214,6 +224,8 @@ func _update_steering(steer_axis: float, delta: float) -> void:
 	if absf(_speed) < 0.05:
 		return
 	var speed_ratio := clampf(absf(_speed) / steer_full_speed, 0.0, 1.0)
+	# 车速越高转向越迟钝，接近最高车速时转率压到六成多。
+	speed_ratio *= 1.0 - 0.35 * clampf(absf(_speed) / move_speed, 0.0, 1.0)
 	var steer_ratio := _steer_angle / max_steer_rad
 	var yaw_delta := (
 		deg_to_rad(max_turn_rate)
@@ -239,11 +251,11 @@ func reset_to(start: SpawnPoint) -> void:
 	velocity = Vector3.ZERO
 
 	_pitch = 0.0
+	_yaw = 0.0
 	_speed = 0.0
 	_steer_angle = 0.0
 
-	camera.rotation.x = 0.0
-	_update_body_visibility()
+	camera.rotation = Vector3.ZERO
 
 	if steering_pivot:
 		steering_pivot.rotation.y = _steer_base_y

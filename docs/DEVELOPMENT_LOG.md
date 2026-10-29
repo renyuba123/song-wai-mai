@@ -1205,3 +1205,32 @@ PR #31 合并后，从 `origin/main` 的 `7c3d412` 起 `feature/jzy070407-menu-r
 - 真实窗口启动过一次，确认开始界面、城市生成和接单流程能正常进入；键盘注入在切回终端后会丢焦点，操控手感最终以 `test_player_handling` 的断言为准。
 
 本条记录随 `feature/jzy070407-scooter-handling` 分支提交、推送并建 PR。
+
+## 2026-10-29 20:20（Asia/Shanghai）视角与前进方向解绑，车速改成加速度模型
+
+本轮需求（原文）：“目前有低头后电动车建模消失的问题，同时解绑视角旋转与前进方向改变的绑定，将速度模型转换为更贴合现实的加速度模型”。
+
+**低头时车模消失：**
+
+- 原因是上一轮合并进来的 `fix(player): ... hide scooter at steep pitch` 会在低头超过 35° 时把 `body_model` 隐藏。本轮删掉 `model_hide_pitch` 参数和 `_update_body_visibility()`，低头、抬头、重开都保持车模可见，`test_touch_controls` 里对应的两条断言改成“低头时车模应保持可见”。
+
+**视角与前进方向解绑：**
+
+- `apply_look()` / `apply_look_touch()` 不再调用 `rotate_y()`，而是把水平转角写进新的 `_yaw`，和俯仰角一起设置到 `camera.rotation`（`Vector3(_pitch, _yaw, 0)`）。
+- 车头朝向只由 A/D 转向改变，`_physics_process` 仍然沿车身前向给速度，所以转视角看四周时前进方向不变。
+- `reset_to()` 同时清空 `_yaw` 和相机旋转。
+
+**加速度模型：**
+
+- 油门不再是匀速逼近目标速度：驱动力按 `acceleration * throttle * (1 - 车速/最高车速)` 随车速衰减，起步猛、接近最高车速时变缓；倒车同理用 `reverse_acceleration`。
+- 刹车按 `brake_deceleration` 直接把车速拉向 0，越过 0 后进入倒车。
+- 松油门滑行时减速为 `coast_deceleration + coast_drag * (车速/最高车速)²`，低速主要靠滚阻、高速有明显风阻。
+- 转向再乘一个随车速衰减的系数（最高车速时转率约为六成半），高速转弯更沉。
+
+**测试与校验：**
+
+- `test_player_handling` 新增“转动视角不改变车头方向”，满油门检查从 2 秒延长到 4 秒以适配衰减加速曲线；headless 退出码 0，打印 `PASS player handling`。
+- `test_touch_controls` 的视角断言改到 `camera.rotation.y`，并新增“转动视角不应改变车头方向”和“低头时车模应保持可见”；headless 退出码 0，打印 `PASS touch controls`。
+- `test_input_actions` 退出码 0，打印 `PASS input actions count=9`。
+
+本条记录随同一分支追加提交。

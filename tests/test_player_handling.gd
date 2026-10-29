@@ -48,9 +48,9 @@ func _check_handling() -> void:
 		player.queue_free()
 		return
 
-	# 1. 满油门两秒后接近最高车速，且不会超过。
+	# 1. 满油门四秒后接近最高车速，且不会超过。
 	Input.action_press("move_forward")
-	_physics_steps(player, 120)
+	_physics_steps(player, 240)
 	var top_speed := _planar_speed(player)
 	_expect(
 		top_speed > player.move_speed * 0.9,
@@ -61,7 +61,19 @@ func _check_handling() -> void:
 		"车速不应超过最高车速，实际 %.2f" % top_speed
 	)
 
-	# 2. 行驶中按 A：车把向左转，整车也向左转，两者方向一致。
+	# 2. 转动视角只动相机，不改车头方向和前进方向。
+	var heading_before_look := player.rotation.y
+	player.apply_look(Vector2(160.0, 0.0))
+	_expect(
+		is_equal_approx(player.rotation.y, heading_before_look),
+		"转动视角不应改变车头方向"
+	)
+	_expect(
+		not is_zero_approx(player.camera.rotation.y),
+		"鼠标视角应转动相机"
+	)
+
+	# 3. 行驶中按 A：车把向左转，整车也向左转，两者方向一致。
 	var yaw_before := player.rotation.y
 	Input.action_press("move_left")
 	_physics_steps(player, 30)
@@ -75,7 +87,7 @@ func _check_handling() -> void:
 		"按住 A 时车把应向左转"
 	)
 
-	# 3. 松开 A 后车把回正。
+	# 4. 松开 A 后车把回正。
 	Input.action_release("move_left")
 	_physics_steps(player, 12)
 	_process_steps(player, 4)
@@ -84,7 +96,7 @@ func _check_handling() -> void:
 		"松开 A 后车把应回正，实际 %.3f" % player.steering_pivot.rotation.y
 	)
 
-	# 4. 松开油门后滑行减速并停下。
+	# 5. 松开油门后滑行减速并停下。
 	Input.action_release("move_forward")
 	_physics_steps(player, 180)
 	_expect(
@@ -92,7 +104,7 @@ func _check_handling() -> void:
 		"松开油门后应滑行停下，实际 %.2f" % _planar_speed(player)
 	)
 
-	# 5. 静止时按 A 只转车把，不原地转身。
+	# 6. 静止时按 A 只转车把，不原地转身。
 	var stopped_yaw := player.rotation.y
 	Input.action_press("move_left")
 	_physics_steps(player, 30)
@@ -108,7 +120,7 @@ func _check_handling() -> void:
 	)
 	_process_steps(player, 12)
 
-	# 6. 按 S 先刹车再倒车，速度方向朝车尾。
+	# 7. 按 S 先刹车再倒车，速度方向朝车尾。
 	Input.action_press("move_forward")
 	_physics_steps(player, 90)
 	Input.action_release("move_forward")
