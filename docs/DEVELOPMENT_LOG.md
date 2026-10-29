@@ -761,4 +761,14 @@ GitHub Actions 报 `resident count grows after revisit`。实测首次访问商�
 - `--import` 顺带改写了 `assets/models/` 下多个 `.glb.import`（模型未展开导致的导入元数据变化），已全部还原，未纳入提交；`git diff --check` 通过。
 - 无 GPU 环境未人工确认条带贴地、门向和遮挡效果。
 
-**提交与分支：** 从 `origin/main` `a25b008` 建立 `feature/jzy070407-route-guidance`；本条日志与功能代码同一提交（`feat(orders): add ground route guidance`），推送后建 PR，不直接推送 `main`。
+**提交与分支：** 从 `origin/main` `a25b008` 建立 `feature/jzy070407-route-guidance`；本条日志与功能代码同一提交（`feat(orders): add ground route guidance`）。推送前合并 `origin/main` `b872b50`（PR #18 人行道导航），与上方记录一起保留，推送后建 PR，不直接推送 `main`。
+
+## 2026-10-29 10:13（Asia/Shanghai）人行道与地块导航基础
+
+本轮按“先不要涉及性能优化，优先进行功能搭建”的要求，暂停性能调优，转回功能开发。原先的寻路只在车行道上可用：人行道碰撞体没有加入导航源组，导航代理还沿用车行车辆级别的 4 米半径，玩家从出生点走到商家门口、再从商家走到顾客门口的路径会贴着车行道或被裁断。
+
+在 `feature/jzy070407-sidewalk-navigation` 分支完成三处改动：`CityBuilder` 的人行道碰撞体加入 `CollisionLayers.NAVIGATION_SOURCE_GROUP`，建筑碰撞体仍不加入，因此导航网格只覆盖道路和人行道，不会铺进建筑内部；`NavigationService` 的烘焙体素从 0.25 米级改成 2 米，代理半径 4 米改为 0.5 米、高度改为 1.8 米，按玩家尺寸烘焙；`test_city` 的人行道断言从“不应在导航源组”改为“应在导航源组”，`test_navigation_queries` 增加玩家起点、商家、顾客三个出生点的吸附误差检查和商家到顾客的配送路径检查。
+
+用临时探针实测：主场景实例化加导航烘焙合计约 2107 毫秒，导航网格 2282 个多边形；全部 32 个站点出生点里，吸附误差最大 2.19 米（customer_015）；玩家起点到商家路径 46 个点、约 1144.9 米，商家到顾客路径 82 个点、约 2471.4 米，连通正常。探针脚本没有提交。
+
+测试：`test_navigation_queries`、`test_city`、`test_contracts`、`test_orders`、`test_main_scene`、`test_traffic` 均为 PASS，退出码 0；`test_city_streaming` 因 99 个城市 GLB 仍是 LFS pointer、资源加载失败而失败（退出码 1），与本改动无关，记为环境阻塞。没有修改订单、UI、主场景和共享文件，因此没有加锁。
