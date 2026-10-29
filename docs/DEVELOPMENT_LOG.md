@@ -1120,3 +1120,26 @@ PR #31 合并后，从 `origin/main` 的 `7c3d412` 起 `feature/jzy070407-menu-r
 - 本轮只改文档、脚本和忽略规则，不涉及 Godot 场景与 GDScript，未跑 headless 测试。
 
 本条记录随 `docs/jzy070407-behavior-export` 分支提交、推送并建 PR。
+## 2026-10-29 16:58（Asia/Shanghai）检查远端更新：PR #33、#34 已合并
+
+本轮需求（原文）：“检查 song-wai-mai 仓库的远端更新：进入 E:/Project/Game Work Team/song-wai-mai，先确认工作区状态，再执行 git fetch origin --prune。如果 origin/main 或 origin/refactor/modular-base 有新提交，按 CONTRIBUTING.md 和每轮工作规则安全整合（有未提交改动时先保留或提交，不覆盖），运行相关 Godot 测试，把本轮同步和测试结果追加到 docs/DEVELOPMENT_LOG.md，提交并推送；若出现冲突或权限问题，停止并向用户说明，不要强推。”
+
+检查结果：
+
+- `song-wai-mai` 主检出的工作区是干净的，当前停在 `feature/jzy070407-traffic-cars`，没有未提交改动，也没有 stash。
+- `git fetch origin --prune` 成功。`origin/main` 从 `af924d6` 前进到 `16569b9`，新增 `774e9bb feat: add circular minimap with order route navigation`、`37cee4a fix: remove reference to deleted car model`，以及两个合并提交 `7f35c9d Merge pull request #33`（上一轮的同步日志分支）和 `16569b9 Merge pull request #34`（小地图）。
+- 小地图提交在 `scripts/core/main.gd` 里加了一个 `MiniMapLayer` 画布层和 `scripts/ui/mini_map.gd`，跟随玩家显示道路和订单路线；`test_main_scene.gd` 同时新增了读取小地图目标点和取餐后刷新的校验。
+- 删除车辆模型的提交只补删了 `Asset_0020.glb.import`，并把 `traffic_model_catalog.gd` 里对它的引用去掉，和 main 上早已删除的 `Asset_0020.glb` 对齐。
+- `origin/refactor/modular-base` 远端已经不存在，`git branch -r` 里没有 refactor 或 modular 相关分支，无需整合。
+- 没有切换 `song-wai-mai` 当前分支。只执行了 `git fetch origin main:main`，把本地 `main` 从 `af924d6` 快进到 `16569b9`，不触碰工作区，不覆盖任何未提交内容。
+- 本轮同步记录同样写在 `worktrees/lead` 里，从最新 `origin/main` 新建 `docs/jzy070407-sync-20261029-d` 分支，避免在主检出里切换分支。
+
+**测试与校验：**
+
+- 在最新 `origin/main` 上执行 `--headless --path . --import`，退出码 0；路网校验通过，节点 91、路段 144；城市生成通过，地块 764、建筑 764、站点 32、出入口 141。
+- headless：`test_traffic_streaming` 打印 `PASS traffic streaming`，退出码 0；`test_contracts` 打印 `PASS contracts nodes=96 edges=149`，退出码 0；`test_orders` 打印 `PASS orders starts=12`、`PASS orders`，退出阶段以 139 结束。
+- headless：`test_main_scene` 连续 5 次都没打印 PASS，并在取餐交互后以 139 结束，报错从 `order_manager.gd` 的 `_update_beacon` 开始（Dummy 渲染器的网格/RID 报错）。做了三组对照：同一台机器上把工作树切到 `af924d6`（小地图之前）跑 `test_main_scene` 2 次都打印 PASS；用 `af924d6` 的旧测试正文跑 `16569b9` 的代码 2 次也都打印 PASS；用真实窗口渲染跑 `16569b9` 的新测试，退出码 0，打印 `PASS main scene nodes=91 lots=764 sites=32 starts=12 vehicles=4 order_seed=1 sky=true`，没有任何报错。结论是小地图本身和主场景都正常，问题只出现在 headless Dummy 渲染器走到“取餐后信标/店招更新”这条路径时，属于本机已知 headless 环境现象的新触发点，不是 PR #34 的功能回归。
+- headless：`test_traffic` 和 `test_route_guidance` 都在导航烘焙阶段或之后崩溃、没有打印 PASS；改用真实窗口渲染复跑，分别打印 `PASS traffic` 和 `PASS route guidance`，退出码都是 0。
+- 本轮没有冲突，也没有权限问题。
+
+本条记录随 `docs/jzy070407-sync-20261029-d` 分支提交、推送并建 PR。
