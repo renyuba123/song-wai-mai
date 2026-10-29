@@ -57,7 +57,6 @@ var _start_feature_row: HFlowContainer
 var _start_controls_panel: PanelContainer
 var _start_controls_grid: GridContainer
 var _start_touch_hint: Label
-var _start_seed_label: Label
 var _start_action_hint: Label
 var _start_button: Button
 
@@ -91,7 +90,7 @@ func _ready() -> void:
 	_request_responsive_layout()
 
 
-func show_start_menu(city_seed: int) -> void:
+func show_start_menu() -> void:
 	hide_toast()
 	_offer_active = false
 	_offer_text = ""
@@ -100,7 +99,6 @@ func show_start_menu(city_seed: int) -> void:
 	_status_panel.visible = false
 	_prompt_label.visible = false
 	clear_error()
-	_start_seed_label.text = "城市种子 %d" % city_seed
 	_start_action_hint.text = (
 		"点击开始接单 · 左侧摇杆骑行，右侧拖动视角"
 		if TouchControls.is_touch_device()
@@ -353,8 +351,9 @@ func get_start_subtitle_text() -> String:
 	return _start_subtitle.text
 
 
-func get_start_seed_text() -> String:
-	return _start_seed_label.text
+func get_start_footer_text() -> String:
+	## 主菜单不显示种子；种子只在局内 HUD、暂停页和结算页出现。
+	return _start_action_hint.text
 
 
 func get_start_content_rect() -> Rect2:
@@ -626,31 +625,6 @@ func _build_start_layer() -> void:
 	footer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	footer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_start_content.add_child(footer)
-
-	var seed_chip := PanelContainer.new()
-	seed_chip.add_theme_stylebox_override("panel", _chip_style())
-	seed_chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	footer.add_child(seed_chip)
-	var seed_margin := MarginContainer.new()
-	seed_margin.add_theme_constant_override("margin_left", 12)
-	seed_margin.add_theme_constant_override("margin_right", 12)
-	seed_margin.add_theme_constant_override("margin_top", 6)
-	seed_margin.add_theme_constant_override("margin_bottom", 6)
-	seed_margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	seed_chip.add_child(seed_margin)
-	var seed_row := HBoxContainer.new()
-	seed_row.add_theme_constant_override("separation", 8)
-	seed_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	seed_margin.add_child(seed_row)
-	var seed_dot := ColorRect.new()
-	seed_dot.color = MINT
-	seed_dot.custom_minimum_size = Vector2(6, 6)
-	seed_dot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	seed_dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	seed_row.add_child(seed_dot)
-	_start_seed_label = _make_label(14, MUTED_UI)
-	_start_seed_label.text = "城市种子 —"
-	seed_row.add_child(_start_seed_label)
 
 	_start_action_hint = _make_label(14, MUTED_UI)
 	_start_action_hint.text = "按 Enter / E 开始"

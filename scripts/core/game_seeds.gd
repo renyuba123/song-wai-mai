@@ -40,12 +40,27 @@ static func city_seed() -> int:
 	return override if override > 0 else random_seed()
 
 
-## 本局第一个订单的种子。后续订单在它基础上递增，保证同一局可以复现。
+## 本局第一个订单的种子：固定值优先，其次启动参数/环境变量，最后随机。
 static func order_seed() -> int:
 	if _order_pin > 0:
 		return _order_pin
 	var override := override_seed(OS.get_cmdline_user_args(), ORDER_FLAG, OS.get_environment(ORDER_ENV))
 	return override if override > 0 else random_seed()
+
+
+## 新开一单时的种子：正常游玩每单重新随机；固定种子或启动参数下沿用
+## “基准 + 1”的可复现序列，测试、录制和 `--order-seed` 复现都和以前一致。
+static func next_order_seed(previous: int) -> int:
+	if previous <= 0:
+		return order_seed()
+	if _order_pin > 0:
+		return previous + 1
+	if override_seed(OS.get_cmdline_user_args(), ORDER_FLAG, OS.get_environment(ORDER_ENV)) > 0:
+		return previous + 1
+	var value := random_seed()
+	while value == previous:
+		value = random_seed()
+	return value
 
 
 ## 城市种子是否由程序随机决定；随机时才允许生成失败后自动换种子。
