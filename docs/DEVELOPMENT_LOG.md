@@ -1202,3 +1202,61 @@ PR #31 合并后，从 `origin/main` 的 `7c3d412` 起 `feature/jzy070407-menu-r
 - API 密钥建议用 CAM 子账号单独生成，只授予 CloudBase 需要的权限，泄露时直接禁用并更新 Secret；不要通过聊天或 Issue 传送密钥。
 
 本条记录随 `feature/jzy070407-web-autodeploy` 分支提交、推送并建 PR。
+## 2026-10-29 19:55（Asia/Shanghai）去掉地面路线指引，改成摩托车式骑行
+
+本轮需求（原文）：“删去地面引导的导航指示线，同时提高车速，修复电动车的物理引擎：当按下左/右移键时，车把对应转动，使之更符合常见游戏中摩托类似物的物理引擎效果”。
+
+同一条消息里用户说明 NPC 汽车行进方向、人类模型、车流量和车速、撞人判定，以及人行道和马路贴图、红绿灯系统都已经改好、正在等更新包，这几块本轮一律没有碰。
+
+**删掉地面路线指引：**
+
+- `scripts/orders/route_guide.gd` 和 `tests/test_route_guidance.gd` 整份删除，`OrderManager` 里的 `_route_guide` 成员、`_ensure_route_guide()`、`_refresh_route()`、`get_route_guide()` 以及各处 `hide_route()` 调用一并去掉。
+- CI 测试清单和 README 的测试表、命令示例同步删掉 `test_route_guidance`。
+- 方向仍然由 HUD 的方向箭头和小地图路线给出，去的是贴在地面的那条黄色条带。
+
+**车速和操控：**
+
+- `PlayerController` 的 `move_speed` 从 5.0 提到 9.0（约 32 km/h），新增 `reverse_speed`（3.0）、`acceleration`（10.0）、`brake_deceleration`（18.0）、`coast_deceleration`（4.5）。W/S 现在是油门和刹车：按住 W 线性加速到最高车速，松手按滑行阻力减速，按 S 先刹车再倒车。
+- 移动不再是“世界坐标里平移”：车头方向就是前进方向，`velocity` 只沿车身前向给速度。
+- A/D 现在直接控制车把：`_steer_angle` 按 `steer_speed`（160 度/秒）跟手转到 `max_steer_angle`（30 度），车模的 `Empty` 车把节点跟着转，松键自动回正。
+- 整车转向由车速换算：`max_turn_rate`（105 度/秒）乘车把比例，再乘 `clamp(车速 / steer_full_speed, 0, 1)`，所以车速越低越难转、静止时完全不能原地转身，倒车时转向方向跟着车速符号反过来。
+- 鼠标和触屏视角不再顺手带车把（原 `steer_response` 参数删掉，`player.tscn` 里的赋值也去掉），视角只管看，车把只听 A/D。
+- 开始界面的操作说明改成“油门 · 刹车 W / S · 摇杆上下”“车把 · 转向 A / D · 摇杆左右”，触屏提示改成“左侧摇杆：上下油门、左右转向”。
+
+**测试与校验：**
+
+- 新增 `tests/test_player_handling.gd`，覆盖满油门接近且不超过最高车速、按 A 时车把和整车同向左转、松手车把回正、松油门滑行停下、静止按 A 不转身、按 S 倒车六个断言；已加入 CI 清单和 README。headless 运行退出码 0，打印 `PASS player handling`。
+- headless：`test_input_actions`（`PASS input actions count=9`）、`test_touch_controls`、`test_menu_ui`（四条 PASS）、`test_contracts`、`test_telemetry` 退出码 0；`test_orders`、`test_phone_orders`、`test_site_readability` 先打印 PASS，退出阶段以既有访问冲突 139 结束；`test_pause`、`test_main_scene`、`test_traffic`、`test_god_view` 在 headless 下没有打印 PASS（导航烘焙后的 Dummy 渲染器 RID 问题），改用真实窗口渲染复跑，四个都打印 `PASS pause`、`PASS main scene nodes=91 lots=764 sites=32 starts=12 vehicles=4 order_seed=1 sky=true`、`PASS traffic`、`PASS god view debug=true`，退出码都是 0。
+- 以上 139 和 RID 报错与既有记录一致，按本机 headless 环境问题处理，不视为断言失败。
+- 真实窗口启动过一次，确认开始界面、城市生成和接单流程能正常进入；键盘注入在切回终端后会丢焦点，操控手感最终以 `test_player_handling` 的断言为准。
+
+本条记录随 `feature/jzy070407-scooter-handling` 分支提交、推送并建 PR。
+
+## 2026-10-29 20:20（Asia/Shanghai）视角与前进方向解绑，车速改成加速度模型
+
+本轮需求（原文）：“目前有低头后电动车建模消失的问题，同时解绑视角旋转与前进方向改变的绑定，将速度模型转换为更贴合现实的加速度模型”。
+
+**低头时车模消失：**
+
+- 原因是上一轮合并进来的 `fix(player): ... hide scooter at steep pitch` 会在低头超过 35° 时把 `body_model` 隐藏。本轮删掉 `model_hide_pitch` 参数和 `_update_body_visibility()`，低头、抬头、重开都保持车模可见，`test_touch_controls` 里对应的两条断言改成“低头时车模应保持可见”。
+
+**视角与前进方向解绑：**
+
+- `apply_look()` / `apply_look_touch()` 不再调用 `rotate_y()`，而是把水平转角写进新的 `_yaw`，和俯仰角一起设置到 `camera.rotation`（`Vector3(_pitch, _yaw, 0)`）。
+- 车头朝向只由 A/D 转向改变，`_physics_process` 仍然沿车身前向给速度，所以转视角看四周时前进方向不变。
+- `reset_to()` 同时清空 `_yaw` 和相机旋转。
+
+**加速度模型：**
+
+- 油门不再是匀速逼近目标速度：驱动力按 `acceleration * throttle * (1 - 车速/最高车速)` 随车速衰减，起步猛、接近最高车速时变缓；倒车同理用 `reverse_acceleration`。
+- 刹车按 `brake_deceleration` 直接把车速拉向 0，越过 0 后进入倒车。
+- 松油门滑行时减速为 `coast_deceleration + coast_drag * (车速/最高车速)²`，低速主要靠滚阻、高速有明显风阻。
+- 转向再乘一个随车速衰减的系数（最高车速时转率约为六成半），高速转弯更沉。
+
+**测试与校验：**
+
+- `test_player_handling` 新增“转动视角不改变车头方向”，满油门检查从 2 秒延长到 4 秒以适配衰减加速曲线；headless 退出码 0，打印 `PASS player handling`。
+- `test_touch_controls` 的视角断言改到 `camera.rotation.y`，并新增“转动视角不应改变车头方向”和“低头时车模应保持可见”；headless 退出码 0，打印 `PASS touch controls`。
+- `test_input_actions` 退出码 0，打印 `PASS input actions count=9`。
+
+本条记录随同一分支追加提交。

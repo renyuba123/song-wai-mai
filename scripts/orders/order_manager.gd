@@ -25,7 +25,6 @@ var _hud: OrderHUD = null
 var _phone: OrderPhone = null
 var _beacon: MeshInstance3D = null
 var _beacon_material: StandardMaterial3D = null
-var _route_guide: RouteGuide = null
 
 var _current_order: DeliveryOrder = null
 var _session: OrderSession = null
@@ -42,7 +41,6 @@ var _nav_wait_frames := 0
 func _ready() -> void:
 	_ensure_hud()
 	_ensure_beacon()
-	_ensure_route_guide()
 
 
 func setup(
@@ -57,10 +55,7 @@ func setup(
 	_ensure_hud()
 	_ensure_phone()
 	_ensure_beacon()
-	_ensure_route_guide()
-	_route_guide.setup(_navigation)
 	if not _configured:
-		_route_guide.hide_route()
 		_hud.show_error("订单系统缺少世界、导航或玩家")
 		return
 	_order_seed = initial_order_seed
@@ -94,10 +89,6 @@ func get_hud() -> OrderHUD:
 
 func get_phone() -> OrderPhone:
 	return _phone
-
-
-func get_route_guide() -> RouteGuide:
-	return _route_guide
 
 
 func is_start_screen_visible() -> bool:
@@ -150,8 +141,6 @@ func reject_order() -> bool:
 	if _phone != null:
 		_phone.hide_offer()
 	_hud.hide_offer()
-	if _route_guide != null:
-		_route_guide.hide_route()
 	order_rejected.emit(rejected)
 	_begin_generation(_order_seed + 1, signature)
 	return true
@@ -170,8 +159,6 @@ func return_to_start_menu() -> bool:
 		_phone.hide_offer()
 	if _beacon != null:
 		_beacon.visible = false
-	if _route_guide != null:
-		_route_guide.hide_route()
 	if _player != null:
 		_player.set_controls_enabled(false)
 	_hud.show_start_menu(_city_seed())
@@ -248,7 +235,6 @@ func _physics_process(delta: float) -> void:
 	if _session.is_finished():
 		return
 	_refresh_hud()
-	_refresh_route(delta, false)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -292,8 +278,6 @@ func _begin_generation(seed_value: int, avoid_signature: String) -> void:
 		_phone.hide_offer()
 	if _beacon != null:
 		_beacon.visible = false
-	if _route_guide != null:
-		_route_guide.hide_route()
 	if _hud != null:
 		_hud.show_waiting("正在生成订单…")
 	_sync_signage()
@@ -334,8 +318,6 @@ func _offer_order(order: DeliveryOrder) -> void:
 	_pending_offer = true
 	if _beacon != null:
 		_beacon.visible = false
-	if _route_guide != null:
-		_route_guide.hide_route()
 	if _player != null:
 		_player.set_controls_enabled(false)
 	_sync_signage()
@@ -365,7 +347,6 @@ func _activate_order(order: DeliveryOrder) -> void:
 	_hud.show_active(order, _session)
 	_update_beacon()
 	_refresh_hud()
-	_refresh_route(0.0, true)
 	order_started.emit(order)
 
 
@@ -385,7 +366,6 @@ func _restart_same_order() -> void:
 	_hud.show_active(_current_order, _session)
 	_update_beacon()
 	_refresh_hud()
-	_refresh_route(0.0, true)
 	order_started.emit(_current_order)
 
 
@@ -398,8 +378,6 @@ func _begin_next_order() -> void:
 func _on_session_state_changed(_state: int) -> void:
 	_update_beacon()
 	_refresh_hud()
-	# 取餐后目标从商家切到顾客，强制重算一次；终态则由活动判断隐藏。
-	_refresh_route(0.0, true)
 
 
 func _on_session_finished(_success: bool) -> void:
@@ -407,8 +385,6 @@ func _on_session_finished(_success: bool) -> void:
 		_phone.hide_offer()
 	if _beacon != null:
 		_beacon.visible = false
-	if _route_guide != null:
-		_route_guide.hide_route()
 	if _player != null:
 		_player.set_controls_enabled(false)
 	_sync_signage()
@@ -466,35 +442,6 @@ func _city_seed() -> int:
 	if _world != null and _world.network != null:
 		return _world.network.seed_value
 	return 0
-
-
-func _ensure_route_guide() -> void:
-	if _route_guide != null:
-		return
-	_route_guide = RouteGuide.new()
-	_route_guide.name = "RouteGuide"
-	add_child(_route_guide)
-	_route_guide.setup(_navigation)
-
-
-func _refresh_route(delta: float, force: bool) -> void:
-	if _route_guide == null:
-		return
-	if (
-		not _configured
-		or _player == null
-		or _session == null
-		or not _session.is_active()
-	):
-		_route_guide.hide_route()
-		return
-	var target := _session.get_target_position()
-	if not target.is_finite():
-		_route_guide.hide_route()
-		return
-	_route_guide.update_route(
-		_player.global_position, target, delta, force
-	)
 
 
 func _ensure_beacon() -> void:

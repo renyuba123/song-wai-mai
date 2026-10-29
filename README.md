@@ -39,6 +39,7 @@ tests/
   test_main_scene.gd        主场景启动与导航就绪冒烟测试
   test_contracts.gd         出生点、站点和订单数据契约测试
   test_input_actions.gd     输入动作与玩家移动测试
+  test_player_handling.gd   油门/刹车、车把转向、滑行与静止不转身测试
   test_navigation_queries.gd 导航查询接口测试
   test_city.gd              城市地块、建筑、站点与可达性测试
   test_city_catalog.gd      城市模型目录完整性、数量与种子多样性测试
@@ -46,7 +47,6 @@ tests/
   test_orders.gd            订单生成、状态机、开始/接单/结算界面测试
   test_menu_ui.gd           开始界面和结算页面的文案、统计与布局测试
   test_phone_orders.gd      三维接单手机、屏幕倒计时、Y/N、点击接单/拒单与配送中常驻测试
-  test_route_guidance.gd    地面路线可见性、贴路面高度、移动实时重算、偏航/传送/目标切换与节流测试
   test_site_readability.gd  站点店名确定性、三维标牌与订单目标高亮测试
   test_traffic.gd           车道、确定性车流、命中检测与撞车失败测试
 docs/
@@ -70,6 +70,7 @@ godot --headless --path . --script res://tests/test_road_network.gd
 godot --headless --path . --script res://tests/test_main_scene.gd
 godot --headless --path . --script res://tests/test_contracts.gd
 godot --headless --path . --script res://tests/test_input_actions.gd
+godot --headless --path . --script res://tests/test_player_handling.gd
 godot --headless --path . --script res://tests/test_navigation_queries.gd
 godot --headless --path . --script res://tests/test_city.gd
 godot --headless --path . --script res://tests/test_city_catalog.gd
@@ -77,7 +78,6 @@ godot --headless --path . --script res://tests/test_god_view.gd
 godot --headless --path . --script res://tests/test_orders.gd
 godot --headless --path . --script res://tests/test_menu_ui.gd
 godot --headless --path . --script res://tests/test_phone_orders.gd
-godot --headless --path . --script res://tests/test_route_guidance.gd
 godot --headless --path . --script res://tests/test_site_readability.gd
 godot --headless --path . --script res://tests/test_traffic.gd
 ```
