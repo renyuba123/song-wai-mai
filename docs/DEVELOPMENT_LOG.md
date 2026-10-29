@@ -1078,3 +1078,23 @@ PR #31 合并后，从 `origin/main` 的 `7c3d412` 起 `feature/jzy070407-menu-r
 - 竖屏手机上整块界面仍偏小，这是 `project.godot` 现有 `canvas_items` + `expand` 拉伸和默认横屏视口的项目级行为，本轮没有改共享文件，留到设置/移动端适配时统一处理。
 
 本条记录随 `feature/jzy070407-menu-redesign` 分支提交、推送并建 PR。
+
+## 2026-10-29 14:57（Asia/Shanghai）检查远端更新：PR #32 已合并
+
+本轮需求（原文）：“检查 song-wai-mai 仓库的远端更新：进入 E:/Project/Game Work Team/song-wai-mai，先确认工作区状态，再执行 git fetch origin --prune。如果 origin/main 或 origin/refactor/modular-base 有新提交，按 CONTRIBUTING.md 和每轮工作规则安全整合（有未提交改动时先保留或提交，不覆盖），运行相关 Godot 测试，把本轮同步和测试结果追加到 docs/DEVELOPMENT_LOG.md，提交并推送；若出现冲突或权限问题，停止并向用户说明，不要强推。”
+
+检查结果：
+
+- `song-wai-mai` 主检出的工作区是干净的，当前停在 `feature/jzy070407-traffic-cars`，没有未提交改动，也没有 stash。
+- `git fetch origin --prune` 成功。`origin/main` 从 `7c3d412` 前进到 `af924d6`，新增的只有 `9f90cb7 feat: redesign start and result screens` 和合并提交 `af924d6 Merge pull request #32 from renyuba123/feature/jzy070407-menu-redesign`，也就是上一轮重做开始/结算页面的 PR #32；没有其他人的新提交。
+- `origin/refactor/modular-base` 远端已经不存在，`git branch -r` 里没有 refactor 或 modular 相关分支，无需整合。
+- 没有切换 `song-wai-mai` 当前分支。只执行了 `git fetch origin main:main`，把本地 `main` 从 `17c87a9` 快进到 `af924d6`，不触碰工作区，不覆盖任何未提交内容。
+- 由于主检出停在别的分支，本轮同步记录在 `worktrees/lead` 里从最新 `origin/main` 新建 `docs/jzy070407-sync-20261029-c` 分支写入，避免在主检出里切换分支。
+
+**测试与校验：**
+
+- 在最新 `origin/main` 上执行 `--headless --path . --import`，退出码 0；城市生成通过，地块 764、建筑 764、站点 32、出入口 141。
+- headless：`test_menu_ui` 打印 `PASS menu ui start`、`PASS menu ui success`、`PASS menu ui failure`、`PASS menu ui`，退出码 0；`test_orders` 打印 `PASS orders starts=12`、`PASS orders`；`test_main_scene` 打印 `PASS main scene nodes=91 lots=764 sites=32 starts=12 vehicles=4 order_seed=1 sky=true`。后两个在退出阶段以既有访问冲突 139 结束，按本机 headless 环境问题处理，不视为断言失败。
+- 本轮没有冲突，也没有权限问题。
+
+本条记录随 `docs/jzy070407-sync-20261029-c` 分支提交、推送并建 PR。
