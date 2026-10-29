@@ -8,10 +8,13 @@ class_name OrderHUD
 ## 路线背景和分段统计。游戏中的左上角状态面板保持照片复刻风格。
 
 signal start_pressed
+signal settings_pressed
+signal exit_pressed
 signal next_order_pressed
 signal menu_pressed
 
 const MenuBackdropScript = preload("res://scripts/ui/menu_backdrop.gd")
+const StartBackdropScript = preload("res://scripts/ui/start_menu_art.gd")
 
 const PANEL_BG := Color(0.045, 0.06, 0.09, 0.84)
 const STATUS_BG := Color(0.035, 0.06, 0.11, 0.80)
@@ -56,9 +59,10 @@ var _offer_seed_label: Label
 var _offer_hint_label: Label
 var _offer_time_limit_s := 0.0
 var _offer_countdown_s := 0.0
+var _phone_hud_mode := false
 
 var _start_layer: Control
-var _start_backdrop: MenuBackdrop
+var _start_backdrop: StartMenuArt
 var _start_page_margin: MarginContainer
 var _start_content: VBoxContainer
 var _start_title: Label
@@ -110,19 +114,14 @@ func show_start_menu() -> void:
 	_status_panel.visible = false
 	_prompt_label.visible = false
 	clear_error()
-	_start_action_hint.text = (
-		"点击开始接单 · 左侧摇杆骑行，右侧拖动视角"
-		if TouchControls.is_touch_device()
-		else "按 Enter / E 开始 · 配送中按 Esc 暂停"
-	)
-	_start_button.grab_focus()
+	_start_action_hint.text = ""
+	_start_backdrop.call("focus_default")
 	_request_responsive_layout()
-	_animate_in(_start_content)
 
 
 func hide_start_menu() -> void:
 	_start_layer.visible = false
-	_start_backdrop.set_active(false)
+	_start_backdrop.call("set_active", false)
 
 
 func show_offer(order: DeliveryOrder, time_limit: float) -> void:
@@ -403,6 +402,14 @@ func get_offer_detail_text() -> String:
 	])
 
 
+func set_phone_hud_mode(enabled: bool) -> void:
+	_phone_hud_mode = enabled
+	if _status_panel != null:
+		_status_panel.modulate.a = 0.0 if enabled else 1.0
+	if _offer_panel != null:
+		_offer_panel.modulate.a = 0.0 if enabled else 1.0
+
+
 func get_start_button_text() -> String:
 	return _start_button.text
 
@@ -649,18 +656,22 @@ func _build_start_layer() -> void:
 	_start_layer.visible = false
 	_root.add_child(_start_layer)
 
-	_start_backdrop = MenuBackdropScript.new()
+	_start_backdrop = StartBackdropScript.new()
 	_start_backdrop.name = "StartBackdrop"
 	_start_backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_start_layer.add_child(_start_backdrop)
+	_start_backdrop.start_pressed.connect(_on_reference_start_pressed)
+	_start_backdrop.settings_pressed.connect(func() -> void: settings_pressed.emit())
+	_start_backdrop.exit_pressed.connect(func() -> void: exit_pressed.emit())
 
 	_start_page_margin = MarginContainer.new()
 	_start_page_margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_start_page_margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_start_page_margin.visible = false
 	_start_layer.add_child(_start_page_margin)
 
 	var page := VBoxContainer.new()
-	page.alignment = BoxContainer.ALIGNMENT_CENTER
+	page.alignment = BoxContainer.ALIGNMENT_BEGIN
 	page.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_start_page_margin.add_child(page)
 
@@ -682,11 +693,12 @@ func _build_start_layer() -> void:
 	brand_dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	brand.add_child(brand_dot)
 	var brand_label := _make_label(14, GOLD)
-	brand_label.text = "城市外卖  ·  NIGHT SHIFT"
+	brand_label.text = "CITY DELIVERY  /  城市配送"
+	brand.visible = false
 	brand.add_child(brand_label)
 
-	_start_title = _make_label(76, GOLD_BRIGHT, true, 8)
-	_start_title.text = "大城市送外卖"
+	_start_title = _make_label(76, Color("ffe4b1"), true, 2)
+	_start_title.text = "大城市\n送外卖"
 	_start_title.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.55))
 	_start_title.add_theme_constant_override("shadow_offset_x", 0)
 	_start_title.add_theme_constant_override("shadow_offset_y", 4)
@@ -698,9 +710,10 @@ func _build_start_layer() -> void:
 	accent_line.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	accent_line.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_start_content.add_child(accent_line)
+	accent_line.visible = false
 
 	_start_subtitle = _make_label(21, TEXT_COLOR, false, 4)
-	_start_subtitle.text = "在程序化生成的城市里接单、取餐、送达。\n穿过真实车流，按时完成每一单。"
+	_start_subtitle.text = "CITY DELIVERY"
 	_start_subtitle.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_start_content.add_child(_start_subtitle)
 
@@ -713,12 +726,14 @@ func _build_start_layer() -> void:
 	_start_feature_row.add_child(_make_chip("程序化城市"))
 	_start_feature_row.add_child(_make_chip("实时车流"))
 	_start_feature_row.add_child(_make_chip("第一人称配送"))
+	_start_feature_row.visible = false
 
 	_start_controls_panel = PanelContainer.new()
 	_start_controls_panel.add_theme_stylebox_override("panel", _glass_style())
 	_start_controls_panel.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	_start_controls_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_start_content.add_child(_start_controls_panel)
+	_start_controls_panel.visible = false
 
 	var controls_margin := MarginContainer.new()
 	controls_margin.add_theme_constant_override("margin_left", 18)
@@ -765,17 +780,25 @@ func _build_start_layer() -> void:
 	_start_action_hint.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_start_action_hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	footer.add_child(_start_action_hint)
+	footer.visible = false
 
-	_start_button = _make_button("开始接单  →", true)
-	_start_button.custom_minimum_size = Vector2(320, 64)
+	_start_button = _make_start_menu_button("START GAME")
 	_start_button.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	_start_button.pressed.connect(func() -> void: start_pressed.emit())
 	_start_content.add_child(_start_button)
+	var settings_button := _make_start_menu_button("SETTINGS")
+	settings_button.name = "StartSettingsButton"
+	settings_button.pressed.connect(func() -> void: settings_pressed.emit())
+	_start_content.add_child(settings_button)
+	var exit_button := _make_start_menu_button("EXIT")
+	exit_button.pressed.connect(func() -> void: exit_pressed.emit())
+	_start_content.add_child(exit_button)
 
 	var button_hint := _make_label(13, MUTED_UI)
 	button_hint.text = "送达后结算收入 · 按 R 继续下一单"
 	button_hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_start_content.add_child(button_hint)
+	button_hint.visible = false
 
 
 func _build_result_layer() -> void:
@@ -938,6 +961,29 @@ func _add_control_row(caption: String, keys: String) -> void:
 	_start_controls_grid.add_child(key_label)
 
 
+func _make_start_menu_button(caption: String, unavailable: bool = false) -> Button:
+	var button := Button.new()
+	button.text = ("▶  " if caption == "START GAME" else "     ") + caption
+	button.flat = true
+	button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	button.custom_minimum_size = Vector2(300, 43)
+	button.add_theme_font_size_override("font_size", 25)
+	button.add_theme_color_override("font_color", GOLD_BRIGHT if caption == "START GAME" else TEXT_COLOR)
+	button.add_theme_color_override("font_hover_color", GOLD_BRIGHT)
+	button.add_theme_color_override("font_focus_color", GOLD_BRIGHT)
+	button.add_theme_color_override("font_disabled_color", Color(0.68, 0.72, 0.78, 0.55))
+	button.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	button.disabled = unavailable
+	button.tooltip_text = "存档功能尚未接入" if unavailable else ""
+	return button
+
+
+func _on_reference_start_pressed() -> void:
+	start_pressed.emit()
+	if not is_start_menu_visible() and not DisplayServer.is_touchscreen_available():
+		Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
+
+
 func _make_chip(text: String) -> PanelContainer:
 	var chip := PanelContainer.new()
 	chip.add_theme_stylebox_override("panel", _chip_style())
@@ -990,7 +1036,7 @@ func _make_stat(caption: String, parent: HBoxContainer) -> PanelContainer:
 func _set_menu_visible(start_visible: bool, result_visible: bool) -> void:
 	_start_layer.visible = start_visible
 	_result_layer.visible = result_visible
-	_start_backdrop.set_active(start_visible)
+	_start_backdrop.call("set_active", start_visible)
 	_result_backdrop.set_active(result_visible)
 
 
@@ -1019,20 +1065,18 @@ func _apply_responsive_layout() -> void:
 		return
 	var narrow := viewport.x < 560.0
 	var compact := viewport.x < 900.0 or viewport.y < 760.0
-	var side := 24 if narrow else (46 if compact else 96)
-	var top := 24 if narrow else (36 if compact else 56)
+	var side := 24 if narrow else (74 if compact else 96)
+	var top := 24 if narrow else (46 if compact else 56)
 	_set_margin(_start_page_margin, side, side, top, top)
-	var content_width := minf(760.0, viewport.x - side * 2.0)
+	var content_width := minf(570.0, viewport.x - side * 2.0)
 	_start_content.custom_minimum_size.x = content_width
 	_start_subtitle.custom_minimum_size.x = content_width
-	_start_title.add_theme_font_size_override("font_size", 44 if narrow else (58 if compact else 76))
-	_start_subtitle.add_theme_font_size_override("font_size", 16 if narrow else (18 if compact else 21))
-	_start_content.add_theme_constant_override("separation", 10 if compact else 14)
-	_start_feature_row.visible = not compact
-	_start_controls_panel.visible = not narrow and not TouchControls.is_touch_device()
-	_start_touch_hint.visible = not _start_controls_panel.visible
-	_start_button.custom_minimum_size.x = content_width if narrow else 320.0
-	_start_button.custom_minimum_size.y = 54.0 if compact else 64.0
+	_start_title.add_theme_font_size_override("font_size", 42 if narrow else (58 if compact else 76))
+	_start_subtitle.add_theme_font_size_override("font_size", 14 if narrow else 18)
+	_start_content.add_theme_constant_override("separation", 6 if compact else 9)
+	_start_feature_row.visible = false
+	_start_controls_panel.visible = false
+	_start_touch_hint.visible = false
 
 	var card_side := 18 if narrow else (28 if compact else 44)
 	_result_card.custom_minimum_size.x = minf(720.0, viewport.x - card_side * 2.0)

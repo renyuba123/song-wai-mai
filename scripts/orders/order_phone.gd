@@ -37,6 +37,7 @@ var _viewport: SubViewport = null
 var _mode := Mode.NONE
 var _screen_text := ""
 var _remaining_s := 0.0
+var _expected_income := 0
 var _expired_emitted := false
 var _pointer_down := false
 var _last_pixel := Vector2.ZERO
@@ -81,6 +82,7 @@ func show_offer(order: DeliveryOrder, time_limit: float) -> void:
 		return
 	_mode = Mode.OFFER
 	_remaining_s = OFFER_TIMEOUT_S
+	_expected_income = expected_income(order, time_limit)
 	_expired_emitted = false
 	_pointer_down = false
 	_screen_text = format_offer_text(order, time_limit)
@@ -90,7 +92,7 @@ func show_offer(order: DeliveryOrder, time_limit: float) -> void:
 		_merchant_detail.text = _site_detail("取餐", order.merchant, "取餐点")
 		_customer_detail.text = _site_detail("送达", order.customer, "送达站点")
 		_distance_label.text = "%.1f km" % total_km
-		_income_label.text = "¥ %d" % expected_income(order, time_limit)
+		_income_label.text = "¥ %d" % _expected_income
 		_status_left.text = "▂▄▆  %s" % Time.get_time_string_from_system().substr(0, 5)
 		_status_right.text = "42  ▮"
 	_update_countdown()
@@ -185,6 +187,10 @@ func get_remaining_s() -> float:
 	return _remaining_s
 
 
+func get_expected_income() -> int:
+	return _expected_income
+
+
 func get_screen_text() -> String:
 	return _screen_text
 
@@ -246,6 +252,8 @@ func _sync_mode() -> void:
 		_offer_card.visible = _mode == Mode.OFFER
 	if _active_card != null:
 		_active_card.visible = _mode == Mode.ACTIVE
+	if _footer_label != null:
+		_footer_label.visible = _mode == Mode.OFFER
 	if _viewport != null:
 		_viewport.render_target_update_mode = (
 			SubViewport.UPDATE_ALWAYS if visible else SubViewport.UPDATE_DISABLED

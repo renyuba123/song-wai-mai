@@ -13,6 +13,11 @@ The following assets are bundled for the city traffic prototype.
   - URL: https://polyhaven.com/a/concrete_pavement_02
   - License: CC0
 
+- `textures/grass004_color_1k.jpg`
+  - Source: ambientCG, "Grass 004" (1K color map)
+  - URL: https://ambientcg.com/view?id=Grass004
+  - License: CC0
+
 ## Traffic horn
 
 - `audio/traffic_horn.ogg`
@@ -41,3 +46,17 @@ page lists the recording as CC0, so attribution is not required.
 
 The source pages could not be reached from the build machine during the final
 offline verification. Re-check the linked license pages before a public release.
+
+## 3D pixel-art post-processing shader
+
+- `Shaders/edge_detection.gdshader` is adapted from `3DPixelArt_Tutorial` by
+  Eduardo Schildt.
+- License: MIT. The complete notice is bundled in
+  `Shaders/3DPixelArt_LICENSE.txt`.
+
+## Order HUD font
+
+- `fonts/BarlowCondensed-Light.ttf` by The Barlow Project Authors.
+- Source: https://github.com/google/fonts/tree/main/ofl/barlowcondensed
+- License: SIL Open Font License 1.1. The complete license is bundled in
+  `fonts/BarlowCondensed-OFL.txt`.

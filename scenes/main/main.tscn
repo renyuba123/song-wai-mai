@@ -1,31 +1,31 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene format=3 uid="uid://dsl67oeyrn1hr"]
 
-[ext_resource type="Script" path="res://scripts/core/main.gd" id="1_main"]
+[ext_resource type="Script" uid="uid://bo3v2ds01m4lk" path="res://scripts/core/main.gd" id="1_main"]
 [ext_resource type="PackedScene" path="res://scenes/world/world.tscn" id="2_world"]
 [ext_resource type="PackedScene" path="res://scenes/navigation/navigation_system.tscn" id="3_navigation"]
 [ext_resource type="PackedScene" path="res://scenes/traffic/traffic_system.tscn" id="4_traffic"]
-[ext_resource type="PackedScene" path="res://scenes/player/player.tscn" id="5_player"]
-[ext_resource type="Script" path="res://scripts/orders/order_manager.gd" id="6_orders"]
-[ext_resource type="PackedScene" path="res://scenes/world/city_ambience_audio.tscn" id="7_ambience"]
+[ext_resource type="PackedScene" uid="uid://bhtnsn6bhwr5h" path="res://scenes/player/player.tscn" id="5_player"]
+[ext_resource type="Script" uid="uid://d2ldofkc8tdcc" path="res://scripts/orders/order_manager.gd" id="6_orders"]
+[ext_resource type="PackedScene" uid="uid://da3whdsq3tc0" path="res://scenes/world/city_ambience_audio.tscn" id="7_ambience"]
 
-[node name="Main" type="Node3D"]
+[node name="Main" type="Node3D" unique_id=78390230]
 script = ExtResource("1_main")
 
-[node name="Player" parent="." instance=ExtResource("5_player")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.0, 0)
+[node name="Player" parent="." unique_id=1415870181 instance=ExtResource("5_player")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
 
-[node name="CityAmbienceAudio" parent="." instance=ExtResource("7_ambience")]
+[node name="CityAmbienceAudio" parent="." unique_id=813228610 instance=ExtResource("7_ambience")]
 
-[node name="NavigationSystem" parent="." instance=ExtResource("3_navigation")]
+[node name="NavigationSystem" parent="." unique_id=1283203540 instance=ExtResource("3_navigation")]
 
-[node name="TrafficSystem" parent="." instance=ExtResource("4_traffic")]
+[node name="TrafficSystem" parent="." unique_id=423468758 instance=ExtResource("4_traffic")]
 
-[node name="OrderSystem" type="Node3D" parent="."]
+[node name="OrderSystem" type="Node3D" parent="." unique_id=1908053411]
 script = ExtResource("6_orders")
 
-[node name="World" parent="." instance=ExtResource("2_world")]
+[node name="World" parent="." unique_id=464265784 instance=ExtResource("2_world")]
 seed = 118
 
-[node name="Sun" type="DirectionalLight3D" parent="."]
+[node name="Sun" type="DirectionalLight3D" parent="." unique_id=2077128997]
 transform = Transform3D(1, 0, 0, 0, 0.573576, -0.819152, 0, 0.819152, 0.573576, 0, 20, 0)
 light_energy = 1.2

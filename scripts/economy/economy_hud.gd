@@ -22,6 +22,7 @@ var _total_compensation := 0
 var _balance_label: Label = null
 var _order_label: Label = null
 var _summary_label: Label = null
+var _panel: PanelContainer = null
 
 
 func _ready() -> void:
@@ -89,6 +90,11 @@ func get_summary_text() -> String:
 	]
 
 
+func set_embedded_phone_mode(enabled: bool) -> void:
+	if _panel != null:
+		_panel.modulate.a = 0.0 if enabled else 1.0
+
+
 func _refresh() -> void:
 	if _balance_label == null:
 		return
@@ -110,22 +116,22 @@ func _build() -> void:
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
 
-	var panel := PanelContainer.new()
-	panel.name = "EconomyPanel"
-	panel.anchor_left = 1.0
-	panel.anchor_right = 1.0
-	panel.offset_left = -286
-	panel.offset_right = -24
-	panel.offset_top = 24
-	panel.offset_bottom = 170
-	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_panel = PanelContainer.new()
+	_panel.name = "EconomyPanel"
+	_panel.anchor_left = 1.0
+	_panel.anchor_right = 1.0
+	_panel.offset_left = -286
+	_panel.offset_right = -24
+	_panel.offset_top = 24
+	_panel.offset_bottom = 170
+	_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var style := StyleBoxFlat.new()
 	style.bg_color = PANEL_BG
 	style.border_color = Color(0.24, 0.88, 0.96, 0.52)
 	style.set_border_width_all(2)
 	style.set_corner_radius_all(8)
-	panel.add_theme_stylebox_override("panel", style)
-	root.add_child(panel)
+	_panel.add_theme_stylebox_override("panel", style)
+	root.add_child(_panel)
 
 	var margin := MarginContainer.new()
 	margin.add_theme_constant_override("margin_left", 16)
@@ -133,7 +139,7 @@ func _build() -> void:
 	margin.add_theme_constant_override("margin_top", 12)
 	margin.add_theme_constant_override("margin_bottom", 12)
 	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	panel.add_child(margin)
+	_panel.add_child(margin)
 
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 5)

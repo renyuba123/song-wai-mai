@@ -10,6 +10,7 @@ signal order_rejected(order: DeliveryOrder)
 signal order_started(order: DeliveryOrder)
 signal order_finished(success: bool)
 signal game_started
+signal returned_to_menu
 ## 即将从主菜单进入一局；主场景收到后换一座新城市，再开始生成首单。
 signal session_starting
 
@@ -101,6 +102,10 @@ func get_phone() -> OrderPhone:
 	return _phone
 
 
+func get_player_position() -> Vector3:
+	return _player.global_position if _player != null else Vector3.ZERO
+
+
 func get_customer_hit_count() -> int:
 	return _customer_hit_count
 
@@ -182,6 +187,7 @@ func return_to_start_menu() -> bool:
 		_player.set_controls_enabled(false)
 	_hud.show_start_menu()
 	_sync_signage()
+	returned_to_menu.emit()
 	return true
 
 
@@ -276,7 +282,8 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("interact"):
 		var handled := false
 		if _at_start_screen:
-			handled = start_game()
+			# 开局只由菜单按钮确认；设置页打开时 E 不能越过 UI 启动游戏。
+			return
 		elif _pending_offer:
 			# 保留 E 作为接单的兼容键，界面提示以 Y/N 为准。
 			handled = accept_order()

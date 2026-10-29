@@ -1,7 +1,7 @@
 extends CanvasLayer
 class_name InputDiagnosticsHUD
 
-## Runtime input probe. F9 hides or restores it.
+## Runtime input probe. Hidden at launch; F9 toggles its phone view.
 
 const PANEL_BG := Color(0.035, 0.055, 0.075, 0.9)
 const TEXT_COLOR := Color(0.92, 0.96, 1.0, 1.0)
@@ -21,6 +21,8 @@ var _key_event_count := 0
 var _last_key_text := "none"
 var _last_key_short := "none"
 var _last_key_msec := 0
+var _enabled := false
+var _embedded := false
 
 
 func _ready() -> void:
@@ -48,13 +50,35 @@ func get_last_key_text() -> String:
 	return _last_key_text
 
 
+func is_enabled() -> bool:
+	return _enabled
+
+
+func set_embedded(enabled: bool) -> void:
+	_embedded = enabled
+	if _panel != null:
+		_panel.visible = _enabled and not _embedded
+
+
+func get_diagnostics_text() -> String:
+	if _focus_label == null:
+		return ""
+	return "\n".join([
+		_focus_label.text,
+		_activation_label.text,
+		_event_label.text,
+		_player_label.text,
+	])
+
+
 func _input(event: InputEvent) -> void:
 	if not (event is InputEventKey):
 		return
 	var key_event := event as InputEventKey
 	if _is_raw_key(key_event, KEY_F9):
 		if key_event.pressed and not key_event.echo:
-			_panel.visible = not _panel.visible
+			_enabled = not _enabled
+			_panel.visible = _enabled and not _embedded
 			get_viewport().set_input_as_handled()
 		return
 	if not key_event.pressed or key_event.echo:
@@ -146,6 +170,7 @@ func _build() -> void:
 	style.set_corner_radius_all(6)
 	_panel.add_theme_stylebox_override("panel", style)
 	root.add_child(_panel)
+	_panel.visible = false
 
 	var margin := MarginContainer.new()
 	margin.add_theme_constant_override("margin_left", 12)
@@ -160,7 +185,7 @@ func _build() -> void:
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	margin.add_child(box)
 
-	var title := _make_label("输入自检 v3  ·  F9 隐藏", 13, MUTED_COLOR)
+	var title := _make_label("输入自检 v3  ·  F9 关闭", 13, MUTED_COLOR)
 	box.add_child(title)
 	_focus_label = _make_label("", 15, TEXT_COLOR)
 	box.add_child(_focus_label)

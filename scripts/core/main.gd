@@ -17,6 +17,8 @@ var _settings: GameSettings = null
 var _economy: EconomyHUD = null
 var _input_activation: InputActivationOverlay = null
 var _input_diagnostics: InputDiagnosticsHUD = null
+var _phone_hud: DeliveryPhoneHUD = null
+var _order_progress_hud: OrderProgressHUD = null
 
 
 func _ready() -> void:
@@ -32,7 +34,15 @@ func _ready() -> void:
 	traffic.set_player(player)
 	_setup_economy()
 	orders.setup(world, navigation, player)
+	_input_activation.set_menu_mode(true)
+	orders.returned_to_menu.connect(func() -> void:
+		_input_activation.set_menu_mode(true)
+		if _phone_hud != null:
+			_phone_hud.set_game_active(false)
+	)
 	_setup_pause_menu()
+	_setup_phone_hud()
+	_setup_order_progress_hud()
 	_setup_touch_controls()
 	_setup_telemetry()
 	_setup_test_god_view()
@@ -74,6 +84,8 @@ func _setup_pause_menu() -> void:
 	_pause_menu.name = "PauseMenu"
 	add_child(_pause_menu)
 	_pause_menu.setup(orders, player, _settings, traffic)
+	orders.get_hud().settings_pressed.connect(_pause_menu.open_start_settings)
+	orders.get_hud().exit_pressed.connect(_pause_menu.open_exit_confirmation)
 
 
 func get_pause_menu() -> PauseController:
@@ -92,8 +104,16 @@ func get_input_diagnostics() -> InputDiagnosticsHUD:
 	return _input_diagnostics
 
 
+func get_phone_hud() -> DeliveryPhoneHUD:
+	return _phone_hud
+
+
+func get_order_progress_hud() -> OrderProgressHUD:
+	return _order_progress_hud
+
+
 func _setup_input_layers() -> void:
-	## 浏览器/桌面窗口丢失焦点时先点一下画面，键盘才会交回游戏；自检面板常驻右上角。
+	## 浏览器/桌面窗口丢失焦点时先点一下画面，键盘才会交回游戏。
 	_input_activation = InputActivationOverlay.new()
 	_input_activation.name = "InputActivation"
 	add_child(_input_activation)
@@ -101,6 +121,23 @@ func _setup_input_layers() -> void:
 	_input_diagnostics.name = "InputDiagnostics"
 	add_child(_input_diagnostics)
 	_input_diagnostics.setup(player, _input_activation)
+	_input_diagnostics.set_embedded(true)
+
+
+func _setup_phone_hud() -> void:
+	_phone_hud = DeliveryPhoneHUD.new()
+	_phone_hud.name = "DeliveryPhoneHUD"
+	add_child(_phone_hud)
+	_phone_hud.setup(orders, _economy, _input_diagnostics)
+	orders.get_hud().set_phone_hud_mode(true)
+	_economy.set_embedded_phone_mode(true)
+
+
+func _setup_order_progress_hud() -> void:
+	_order_progress_hud = OrderProgressHUD.new()
+	_order_progress_hud.name = "OrderProgressHUD"
+	add_child(_order_progress_hud)
+	_order_progress_hud.setup(orders, player)
 
 
 func _setup_economy() -> void:
@@ -126,6 +163,9 @@ func _on_session_starting() -> void:
 
 
 func _on_game_started() -> void:
+	_input_activation.set_menu_mode(false)
+	if _phone_hud != null:
+		_phone_hud.set_game_active(true)
 	## 从主菜单重新开始时账户归位；后续订单在同一局里累加。
 	if _economy != null:
 		_economy.reset_economy()

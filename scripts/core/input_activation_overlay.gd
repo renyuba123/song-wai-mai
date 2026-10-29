@@ -13,6 +13,7 @@ var _overlay: Control = null
 var _title: Label = null
 var _hint: Label = null
 var _active := false
+var _menu_mode := false
 
 
 func _ready() -> void:
@@ -28,6 +29,8 @@ func _ready() -> void:
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_APPLICATION_FOCUS_OUT:
+		if _menu_mode:
+			return
 		show_reactivation("窗口已失去焦点，点击画面继续")
 
 
@@ -58,8 +61,9 @@ func activate() -> void:
 	_overlay.visible = false
 	var game_window := get_window()
 	game_window.grab_focus()
-	get_viewport().gui_release_focus()
-	Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
+	if not _menu_mode:
+		get_viewport().gui_release_focus()
+	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE if _menu_mode else Input.MOUSE_MODE_CAPTURED)
 	if DisplayServer.get_name() != "headless":
 		DisplayServer.window_set_title("大城市送外卖")
 	print(
@@ -67,6 +71,16 @@ func activate() -> void:
 		" renderer=", RenderingServer.get_video_adapter_name()
 	)
 	activated.emit()
+
+
+func set_menu_mode(enabled: bool) -> void:
+	_menu_mode = enabled
+	if enabled:
+		_active = true
+		_overlay.visible = false
+		Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
+	elif not DisplayServer.is_touchscreen_available():
+		Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
 
 
 func is_active() -> bool:
