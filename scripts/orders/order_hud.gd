@@ -9,7 +9,10 @@ signal next_order_pressed
 signal menu_pressed
 
 const PANEL_BG := Color(0.045, 0.06, 0.09, 0.84)
+const STATUS_BG := Color(0.035, 0.06, 0.11, 0.80)
+const STATUS_BORDER := Color(0.85, 0.68, 0.32, 0.75)
 const TEXT_COLOR := Color(0.96, 0.97, 1.0, 1.0)
+const OFFER_TEXT_COLOR := Color(0.98, 0.90, 0.72, 1.0)
 const MUTED_COLOR := Color(0.72, 0.78, 0.86, 1.0)
 const ACCENT_COLOR := Color(1.0, 0.72, 0.28, 1.0)
 const ERROR_COLOR := Color(1.0, 0.45, 0.38, 1.0)
@@ -46,6 +49,7 @@ func _ready() -> void:
 func show_start_menu(city_seed: int) -> void:
 	_offer_active = false
 	_offer_text = ""
+	_set_offer_panel(false)
 	_start_layer.visible = true
 	_result_layer.visible = false
 	_status_panel.visible = false
@@ -65,11 +69,12 @@ func show_offer(order: DeliveryOrder, time_limit: float) -> void:
 		return
 	_offer_active = true
 	_offer_text = OrderPhone.format_offer_text(order, time_limit)
+	_set_offer_panel(true)
 	_start_layer.visible = false
 	_result_layer.visible = false
 	_status_panel.visible = true
-	_objective_label.text = "手机收到新订单"
-	_detail_label.text = "Y 接单 · N 拒单"
+	_objective_label.text = "手机收到新订单 · Y 接单 / N 拒单"
+	_detail_label.text = ""
 	_arrow_label.text = ""
 	_arrow_label.visible = false
 	_hint_label.text = ""
@@ -85,6 +90,7 @@ func hide_offer() -> void:
 
 func show_waiting(text: String = "正在生成订单…") -> void:
 	_offer_active = false
+	_set_offer_panel(false)
 	_result_layer.visible = false
 	_status_panel.visible = true
 	_error_label.text = ""
@@ -101,6 +107,7 @@ func show_waiting(text: String = "正在生成订单…") -> void:
 
 func show_active(order: DeliveryOrder, session: OrderSession) -> void:
 	_offer_active = false
+	_set_offer_panel(false)
 	_result_layer.visible = false
 	_status_panel.visible = true
 	_error_label.text = ""
@@ -147,6 +154,7 @@ func show_result(order: DeliveryOrder, session: OrderSession) -> void:
 	if order == null or session == null:
 		return
 	_offer_active = false
+	_set_offer_panel(false)
 	_start_layer.visible = false
 	_status_panel.visible = false
 	_result_layer.visible = true
@@ -182,6 +190,7 @@ func show_result(order: DeliveryOrder, session: OrderSession) -> void:
 
 func show_error(text: String) -> void:
 	_offer_active = false
+	_set_offer_panel(false)
 	_result_layer.visible = false
 	_status_panel.visible = true
 	_objective_label.text = "订单未开始"
@@ -305,7 +314,7 @@ func _build() -> void:
 	_status_panel.position = Vector2(24, 24)
 	_status_panel.custom_minimum_size = Vector2(430, 0)
 	_status_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_status_panel.add_theme_stylebox_override("panel", _panel_style())
+	_status_panel.add_theme_stylebox_override("panel", _status_style())
 	_root.add_child(_status_panel)
 
 	var margin := MarginContainer.new()
@@ -480,6 +489,34 @@ func _make_button(text: String) -> Button:
 	button.mouse_filter = Control.MOUSE_FILTER_STOP
 	button.add_theme_font_size_override("font_size", 22)
 	return button
+
+
+func _status_style() -> StyleBoxFlat:
+	## 照参考照片：左上角深蓝底、金色描边的圆角面板。
+	var style := StyleBoxFlat.new()
+	style.bg_color = STATUS_BG
+	style.border_color = STATUS_BORDER
+	style.set_border_width_all(2)
+	style.set_corner_radius_all(9)
+	return style
+
+
+func _set_offer_panel(enabled: bool) -> void:
+	## 接单时把左上角面板放大成照片里的单行提醒；其他状态恢复常规尺寸。
+	if enabled:
+		_status_panel.position = Vector2(24, 26)
+		_status_panel.custom_minimum_size = Vector2(460, 150)
+		_status_panel.size = Vector2(460, 150)
+		_objective_label.add_theme_font_size_override("font_size", 20)
+		_objective_label.add_theme_color_override("font_color", OFFER_TEXT_COLOR)
+		_detail_label.visible = false
+		return
+	_status_panel.position = Vector2(24, 24)
+	_status_panel.custom_minimum_size = Vector2(430, 0)
+	_status_panel.size = Vector2(430, 0)
+	_objective_label.add_theme_font_size_override("font_size", 24)
+	_objective_label.add_theme_color_override("font_color", TEXT_COLOR)
+	_detail_label.visible = true
 
 
 func _panel_style() -> StyleBoxFlat:

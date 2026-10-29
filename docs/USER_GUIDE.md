@@ -67,7 +67,7 @@ godot --headless --path . --script res://tests/test_site_readability.gd
 godot --headless --path . --script res://tests/test_traffic.gd
 ```
 
-前两条检查路网生成、校验、寻路和主场景启动；中间三条分别检查共享数据契约、输入映射与玩家移动、导航查询接口；`test_city` 检查城市确定性、反向数据、主场景城市装配和站点可达性；`test_city_catalog` 检查模型目录可加载、包围盒有效、分类数量和种子 118 的模型多样性；`test_god_view` 检查测试用上帝视角只在调试构建创建、开关时相机和玩家状态正确切换并恢复；`test_orders` 检查订单生成、状态机、开始/接单/结算界面和撞车失败语义；`test_phone_orders` 检查三维手机的挂载位置、屏幕内容、倒计时、Y/N 与点击接单/拒单和主菜单隐藏；`test_site_readability` 检查站点店名确定性、三维店名牌、当前目标星标以及接单/取餐/送达时的 HUD 与信标文本；`test_traffic` 检查车道数学、确定性车流、出生安全、命中 Area3D 和主场景撞车信号链。新增脚本后先执行一次 `godot --headless --path . --import`，让 Godot 注册 `class_name` 并生成 `.gd.uid`。
+前两条检查路网生成、校验、寻路和主场景启动；中间三条分别检查共享数据契约、输入映射与玩家移动、导航查询接口；`test_city` 检查城市确定性、反向数据、主场景城市装配和站点可达性；`test_city_catalog` 检查模型目录可加载、包围盒有效、分类数量和种子 118 的模型多样性；`test_god_view` 检查测试用上帝视角只在调试构建创建、开关时相机和玩家状态正确切换并恢复；`test_orders` 检查订单生成、状态机、开始/接单/结算界面和撞车失败语义；`test_phone_orders` 检查三维手机的挂载位置、屏幕内容、倒计时、Y/N、点击接单/拒单、配送中常驻和主菜单隐藏；`test_site_readability` 检查站点店名确定性、三维店名牌、当前目标星标以及接单/取餐/送达时的 HUD 与信标文本；`test_traffic` 检查车道数学、确定性车流、出生安全、命中 Area3D 和主场景撞车信号链。新增脚本后先执行一次 `godot --headless --path . --import`，让 Godot 注册 `class_name` 并生成 `.gd.uid`。
 
 ## 2. 所有人：日常操作流程
 
@@ -325,7 +325,7 @@ project.godot
 - 输入映射由整合者统一维护；正式功能必须通过 `InputMap` 动作读取，不要直接轮询物理按键。
 - 玩家出生点由 `CityContent.player_start` 提供，`main.gd` 在 `world.regenerate()` 后把玩家放到该位置和朝向；订单开始后 `OrderManager` 再把玩家放到订单起点。玩家模块只负责“被放在哪里之后怎么走”，不要退回固定节点或原点。
 - 开始界面、待接订单和结算界面显示期间，`OrderManager` 调用 `PlayerController.set_controls_enabled(false)` 关闭移动和视角并释放鼠标；接单或重开时再恢复。新增菜单时沿用这个开关，不要在各处直接改鼠标模式。
-- 新订单展示在挂在相机前的三维手机 `OrderPhone` 上：屏幕用 `SubViewport` 渲染，显示取餐/送达店名、总路程、配送费和限时，并有 10 秒倒计时。按 **Y** 接单、**N** 拒单，鼠标或触屏可以直接点屏幕上的按钮；倒计时归零走拒单流程并自动生成下一单，不会回到开始菜单。手机由 `OrderManager` 在代码里挂到玩家相机上，不改 `player.tscn`。
+- 新订单展示在车把左侧的三维手机 `OrderPhone` 上：屏幕用 `SubViewport` 渲染，卡片显示取餐/送达店名、总路程、预计收入和限时，底部并排“拒绝 N”“立即接单 Y”按钮，并有 10 秒倒计时。按 **Y** 接单、**N** 拒单，鼠标或触屏可以直接点屏幕上的按钮；倒计时归零走拒单流程并自动生成下一单，不会回到开始菜单。接单后手机不消失，而是切到“配送中”页面，继续显示当前目标、距离、剩余时间和 E 交互提示。手机由 `OrderManager` 在代码里挂到玩家相机上，不改 `player.tscn`。
 - 交通撞到玩家时，`main.gd` 把 `traffic.player_hit` 转给 `OrderManager.notify_player_hit()`。只有当前订单处于活动状态且玩家在物理处理时才会调用 `OrderSession.fail(HIT_BY_CAR)`；撞车失败保留剩余时间和真实用时，结算正文显示“被来往汽车撞倒，配送失败”。玩家被撞后表现为控制冻结并进入失败结算，按 R 继续下一单。
 - 站点的 `display_name` 由 `SiteNaming.apply()` 在布局生成后写入，HUD 的接单信息、活动目标和三维店名牌读同一份数据。店名牌由 `WorldGenerator` 在运行时创建；当前订单目标显示“★”并始终可见，其它站点标签在 160 米外淡出，接近目标时不用再靠编号找店。
 

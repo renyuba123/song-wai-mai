@@ -133,8 +133,7 @@ func accept_order() -> bool:
 	if not _configured or not _pending_offer or _current_order == null:
 		return false
 	_pending_offer = false
-	if _phone != null:
-		_phone.hide_offer()
+	# 手机不隐藏：接单后切换到配送模式，继续显示在车把左侧。
 	_hud.hide_offer()
 	_activate_order(_current_order)
 	return true
@@ -353,14 +352,16 @@ func _activate_order(order: DeliveryOrder) -> void:
 	_current_order = order
 	_order_seed = order.order_seed
 	_pending_offer = false
-	if _phone != null:
-		_phone.hide_offer()
 	_session = OrderSession.new(order, _player.move_speed if _player != null else 5.0)
 	_session.state_changed.connect(_on_session_state_changed)
 	_session.finished.connect(_on_session_finished)
 	if _player != null:
 		_player.reset_to(order.start)
 		_player.set_controls_enabled(true)
+	if _phone != null:
+		_phone.show_active(order, _session)
+		if _player != null:
+			_phone.update_active(_session, _player.global_position)
 	_hud.show_active(order, _session)
 	_update_beacon()
 	_refresh_hud()
@@ -371,14 +372,16 @@ func _activate_order(order: DeliveryOrder) -> void:
 func _restart_same_order() -> void:
 	if _current_order == null:
 		return
-	if _phone != null:
-		_phone.hide_offer()
 	_session = OrderSession.new(_current_order, _player.move_speed if _player != null else 5.0)
 	_session.state_changed.connect(_on_session_state_changed)
 	_session.finished.connect(_on_session_finished)
 	if _player != null:
 		_player.reset_to(_current_order.start)
 		_player.set_controls_enabled(true)
+	if _phone != null:
+		_phone.show_active(_current_order, _session)
+		if _player != null:
+			_phone.update_active(_session, _player.global_position)
 	_hud.show_active(_current_order, _session)
 	_update_beacon()
 	_refresh_hud()
@@ -422,6 +425,8 @@ func _refresh_hud() -> void:
 	_hud.update_active(
 		_current_order, _session, _player.global_position, _player.rotation.y
 	)
+	if _phone != null:
+		_phone.update_active(_session, _player.global_position)
 
 
 func _ensure_hud() -> void:
