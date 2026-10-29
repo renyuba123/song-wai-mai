@@ -7,6 +7,21 @@ func check(condition: bool, message: String) -> void:
 func _initialize() -> void:
 	call_deferred("run")
 
+func clear_of_road(rect: Rect2, a: Vector2, b: Vector2, half_width: float) -> bool:
+	var safe := rect.grow(half_width)
+	if safe.has_point(a) or safe.has_point(b):
+		return false
+	var corners := [
+		safe.position,
+		Vector2(safe.end.x, safe.position.y),
+		safe.end,
+		Vector2(safe.position.x, safe.end.y),
+	]
+	for index in 4:
+		if RoadNetwork._segments_touch_without_node(a, b, corners[index], corners[(index + 1) % 4]):
+			return false
+	return true
+
 func spatial(layout: CityPopulationLayout, network: RoadNetwork, city: CityContent) -> void:
 	var buckets := {}
 	for item in layout.items:
@@ -14,7 +29,7 @@ func spatial(layout: CityPopulationLayout, network: RoadNetwork, city: CityConte
 		for edge in network.edges:
 			var a: Vector2 = network.nodes[edge.a]
 			var b: Vector2 = network.nodes[edge.b]
-			check(not rect.intersects(Rect2(a.min(b), (a-b).abs()).grow(network.widths[edge.kind]*0.5)), "road encroachment " + item.id)
+			check(clear_of_road(rect, a, b, network.widths[edge.kind] * 0.5), "road encroachment " + item.id)
 		var low := Vector2i(floori(rect.position.x / 50), floori(rect.position.y / 50))
 		var high := Vector2i(floori(rect.end.x / 50), floori(rect.end.y / 50))
 		for x in range(low.x, high.x+1):
@@ -30,11 +45,14 @@ func spatial(layout: CityPopulationLayout, network: RoadNetwork, city: CityConte
 		check(item.site_id == String(site.id), "site identity")
 		var rect: Rect2 = item.footprint
 		var target := Vector2(item.target.x, item.target.z)
-		var door := rect.get_center() + Vector2(-sin(item.yaw), -cos(item.yaw)) * rect.size * 0.5
+		var door := CityPopulationLayout.door_point(rect, item.yaw)
 		for other in layout.items:
-			check(not other.footprint.grow(1).has_point(target), "trigger clearance")
+			check(not other.footprint.grow(1).has_point(target), "trigger clearance " + item.id + " <- " + other.id)
 			for step in range(10):
-				check(not other.footprint.has_point(target.lerp(door, step/10.0)), "entry approach")
+				check(
+					not other.footprint.has_point(target.lerp(door, step / 10.0)),
+					"entry approach %s <- %s at %.1f" % [item.id, other.id, float(step) / 10.0]
+				)
 
 func drain(stream: CityStreaming) -> void:
 	for frame in 2400:

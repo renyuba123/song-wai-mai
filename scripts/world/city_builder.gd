@@ -14,6 +14,8 @@ const MERCHANT_MARKER_COLOR := Color("f2c14e")
 const CUSTOMER_MARKER_COLOR := Color("4fc3c8")
 const GENERATED_META := &"world_generator_generated"
 
+var _map_size: Vector2
+
 var _sidewalk_body: StaticBody3D = null
 var _building_body: StaticBody3D = null
 var _materials := {}
@@ -25,6 +27,7 @@ func build(network: RoadNetwork, city: CityContent) -> void:
 	_clear()
 	if network == null or city == null:
 		return
+	_map_size = network.map_size
 	if population_layout == null or population_layout.seed_value != city.seed_value:
 		population_layout = CityPopulationLayout.generate(city)
 	_materials = {
@@ -75,19 +78,11 @@ func _build_sidewalks(network: RoadNetwork) -> void:
 			continue
 		var direction := (b - a) / length
 		var left := Vector2(direction.y, -direction.x)
-		var horizontal := absf(direction.x) > absf(direction.y)
+		var yaw := -direction.angle()
 		var centreline := a.lerp(b, (start + finish) * 0.5 / length)
 		var usable_length := finish - start
-		var visual_size := (
-			Vector3(usable_length, 0.01, band_width)
-			if horizontal
-			else Vector3(band_width, 0.01, usable_length)
-		)
-		var collision_size := (
-			Vector3(usable_length, 0.04, band_width)
-			if horizontal
-			else Vector3(band_width, 0.04, usable_length)
-		)
+		var visual_size := Vector3(usable_length, 0.01, band_width)
+		var collision_size := Vector3(usable_length, 0.04, band_width)
 		for side in [1, -1]:
 			var lateral := RoadNetwork.sidewalk_offset(redline) * float(side)
 			var point := centreline + left * lateral
@@ -95,12 +90,14 @@ func _build_sidewalks(network: RoadNetwork) -> void:
 			_visual_box(
 				visual_size,
 				centre + Vector3(0.0, RoadNetwork.SURFACE_Y + 0.007, 0.0),
-				_materials.sidewalk
+				_materials.sidewalk,
+				yaw
 			)
 			_collision_box(
 				collision_size,
 				centre + Vector3(0.0, RoadNetwork.SURFACE_Y - 0.02, 0.0),
-				_sidewalk_body
+				_sidewalk_body,
+				yaw
 			)
 
 
@@ -123,11 +120,15 @@ func _build_buildings(city: CityContent) -> void:
 		_collision_box(item.size, item.center, _building_body)
 		if not item.site_id.is_empty():
 			var rect: Rect2 = item.footprint
-			var door := rect.get_center() + Vector2(-sin(item.yaw), -cos(item.yaw)) * rect.size * 0.5
+			var door := CityPopulationLayout.door_point(rect, item.yaw)
 			var target: Vector3 = item.target
 			var endpoint := Vector3(door.x, 0.025, door.y)
-			var paving := _visual_box(Vector3(2, 0.015, target.distance_to(endpoint)), (target + endpoint) * 0.5 + Vector3(0, 0.02, 0), _materials.sidewalk)
-			paving.rotation.y = item.yaw
+			_visual_box(
+				Vector3(2, 0.015, target.distance_to(endpoint)),
+				(target + endpoint) * 0.5 + Vector3(0, 0.02, 0),
+				_materials.sidewalk,
+				item.yaw
+			)
 
 func set_detail_visible(id: int, detailed: bool) -> void:
 	if _lod_visuals.has(id) and is_instance_valid(_lod_visuals[id]):
@@ -168,23 +169,50 @@ func _add_generated_child(child: Node) -> void:
 	add_child(child)
 
 
-func _visual_box(size: Vector3, position: Vector3, material: Material) -> MeshInstance3D:
+func _visual_box(size: Vector3, position: Vector3, material: Material, yaw: float = 0.0) -> MeshInstance3D:
+	var polygon := RoadBuilder.clipped_footprint(size, position, yaw, _map_size)
+	if not polygon.is_empty():
+		var clipped := MeshInstance3D.new()
+		var surface := SurfaceTool.new()
+		surface.begin(Mesh.PRIMITIVE_TRIANGLES)
+		for index in range(1, polygon.size() - 1):
+			for vertex in [polygon[0], polygon[index + 1], polygon[index]]:
+				surface.set_normal(Vector3.UP)
+				surface.add_vertex(Vector3(vertex.x, position.y + size.y * 0.5, vertex.y))
+		clipped.mesh = surface.commit()
+		clipped.material_override = material
+		_add_generated_child(clipped)
+		return clipped
 	var instance := MeshInstance3D.new()
 	var mesh := BoxMesh.new()
 	mesh.size = size
 	instance.mesh = mesh
 	instance.material_override = material
 	instance.position = position
+	instance.rotation.y = yaw
 	_add_generated_child(instance)
 	return instance
 
 
-func _collision_box(size: Vector3, position: Vector3, body: StaticBody3D) -> void:
+func _collision_box(size: Vector3, position: Vector3, body: StaticBody3D, yaw: float = 0.0) -> void:
+	var polygon := RoadBuilder.clipped_footprint(size, position, yaw, _map_size)
+	if not polygon.is_empty():
+		var clipped_node := CollisionShape3D.new()
+		var clipped_shape := ConvexPolygonShape3D.new()
+		var points := PackedVector3Array()
+		for vertex in polygon:
+			points.append(Vector3(vertex.x, position.y - size.y * 0.5, vertex.y))
+			points.append(Vector3(vertex.x, position.y + size.y * 0.5, vertex.y))
+		clipped_shape.points = points
+		clipped_node.shape = clipped_shape
+		body.add_child(clipped_node)
+		return
 	var shape_node := CollisionShape3D.new()
 	var shape := BoxShape3D.new()
 	shape.size = size
 	shape_node.shape = shape
 	shape_node.position = position
+	shape_node.rotation.y = yaw
 	body.add_child(shape_node)
 
 

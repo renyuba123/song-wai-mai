@@ -147,8 +147,7 @@ func bake() -> void:
 			var site: CitySite = sites[building.lot_id]
 			var footprint: Rect2 = instance.get_meta("footprint")
 			var target := Vector2(site.spawn_point.position.x, site.spawn_point.position.z)
-			var front := Vector2(-sin(lot.facing_yaw), -cos(lot.facing_yaw))
-			var door := footprint.get_center() + front * footprint.size * 0.5
+			var door := CityPopulationLayout.door_point(footprint, lot.facing_yaw)
 			var approach := MeshInstance3D.new()
 			approach.name = "EntryApproach"
 			var paving := BoxMesh.new()

@@ -40,7 +40,11 @@ static func generate(network: RoadNetwork) -> CityContent:
 	for edge_id in edge_ids:
 		if city.lots.size() >= MAX_FRONTAGE_LOTS:
 			break
-		var edge_lots := _lots_for_edge(network, edge_id, rng)
+		var candidates := _lots_for_edge(network, edge_id, rng)
+		var edge_lots: Array[Dictionary] = []
+		for candidate in candidates:
+			if _lot_is_clear(network, candidate.rect, city.lots, edge_lots):
+				edge_lots.append(candidate)
 		if edge_lots.is_empty():
 			continue
 		var remaining := MAX_FRONTAGE_LOTS - city.lots.size()
@@ -151,7 +155,7 @@ static func _lots_for_edge(network: RoadNetwork, edge_id: int, rng: RandomNumber
 	var redline: float = network.widths[int(edge.kind)]
 	var direction := (b - a) / length
 	var left := Vector2(direction.y, -direction.x)
-	var front_offset := redline * 0.5 + LOT_SETBACK
+	var front_offset := redline * 0.5 + LOT_SETBACK + MAX_FRONTAGE * absf(direction.x * direction.y)
 	for side in [1, -1]:
 		var sample := (
 			a.lerp(b, 0.5)
@@ -195,9 +199,6 @@ static func _add_infill_lots(
 	## 沿临街地块再向街区内补两排建筑，避免只有一圈“贴街皮”和空荡的街区。
 	## 补排地块没有出入口，也不参与站点选择；与已有地块相交时跳过。
 	var frontage_count := city.lots.size()
-	var occupied: Array = []
-	for lot in city.lots:
-		occupied.append(lot.rect)
 	for index in frontage_count:
 		if city.lots.size() >= MAX_LOTS:
 			return
@@ -216,7 +217,10 @@ static func _add_infill_lots(
 			continue
 		var direction := (b - a) / length
 		var left := Vector2(direction.y, -direction.x)
-		var base_front := network.widths[kind] * 0.5 + LOT_SETBACK
+		var base_front := (
+			network.widths[kind] * 0.5 + LOT_SETBACK
+			+ MAX_FRONTAGE * absf(direction.x * direction.y)
+		)
 		var front := base_front + float(source.depth_m) + rng.randf_range(MIN_GAP, MAX_GAP)
 		for _row in INFILL_ROWS:
 			if city.lots.size() >= MAX_LOTS:
@@ -228,7 +232,7 @@ static func _add_infill_lots(
 				float(source.frontage_width_m), depth, front,
 				int(source.side), left
 			)
-			if not _overlaps_existing(rect, occupied):
+			if _lot_is_clear(network, rect, city.lots, []):
 				var lot := {
 					"id": city.lots.size(),
 					"rect": rect,
@@ -243,7 +247,6 @@ static func _add_infill_lots(
 					"site_id": &"",
 				}
 				city.lots.append(lot)
-				occupied.append(rect)
 				var building := _make_building(lot, rng)
 				building.id = city.buildings.size()
 				lot.building_id = int(building.id)
@@ -251,11 +254,36 @@ static func _add_infill_lots(
 			front += depth + gap
 
 
-static func _overlaps_existing(rect: Rect2, occupied: Array) -> bool:
-	for other in occupied:
-		if rect.intersects(other):
-			return true
-	return false
+static func _lot_is_clear(
+	network: RoadNetwork,
+	rect: Rect2,
+	existing: Array[Dictionary],
+	pending: Array[Dictionary]
+) -> bool:
+	var bounds := Rect2(-network.map_size * 0.5, network.map_size)
+	if not bounds.encloses(rect):
+		return false
+	for lot in existing + pending:
+		if rect.grow(MIN_GAP).intersects(lot.rect):
+			return false
+	# 斜向路网没有全局轴线，逐条路段按包围盒净距保守排除压到车行道的
+	# 地块，避免地块矩形跨过斜向街道。
+	for edge in network.edges:
+		var safe := rect.grow(float(network.widths[edge.kind]) * 0.5)
+		var a: Vector2 = network.nodes[edge.a]
+		var b: Vector2 = network.nodes[edge.b]
+		if safe.has_point(a) or safe.has_point(b):
+			return false
+		var corners := [
+			safe.position,
+			Vector2(safe.end.x, safe.position.y),
+			safe.end,
+			Vector2(safe.position.x, safe.end.y),
+		]
+		for index in 4:
+			if RoadNetwork._segments_touch_without_node(a, b, corners[index], corners[(index + 1) % 4]):
+				return false
+	return true
 
 
 static func _lot_rect(
@@ -449,7 +477,8 @@ static func _point_in_buildings(point: Vector2, buildings: Array[Dictionary]) ->
 
 static func _block_sides(network: RoadNetwork, a: Vector2, b: Vector2, left: Vector2, redline: float) -> Array[int]:
 	var sides: Array[int] = []
-	var front_offset := redline * 0.5 + LOT_SETBACK
+	var direction := (b - a).normalized()
+	var front_offset := redline * 0.5 + LOT_SETBACK + MAX_FRONTAGE * absf(direction.x * direction.y)
 	for side in [1, -1]:
 		var sample := (
 			a.lerp(b, 0.5)
@@ -461,18 +490,8 @@ static func _block_sides(network: RoadNetwork, a: Vector2, b: Vector2, left: Vec
 
 
 static func _inside_block(network: RoadNetwork, point: Vector2) -> bool:
-	if network.x_axes.size() < 2 or network.y_axes.size() < 2:
-		return false
-	var min_x: float = network.x_axes[0].pos
-	var max_x: float = network.x_axes[network.x_axes.size() - 1].pos
-	var min_y: float = network.y_axes[0].pos
-	var max_y: float = network.y_axes[network.y_axes.size() - 1].pos
-	return (
-		point.x > min_x + RoadNetwork.EPS
-		and point.x < max_x - RoadNetwork.EPS
-		and point.y > min_y + RoadNetwork.EPS
-		and point.y < max_y - RoadNetwork.EPS
-	)
+	var half := network.map_size * 0.5
+	return absf(point.x) < half.x - RoadNetwork.EPS and absf(point.y) < half.y - RoadNetwork.EPS
 
 
 static func _yaw_from_dir(direction: Vector2) -> float:
