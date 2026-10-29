@@ -761,7 +761,13 @@ GitHub Actions 报 `resident count grows after revisit`。实测首次访问商�
 - `--import` 顺带改写了 `assets/models/` 下多个 `.glb.import`（模型未展开导致的导入元数据变化），已全部还原，未纳入提交；`git diff --check` 通过。
 - 无 GPU 环境未人工确认条带贴地、门向和遮挡效果。
 
-**提交与分支：** 从 `origin/main` `a25b008` 建立 `feature/jzy070407-route-guidance`；本条日志与功能代码同一提交（`feat(orders): add ground route guidance`）。推送前合并 `origin/main` `b872b50`（PR #18 人行道导航），与上方记录一起保留，推送后建 PR，不直接推送 `main`。
+**合并后复验：** 合并 `origin/main` `b872b50`（PR #18 人行道与地块导航基础）后，在合并提交 `b52018c` 上重跑相关测试：
+
+- `--headless --path . --import` 退出码 0；`test_navigation_queries`、`test_orders`、`test_main_scene`、`test_city` 全部 `exit=0`，其中主场景输出 `PASS main scene nodes=150 lots=1637 sites=32 starts=12 vehicles=11 order_seed=1 sky=true`，城市测试种子 42 `lots=1699`、种子 1 `lots=135`。
+- `test_route_guidance` 输出 `PASS route guidance`，进程退出码仍偶尔为 `-1073741819`（0xC0000005），与 99 个模型仍是 LFS pointer 的环境阻塞一致；`test_orders` 本次 `exit=0`，同一环境两次运行结果不同，说明退出码抖动来自资源加载而非本轮逻辑。
+- 合并只在 `docs/DEVELOPMENT_LOG.md` 产生冲突，按时间顺序保留本条记录和人行道导航记录（`10:13`），合并提交 `b52018c`。
+
+**提交与分支：** 从 `origin/main` `a25b008` 建立 `feature/jzy070407-route-guidance`；功能与日志提交 `d24d158 feat(orders): add ground route guidance`，随后合并 `origin/main` `b872b50` 得到 `b52018c`；推送后向 `main` 建 PR，不直接推送 `main`，不强推。
 
 ## 2026-10-29 10:13（Asia/Shanghai）人行道与地块导航基础
 
