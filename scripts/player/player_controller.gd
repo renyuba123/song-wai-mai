@@ -9,6 +9,16 @@ class_name PlayerController
 @export var mouse_sensitivity := 0.0025
 @export var gravity := 9.8
 
+@export_group("Touch Look")
+## 触屏拖动一屏宽转过的角度；按视口比例换算，避免高像素密度手机上一划就转好几圈。
+@export var touch_yaw_per_screen := TAU * 0.6
+## 触屏拖动一屏高转过的角度。
+@export var touch_pitch_per_screen := PI * 0.55
+## 触屏低头极限，比鼠标小，避免镜头一路压到车顶。
+@export var touch_pitch_limit := deg_to_rad(60.0)
+## 低头超过这个角度时隐藏自己的车模，否则车身占满视野。
+@export var model_hide_pitch := deg_to_rad(-35.0)
+
 @export_group("Scooter Steering")
 ## 在 Inspector 中拖入 GLB 里的 Empty 节点
 @export var steering_pivot: Node3D
@@ -26,6 +36,7 @@ class_name PlayerController
 @export var steer_return_speed := 25.0
 
 @onready var camera: Camera3D = $Camera3D
+@onready var body_model: Node3D = get_node_or_null("电鸡模型")
 
 ## 菜单、接单和结算期间关闭移动与视角，避免鼠标操作界面时角色跟着转。
 var controls_enabled := true
@@ -72,26 +83,51 @@ func _unhandled_input(event: InputEvent) -> void:
 		apply_look(event.relative)
 
 
-## 鼠标和触屏共用的视角入口；参数为像素位移。
+## 鼠标视角入口；参数为像素位移。
 func apply_look(relative: Vector2) -> void:
 	if not controls_enabled or relative == Vector2.ZERO:
 		return
-
-	# 1. 第一人称水平视角控制
-	var yaw_delta: float = (
-		-relative.x * mouse_sensitivity
+	_apply_look_radians(
+		-relative.x * mouse_sensitivity,
+		-relative.y * mouse_sensitivity,
+		deg_to_rad(89.0)
 	)
 
+
+## 触屏视角入口；参数为画布像素位移，按视口尺寸归一化后再换算角度。
+func apply_look_touch(relative: Vector2) -> void:
+	if not controls_enabled or relative == Vector2.ZERO:
+		return
+	var view_size := get_viewport().get_visible_rect().size
+	if view_size.x <= 0.0 or view_size.y <= 0.0:
+		return
+	_apply_look_radians(
+		-relative.x / view_size.x * touch_yaw_per_screen,
+		-relative.y / view_size.y * touch_pitch_per_screen,
+		touch_pitch_limit
+	)
+
+
+func _apply_look_radians(
+	yaw_delta: float,
+	pitch_delta: float,
+	pitch_limit: float
+) -> void:
+	if not controls_enabled or (yaw_delta == 0.0 and pitch_delta == 0.0):
+		return
+
+	# 1. 第一人称水平视角控制
 	rotate_y(yaw_delta)
 
 	# 2. 上下视角控制
 	_pitch = clampf(
-		_pitch - relative.y * mouse_sensitivity,
-		deg_to_rad(-89.0),
-		deg_to_rad(89.0)
+		_pitch + pitch_delta,
+		-pitch_limit,
+		pitch_limit
 	)
 
 	camera.rotation.x = _pitch
+	_update_body_visibility()
 
 	# 3. 根据视角左右移动控制车头
 	_steer_target += yaw_delta * steer_response
@@ -101,6 +137,12 @@ func apply_look(relative: Vector2) -> void:
 		deg_to_rad(-max_steer_angle),
 		deg_to_rad(max_steer_angle)
 	)
+
+
+## 低头越过阈值时隐藏自己的车，避免第一人称视野被车身占满。
+func _update_body_visibility() -> void:
+	if body_model:
+		body_model.visible = _pitch > model_hide_pitch
 
 
 func _process(delta: float) -> void:
@@ -178,6 +220,7 @@ func reset_to(start: SpawnPoint) -> void:
 	_steer_target = 0.0
 
 	camera.rotation.x = 0.0
+	_update_body_visibility()
 
 	if steering_pivot:
 		steering_pivot.rotation.y = _steer_base_y

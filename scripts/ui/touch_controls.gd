@@ -6,7 +6,6 @@ class_name TouchControls
 
 const JOY_RADIUS := 90.0
 const JOY_DEADZONE := 0.15
-const LOOK_GAIN := 1.0
 const BUTTON_SIZE := 68.0
 const BUTTON_MARGIN := 24.0
 
@@ -188,7 +187,7 @@ func _drag(event: InputEventScreenDrag) -> void:
 		_set_joystick(joystick_axis(offset))
 		_overlay.queue_redraw()
 	elif event.index == _look_index:
-		player.apply_look(event.relative * LOOK_GAIN)
+		player.apply_look_touch(event.relative)
 
 
 func _set_joystick(axis: Vector2) -> void:
