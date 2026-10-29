@@ -190,7 +190,11 @@ func _build() -> void:
 	box.add_child(_seed_label)
 
 	var hint := _make_label(14, MUTED_COLOR)
-	hint.text = "Esc 或“继续”返回游戏"
+	hint.text = (
+		"点“继续”返回游戏"
+		if TouchControls.is_touch_device()
+		else "Esc 或“继续”返回游戏"
+	)
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(hint)
 

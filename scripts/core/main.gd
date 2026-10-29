@@ -20,6 +20,7 @@ func _ready() -> void:
 	traffic.set_player(player)
 	orders.setup(world, navigation, player)
 	_setup_pause_menu()
+	_setup_touch_controls()
 	_setup_test_god_view()
 
 
@@ -48,6 +49,16 @@ func _setup_pause_menu() -> void:
 
 func get_pause_menu() -> PauseController:
 	return _pause_menu
+
+
+func _setup_touch_controls() -> void:
+	## 手机浏览器没有键盘鼠标，用触屏层代替；桌面端不创建。
+	if not TouchControls.is_touch_device():
+		return
+	var controls := TouchControls.new()
+	controls.name = "TouchControls"
+	add_child(controls)
+	controls.setup(player)
 
 
 func _setup_test_god_view() -> void:

@@ -74,3 +74,7 @@ restart={
 [rendering]
 
 rendering_device/driver.windows="d3d12"
+
+[gui]
+
+theme/custom_font="res://assets/fonts/NotoSansSC-Regular.ttf"
