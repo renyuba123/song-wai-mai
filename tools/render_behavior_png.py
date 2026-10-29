@@ -89,6 +89,27 @@ RENDER_STYLE = """
 """
 
 
+def load_city(city_path: Path, data: dict, source: Path) -> dict:
+    """读取底图。城市每局随机，数据旁边有 city-<种子>.json 时优先用它。"""
+    city = json.loads(city_path.read_text(encoding="utf-8"))
+    meta = data.get("meta") if isinstance(data.get("meta"), dict) else {}
+    seed = meta.get("city")
+    if seed is None or str(seed) == str(city.get("seed")):
+        return city
+    if city_path != DEFAULT_CITY:
+        return city
+    candidate = source.parent / ("city-%s.json" % seed)
+    if candidate.is_file():
+        print("数据来自种子 %s，底图使用 %s" % (seed, candidate))
+        return json.loads(candidate.read_text(encoding="utf-8"))
+    print(
+        "提示：数据来自种子 %s，底图仍是种子 %s；要轨迹和路网对齐，"
+        "先用 tools/export_city_map.gd 生成 city-%s.json，或用 --city 指定底图。"
+        % (seed, city.get("seed"), seed)
+    )
+    return city
+
+
 def load_input(args: argparse.Namespace) -> tuple[dict, dict, Path]:
     for name in ("index.html", "analytics.css", "analytics.js"):
         if not (PAGE_DIR / name).is_file():
@@ -96,7 +117,6 @@ def load_input(args: argparse.Namespace) -> tuple[dict, dict, Path]:
     city_path = Path(args.city)
     if not city_path.is_file():
         raise SystemExit("找不到城市底图：%s" % city_path)
-    city = json.loads(city_path.read_text(encoding="utf-8"))
 
     if args.csv:
         source = Path(args.csv)
@@ -127,7 +147,7 @@ def load_input(args: argparse.Namespace) -> tuple[dict, dict, Path]:
             ))
         data = dict(data)
         data["sessions"] = [matches[0]]
-    return city, data, source
+    return load_city(city_path, data, source), data, source
 
 
 def default_outputs(source: Path, args: argparse.Namespace) -> tuple[Path, Path | None]:

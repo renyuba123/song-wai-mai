@@ -77,6 +77,8 @@ func run() -> void:
 		signatures[layout.signature()] = true
 		spatial(layout, network, city)
 		print("LAYOUT seed=", seed_value, " buildings=", layout.buildings.size(), " props=", layout.items.size()-layout.buildings.size(), " chunks=", layout.chunks.size(), " generation_ms=", elapsed)
+		# 主场景启动时会重新取种子，这里固定成循环里的种子，保证按种子逐一检查。
+		GameSeeds.pin(seed_value, 1)
 		var main = load("res://scenes/main/main.tscn").instantiate()
 		main.get_node("World").seed = seed_value
 		root.add_child(main)

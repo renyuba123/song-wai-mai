@@ -24,6 +24,9 @@ func _ready() -> void:
 	_setup_input_layers()
 	world.world_generated.connect(_on_world_generated)
 	traffic.player_hit.connect(_on_traffic_player_hit)
+	# 每局换一座城市；测试和录制脚本会通过 GameSeeds.pin() 固定种子。
+	world.seed = GameSeeds.city_seed()
+	world.allow_seed_retry = GameSeeds.is_city_random()
 	world.regenerate()
 	_place_player()
 	traffic.set_player(player)
@@ -34,6 +37,8 @@ func _ready() -> void:
 	_setup_telemetry()
 	_setup_test_god_view()
 	_setup_mini_map()
+	# 把本局种子打到日志里；需要复现时用 --city-seed / --order-seed 传回去。
+	print("[种子] 城市 %d · 订单 %d" % [world.seed, orders.get_order_seed()])
 
 
 func _setup_settings() -> void:

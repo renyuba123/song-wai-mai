@@ -166,7 +166,8 @@ CREATE TABLE IF NOT EXISTS behavior_events (
 
 道路属性说明：
 
-- `road`：玩家或车辆离最近路段在 `city-118.json` 里的编号。
+- `road`：玩家或车辆距离最近的路段在该局城市路网里的编号；要和底图对照，
+  底图必须是同一城市种子导出的。
 - `rk`：路段等级，`0` 主干路、`1` 次干路、`2` 支路。
 - `cars`：和玩家同一条路段上的 NPC 车辆数；`peds` 是同路段的行人。
 - `near`：玩家 80 米范围内的车辆数。分析页按 `cars ÷ 路段长度 × 100`
@@ -201,8 +202,7 @@ python tools/build_behavior_page_data.py \
 
 页面默认带一份演示轨迹（`exhibition/analytics/data/sample-data.js`），
 标着“示例数据”，不是真实访客。地图底图 `data/city-118.json` 由
-`tools/export_city_map.gd` 从主场景使用的种子（`main.tscn` 里
-`World.seed = 118`）导出，种子或路网参数变了要一起重新生成：
+`tools/export_city_map.gd` 用种子 118 导出，种子或路网参数变了要一起重新生成：
 
 ```bash
 Godot_v4.7.2-stable_win64_console.exe --headless --path . \
@@ -211,6 +211,21 @@ python tools/build_behavior_page_data.py --demo \
   --city exhibition/analytics/data/city-118.json \
   --out exhibition/analytics/data/sample-data.js --js
 ```
+
+游戏里每局的城市种子是随机的（见 `GameSeeds`），每个访客走的是不同的城市，
+所以线上采集的数据多数会和 118 号底图对不上。页面检测到
+`meta.city` 与底图种子不一致时会在图例里提示“数据来自种子 X，当前底图是 Y”，
+轨迹和拥挤度仍然会画，但路网不是那局的路网。需要对齐时，用该局的种子
+单独导出一张底图：
+
+```bash
+Godot_v4.7.2-stable_win64_console.exe --headless --path . \
+  --script res://tools/export_city_map.gd \
+  -- --seed <城市种子> --out res://exports/city-<城市种子>.json
+```
+
+分析页没有联网取底图的能力，线上页面只能看 118 号底图；对齐底图主要用于
+本地导出和留档。
 
 ## 直接生成地图 PNG
 
@@ -242,6 +257,8 @@ python tools/render_behavior_png.py \
 - `--browser <路径>` 或环境变量 `SWM_BROWSER`：指定 Edge / Chrome。
   默认依次查找 Windows 和 macOS 的常见安装位置。
 - `--keep`：保留临时页面目录，截图失败时用来排查。
+- `--city`：城市底图，默认 `exhibition/analytics/data/city-118.json`。没有显式指定时，
+  如果数据文件旁边有 `city-<meta.city>.json`，脚本会自动用它，并打印用的是哪张。
 
 导出的 PNG 和 CSV、JSON 一样属于内部资料，不要提交进仓库或贴到公开群。
 如果提示“这个会话没有 pos 事件”，说明数据来自旧版 Web 构建或没有开始配送；
@@ -262,6 +279,9 @@ Godot_v4.7.2-stable_win64_console.exe --path . \
 在商家和顾客处按交互，把速度控制在 2–9 米/秒并在路口前减速。为了少等，
 运行过程用 8 倍时间加速；导出时会把事件时间换算回游戏内用时。桌面构建不会
 创建 HTTPRequest，事件只留在本机队列里，不会上传到云函数。
+
+脚本用 `GameSeeds.pin(118, 1)` 固定城市和订单种子，所以每次运行都是同一座城市、
+同一单，和页面默认的 118 号底图一致；正常游戏每局是随机城市。
 
 跑完写出：
 

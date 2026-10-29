@@ -41,6 +41,7 @@ func _expect(condition: bool, message: String) -> void:
 
 
 func _setup_main() -> void:
+	GameSeeds.pin(118, 1)
 	var packed := load("res://scenes/main/main.tscn") as PackedScene
 	if packed == null:
 		_expect(false, "无法加载主场景")

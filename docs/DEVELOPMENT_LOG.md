@@ -1586,3 +1586,37 @@ PR #31 合并后，从 `origin/main` 的 `7c3d412` 起 `feature/jzy070407-menu-r
 **修改文件：** `docs/DEVELOPMENT_LOG.md`。
 
 本条记录随 `docs/jzy070407-sync-20261029-e` 分支提交、推送并建 PR。
+
+## 2026-10-29 22:35（Asia/Shanghai）城市与订单种子改成每局随机
+
+本轮需求（原文）：“城市与订单种子随机性不足”。确认城市随机化的范围时，用户选择“每局完全随机”，接受行为分析页只有 118 号底图、跨种子的轨迹和路网对不上的取舍。
+
+**问题定位：**
+
+- `scenes/main/main.tscn` 里 `World.seed = 118` 写死，每次启动都是同一座城市。
+- `OrderManager.initial_order_seed` 默认 1，后续订单统一 `+1`，每次启动的订单序列完全一样；开始界面和暂停页都把种子显示出来，玩家能直接看到“1、2、3”。
+
+**改动：**
+
+- 新增 `scripts/core/game_seeds.gd`：城市和订单种子在 1 到 999983 之间用 `Crypto` 随机取；支持 `-- --city-seed` / `-- --order-seed` 启动参数和 `SWM_CITY_SEED` / `SWM_ORDER_SEED` 环境变量复现；`pin(city, order)` 给测试和录制脚本固定种子；`is_city_random()` 告诉调用方这次是不是随机种子。
+- `main.gd` 在 `world.regenerate()` 之前取随机城市种子，并打印 `[种子] 城市 … · 订单 …`，方便玩家和日志复现。
+- `WorldGenerator` 加 `allow_seed_retry`：随机种子生成后路网或城市校验失败时自动换种子，最多重试 3 次；固定种子（编辑器预览、测试、录制）不重试，避免悄悄换成别的城市。先跑了 40 个随机种子的探针，全部通过校验，重试只是兜底。
+- `OrderManager.initial_order_seed` 改为 0 表示随机、大于 0 表示固定，`setup()` 里没固定时向 `GameSeeds` 取种子；同局重开、下一单、超时后的 `+1` 逻辑保持不变，同一局仍可复现。
+- 11 个实例化 `main.tscn` 的测试在加载前调用 `GameSeeds.pin(118, 1)`，保持原来的确定性；`test_city_streaming` 按循环里的种子逐个固定。
+- `tools/record_sample_session.gd` 固定 `pin(118, 1)`，示例和页面默认底图保持一致；`meta.city` 改成读真实路网种子。
+- `tools/export_city_map.gd` 支持 `-- --seed <种子> --out <路径>`，可以给某一局单独导出底图。
+- `tools/render_behavior_png.py` 没有显式 `--city` 时，会优先使用数据文件旁边的 `city-<meta.city>.json`；没有匹配底图时打印提示，不再静默套 118。
+- 新增 `tests/test_game_seeds.gd`，并加进 CI 测试列表、README 和开发者指南。
+
+**验证：**
+
+- 连续启动两次游戏：城市 873010/订单 912036、城市 945673/订单 110904，种子确实每次都变。
+- `-- --city-seed 118 --order-seed 1` 启动打印“城市 118 · 订单 1”；`SWM_CITY_SEED=4242 SWM_ORDER_SEED=7` 打印“城市 4242 · 订单 7”，两种复现方式都有效。
+- 随机城市探针实测两局：城市 600633（90 节点）和 948463（101 节点），城市校验通过、导航就绪，订单分别以 201076 和 783735 生成，取餐/送达路径 1217+1276 米、1211+790 米。
+- 用 `--seed 948463` 导出 `city-948463.json`，再拿一份 `meta.city` 为 948463 的临时数据跑 `render_behavior_png.py`：脚本自动选中这张底图，生成 2000×2000、1150 KB 的 PNG。
+- `record_sample_session.gd` 实跑：`[种子] 城市 118 · 订单 1`，事件 52 条，`meta.city=118`，示例数据和 118 号底图仍然一致。
+- 受影响测试全部 PASS：`test_game_seeds`、`test_main_scene`（order_seed=1、nodes=91、lots=764）、`test_orders`、`test_menu_ui`、`test_phone_orders`、`test_pause`、`test_city`、`test_city_streaming`、`test_god_view`、`test_navigation_queries`、`test_pedestrians`、`test_site_readability`、`test_traffic`、`test_telemetry`。其中窗口渲染模式跑的是 `test_main_scene`、`test_pause`、`test_city_streaming`、`test_god_view`、`test_navigation_queries`、`test_pedestrians`、`test_traffic`；headless 下这些用例仍会出现已知的退出码 139（导航网格烘焙阶段 RID 报错），打印 PASS 的用例按环境问题记录。
+
+**修改文件：** 新增 `scripts/core/game_seeds.gd`、`tests/test_game_seeds.gd`；修改 `scripts/core/main.gd`、`scripts/world/world_generator.gd`、`scripts/orders/order_manager.gd`、11 个主场景测试、`tools/record_sample_session.gd`、`tools/export_city_map.gd`、`tools/render_behavior_png.py`、`.github/workflows/repository-integrity.yml`、`README.md`、`docs/USER_GUIDE.md`、`docs/BEHAVIOR_DATA_EXPORT.md`、`docs/DEVELOPMENT_LOG.md`。
+
+本条记录随 `feature/jzy070407-random-seeds` 分支提交、推送并建 PR。

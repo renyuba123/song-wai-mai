@@ -46,6 +46,8 @@ var _failed := false
 func _initialize() -> void:
 	Engine.time_scale = TIME_SCALE
 	Engine.max_fps = 60
+	# 示例固定在种子 118，和分析页底图城市一致；正常游戏每局随机。
+	GameSeeds.pin(118, 1)
 	_last_usec = Time.get_ticks_usec()
 	var scene := load(MAIN_SCENE) as PackedScene
 	if scene == null:
@@ -247,7 +249,7 @@ func _write_output(events: Array) -> void:
 	var sample := {
 		"meta": {
 			"label": "游戏本体自动录制示例（自动驾驶，不是真实访客）",
-			"city": 118,
+			"city": _world.network.seed_value if _world != null and _world.network != null else 118,
 			"demo": true,
 			"generated_at": Time.get_datetime_string_from_system(),
 		},
