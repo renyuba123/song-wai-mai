@@ -11,6 +11,15 @@ var chunks: Dictionary = {}
 static func chunk_at(position: Vector3, size: float) -> Vector2i:
 	return Vector2i(floori(position.x / size), floori(position.z / size))
 
+static func door_point(rect: Rect2, yaw: float) -> Vector2:
+	## 沿朝向射线与轴对齐包围盒的边界求门点；斜向放置时不能直接用
+	## 半宽乘朝向，否则点会落在包围盒内部，入口步道会穿进模型。
+	var front := Vector2(-sin(yaw), -cos(yaw))
+	var half := rect.size * 0.5
+	var tx := INF if absf(front.x) < 1e-6 else half.x / absf(front.x)
+	var ty := INF if absf(front.y) < 1e-6 else half.y / absf(front.y)
+	return rect.get_center() + front * minf(tx, ty)
+
 static func fit(model: Dictionary, rect: Rect2, yaw: float, height: float, align_front: bool) -> Dictionary:
 	var source: AABB = model.bounds
 	var basis := Basis(Vector3.UP, yaw + PI)

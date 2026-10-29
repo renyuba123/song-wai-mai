@@ -65,7 +65,9 @@ func _check_city(seed_value: int, map_size: Vector2, density: float) -> void:
 	_expect(city.lots.size() <= CityGenerator.MAX_LOTS, "地块数量超过上限")
 	_expect(city.buildings.size() == city.lots.size(), "建筑数量应与地块一致")
 	if map_size.x >= 2400.0 and map_size.y >= 2400.0:
-		_expect(city.lots.size() >= 1200, "大地图地块密度不足：%d" % city.lots.size())
+		# 斜向、分级生长的街区比旧正交网格更长更宽，可达的临街地块随之减少；
+		# 仍要求大地图保持千级地块，避免城市变空。
+		_expect(city.lots.size() >= 1000, "大地图地块密度不足：%d" % city.lots.size())
 	_expect(not network.entrances.is_empty(), "城市没有出入口")
 	_expect(city.get_entrance_lots().size() >= 2, "至少需要两个入口地块")
 

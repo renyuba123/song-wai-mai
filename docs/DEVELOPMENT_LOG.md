@@ -1027,3 +1027,32 @@ Godot 4.7.2 `--headless --path . --import` 退出码 0，路网 150 个节点、
 - 以上 headless 139 与 RID 报错与既有记录一致，按本机环境问题处理，不视为断言失败。
 
 本条记录随 `feature/jzy070407-phone-replica` 分支提交、推送并建 PR。
+
+## 2026-10-29 14:39（Asia/Shanghai）接收包更新：合并斜向分级路网原型
+
+本轮需求（原文）：“接收包有更新，提取有用项合并”。
+
+检查了新到的 `交接包接收/song-wai-mai-main.zip`（约 51 MB，2026-10-29 13:54）。解压后快照的 `main`、`手机`、`upload-cars` 三个分支和三个 stash 都看过了：模型和贴图共 102 个 LFS 指针与当前 `assets` 完全一致，没有新增美术资源；`手机` 分支上的 `a86b892 feat: restore phone order notification UI` 是更早的并行手机界面，已被已经合并的照片复刻手机取代，合并它只会回退，因此没有采用。真正有用的是 `stash@{2}` 里未合并的路网原型。
+
+`stash@{2}` 的改动按当前代码重新落地，没有直接套用整个 stash：
+
+- `scripts/world/road_generator.gd` 换成“等级优先生长”：先生成一条沿随机基准方向的主干路，再从主干路节点向两侧长次干路，然后在次干路上按间距分叉支路，最后从支路内部节点补一代垂直支路；每一步都允许小幅噪声转弯，交叉处按事务方式切分旧路段，靠近已有节点时吸附并复用节点，生长完再裁掉只有一端的支路短头。新路网是斜向、不规则的，不再有全局正交轴线，`x_axes`、`y_axes` 保留字段但为空。
+- `scripts/world/road_builder.gd` 的道路、路口改用朝向角旋转放置；跨出地图边界的网格和碰撞体通过 `clipped_footprint()` 与地图矩形求交，路面视觉改成三角化多边形，碰撞改成 `ConvexPolygonShape3D`。只擦到边界、面积接近零的薄片直接按未裁切处理，避免退化的凸包影响导航。
+- `scripts/world/road_network.gd` 的校验补上节点越界、路段字段和端点、重复路段、任意角度相交检测；道路间距说明改成按每条路段统计偏离推荐值，不再依赖轴线。
+- `scripts/world/city_builder.gd` 的人行道、入口步道也按路段朝向旋转，并在靠近地图边缘时裁切；`scripts/world/city_generator.gd` 的地块改为按路段净距逐条检查，斜向街区把临街退让加上 `MAX_FRONTAGE * |sin·cos|`，内部补排同样做道路净距检查；`_inside_block()` 改用地图边界判定。
+- 新增 `CityPopulationLayout.door_point()`：沿朝向射线求与轴对齐包围盒的真实边界。斜向摆放下原来用“半宽乘朝向”算出的门点会落在包围盒里面，入口步道会穿进模型；建筑绘制、烘焙脚本和两个布局测试都改用这个函数。
+
+测试同步调整：
+
+- `tests/test_road_network.gd` 新增 64 组布局的生长扫描、确定性重复、不同种子几何差异、任意角度相交谓词、事务式交叉口切分、重复路段和越界负例。
+- `tests/test_contracts.gd` 不再要求轴线非空，改为检查兼容字段仍是数组；`tests/test_city.gd` 的大地图地块下限从 1200 调整为 1000，因为斜向分级街区更长更宽、可放下的临街地块比旧正交网格少，但种子 42、2400 米仍有 1038 个地块。
+- `tests/test_city_streaming.gd` 和 `tests/test_city_population.gd` 的道路侵占检查从“道路端点包围盒”改成“地块矩形与路段中心线的净距”，避免斜向道路被轴对齐包围盒误判。`test_city_population.gd` 原来读取的种子 118 烘焙场景是按旧正交路网生成的，已经过期；本机 headless 重新烘焙会触发已知的 `RendererDummy` 网格 RID 崩溃，因此改为直接验证运行时 `CityPopulationLayout` 的 764 栋建筑、1528 个装饰、32 个站点。
+
+**测试与校验：**
+
+- Godot 4.7.2 `--headless --path . --import` 退出码 0，没有脚本解析错误。
+- headless：`test_road_network` 退出码 0，`PASS seed=42 nodes=96 edges=149`、`PASS seed=1 nodes=19 edges=21`、`PASS seed=73 nodes=177 edges=306`，生长扫描 64 组布局、确定性和负例全部通过；`test_contracts` 退出码 0；`test_city_population` 退出码 0，`PASS population: 32 sites, 764 buildings, 1528 decorations; seed 118 layout`；`test_city` 的两个种子地块/建筑/入口/站点检查通过（1038 地块、137 地块），进入主场景导航烘焙后与本机既有问题一样以 139 结束，没有打印断言失败；`test_main_scene`、`test_orders`、`test_traffic_streaming` 先打印 PASS，也在退出阶段以 139 结束。
+- `test_city_streaming` 的四个种子里，种子 118 的布局空间检查（道路净距、模型重叠、站点入口步道）没有失败，随后在加载模型的 headless 阶段以 139 结束。用 `origin/main` 的干净工作树复跑同一测试也停在完全相同的位置，确认这是本机 `RendererDummy` 环境问题，不是本轮路网改动引入的。
+- `test_navigation_queries`、`test_traffic`、`test_pedestrians`、`test_pause`、`test_route_guidance` 本轮在 headless 下都在主场景资源加载阶段触发同一类 RID 报错并退出 139，未打印 PASS；与既有环境记录一致，按环境问题处理。
+
+本条记录随 `feature/jzy070407-road-growth` 分支提交、推送并建 PR。

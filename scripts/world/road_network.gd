@@ -108,6 +108,35 @@ func get_entrance_setback(edge_id: int) -> float:
 func validate() -> Dictionary:
 	var errors: Array[String] = []
 	var notes: Array[String] = []
+	var seen_edges := {}
+	for point in nodes:
+		if (
+			not point.is_finite()
+			or absf(point.x) > map_size.x * 0.5 + EPS
+			or absf(point.y) > map_size.y * 0.5 + EPS
+		):
+			errors.append("节点超出地图边界或坐标无效")
+	for edge in edges:
+		if (
+			not edge.has_all(["a", "b", "kind"])
+			or int(edge.a) < 0
+			or int(edge.b) < 0
+			or int(edge.a) >= nodes.size()
+			or int(edge.b) >= nodes.size()
+		):
+			errors.append("存在无效的路段端点或缺失字段")
+			return {
+				"valid": false,
+				"errors": errors,
+				"notes": notes,
+				"nodes": nodes.size(),
+				"edges": edges.size(),
+				"kinds": [0, 0, 0],
+			}
+		var key := Vector2i(mini(edge.a, edge.b), maxi(edge.a, edge.b))
+		if seen_edges.has(key):
+			errors.append("存在重复路段")
+		seen_edges[key] = true
 	var adjacency: Array = []
 	for _node_id in nodes.size():
 		adjacency.append([])
@@ -189,37 +218,24 @@ func validate() -> Dictionary:
 			errors.append("路网不连通：%d / %d 个节点可达" % [seen.size(), nodes.size()])
 	else:
 		errors.append("路网没有节点")
-	# Compare distances between successive intersection nodes along each
-	# centreline. Road ends are checked for the 150 m hard limit above.
-	var arterial_outliers := 0
-	for axis in x_axes:
-		if axis.kind == MAIN:
-			var main_positions: Array[float] = []
-			for cross in y_axes:
-				if cross.kind == MAIN:
-					main_positions.append(cross.pos)
-			for i in range(main_positions.size() - 1):
-				var gap: float = main_positions[i + 1] - main_positions[i]
-				if gap < MAIN_PREFERRED.x - EPS or gap > MAIN_PREFERRED.y + EPS:
-					arterial_outliers += 1
-	for axis in y_axes:
-		if axis.kind == MAIN:
-			var main_positions: Array[float] = []
-			for cross in x_axes:
-				if cross.kind == MAIN:
-					main_positions.append(cross.pos)
-			for i in range(main_positions.size() - 1):
-				var gap: float = main_positions[i + 1] - main_positions[i]
-				if gap < MAIN_PREFERRED.x - EPS or gap > MAIN_PREFERRED.y + EPS:
-					arterial_outliers += 1
-	if arterial_outliers > 0:
-		notes.append("%d 处主干路—主干路间距偏离 %.0f～%.0f 米建议范围" % [arterial_outliers, MAIN_PREFERRED.x, MAIN_PREFERRED.y])
-	var secondary_short := 0
+	# 斜向生长后不再有全局轴线，按每条路段的推荐间距统计偏离。
+	var outliers := [0, 0, 0]
+	var preferred := [MAIN_PREFERRED, SECONDARY_PREFERRED, LOCAL_PREFERRED]
 	for edge in edges:
-		if edge.kind == SECONDARY and nodes[edge.a].distance_to(nodes[edge.b]) < SECONDARY_PREFERRED.x - EPS:
-			secondary_short += 1
-	if secondary_short > 0:
-		notes.append("%d 段次干路交叉口间距低于建议的 %.0f 米；为连接支路保留，均满足 %.0f 米硬下限" % [secondary_short, SECONDARY_PREFERRED.x, MIN_JUNCTION_SPACING])
+		if edge.kind < MAIN or edge.kind > LOCAL:
+			continue
+		var length := nodes[edge.a].distance_to(nodes[edge.b])
+		var limits: Vector2 = preferred[edge.kind]
+		if length < limits.x - EPS or length > limits.y + EPS:
+			outliers[edge.kind] += 1
+	for kind in range(SECONDARY, LOCAL + 1):
+		if outliers[kind] > 0:
+			notes.append(
+				"%s有 %d 段偏离推荐间距；边界裁切、街区接合和生长采样优先遵守 %.0f 米硬下限"
+				% [NAMES[kind], outliers[kind], MIN_JUNCTION_SPACING]
+			)
+	if x_axes.is_empty() and y_axes.is_empty():
+		notes.append("无主干路—主干路交叉口对：主干路推荐间距未适用；各段仍校验 %.0f 米硬下限" % MIN_JUNCTION_SPACING)
 	errors.append_array(_validate_entrances(nodes))
 	if entrances.is_empty():
 		notes.append("地块出入口规则：未适用（本演示未生成地块或出入口）")
@@ -227,22 +243,14 @@ func validate() -> Dictionary:
 
 
 static func _segments_touch_without_node(a: Vector2, b: Vector2, c: Vector2, d: Vector2) -> bool:
-	var first_horizontal := absf(a.y - b.y) < EPS
-	var second_horizontal := absf(c.y - d.y) < EPS
-	if first_horizontal != second_horizontal:
-		var h0: Vector2 = a if first_horizontal else c
-		var h1: Vector2 = b if first_horizontal else d
-		var v0: Vector2 = c if first_horizontal else a
-		var v1: Vector2 = d if first_horizontal else b
-		return (
-			v0.x >= minf(h0.x, h1.x) - EPS
-			and v0.x <= maxf(h0.x, h1.x) + EPS
-			and h0.y >= minf(v0.y, v1.y) - EPS
-			and h0.y <= maxf(v0.y, v1.y) + EPS
-		)
-	if first_horizontal:
-		return absf(a.y - c.y) < EPS and maxf(minf(a.x, b.x), minf(c.x, d.x)) <= minf(maxf(a.x, b.x), maxf(c.x, d.x)) + EPS
-	return absf(a.x - c.x) < EPS and maxf(minf(a.y, b.y), minf(c.y, d.y)) <= minf(maxf(a.y, b.y), maxf(c.y, d.y)) + EPS
+	if Geometry2D.segment_intersects_segment(a, b, c, d) != null:
+		return true
+	return (
+		a.distance_to(Geometry2D.get_closest_point_to_segment(a, c, d)) <= EPS
+		or b.distance_to(Geometry2D.get_closest_point_to_segment(b, c, d)) <= EPS
+		or c.distance_to(Geometry2D.get_closest_point_to_segment(c, a, b)) <= EPS
+		or d.distance_to(Geometry2D.get_closest_point_to_segment(d, a, b)) <= EPS
+	)
 
 
 func _validate_entrances(road_nodes: Array) -> Array[String]:

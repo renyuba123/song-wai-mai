@@ -234,7 +234,7 @@ scenes/traffic/
 - `edges`：路段（`a`、`b`、`kind`）
 - `widths`：三类道路红线宽度
 - `seed_value`、`density`、`map_size`
-- `x_axes`、`y_axes`：道路轴线
+- `x_axes`、`y_axes`：旧版正交路网轴线字段，仅保留兼容性；分级生长路网不再填充，读取方不要依赖它们非空
 - `entrances`：地块出入口；阶段一由 `CityGenerator` 写入 `edge_id`、`offset`、`width`、`facing_yaw`、`lot_id`
 - `SURFACE_Y`：地面、车行道和人行道的统一可走顶面高度（0 米）；视觉网格可以略高，但碰撞体必须齐平
 - `CARRIAGEWAY_RATIO`、`sidewalk_offset(redline)`：车行道占红线比例和人行道中心距
@@ -261,6 +261,7 @@ scenes/traffic/
 ### 4.2 生成规则
 
 - 使用 `RoadGenerator.generate(...)` 生成路网，使用 `CityGenerator.generate(network)` 生成城市内容；不要在别的模块里复制一套生成逻辑。
+- 路网按等级优先生长：先铺主干路，再从主干路节点向两侧长出次干路，随后补支路并在本地街区内部补一排垂直支路；所有方向允许小幅转弯，因此路网是斜向、不规则的，不再有全局正交轴线。
 - 所有随机都使用 `RandomNumberGenerator` 并显式设置 `seed`，不要用全局 `randi()`。城市生成使用 `network.seed_value ^ CityGenerator.CITY_RNG_SALT`，不修改路网节点、路段或种子。
 - 同一组参数和种子必须生成同一份路网和城市；`tests/test_city.gd` 会逐字段比较。
 - 新增加固生成规则时，优先扩展 `CityContent` 或新增独立资源，不要把逻辑塞进 `RoadBuilder` / `CityBuilder`。

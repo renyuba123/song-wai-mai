@@ -103,7 +103,7 @@ func _check_road_network(network: RoadNetwork) -> void:
 	_expect(network.widths == Vector3(40.0, 30.0, 18.0), "路网宽度字段不符")
 	_expect(not network.nodes.is_empty(), "路网没有节点")
 	_expect(not network.edges.is_empty(), "路网没有路段")
-	_expect(not network.x_axes.is_empty() and not network.y_axes.is_empty(), "路网缺少轴线字段")
+	_expect(network.x_axes is Array and network.y_axes is Array, "兼容轴线字段必须保留；任意角度路网不再依赖全局轴线")
 	_expect(network.edges[0].has("a") and network.edges[0].has("b") and network.edges[0].has("kind"), "路段字段不完整")
 	_expect(network.entrances.is_empty(), "新生成路网不应已有出入口")
 	_expect(network.validate().valid, "路网校验未通过")
