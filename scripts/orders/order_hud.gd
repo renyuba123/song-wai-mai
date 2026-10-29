@@ -573,6 +573,14 @@ func _build_start_layer() -> void:
 	_start_touch_hint.visible = false
 	_start_content.add_child(_start_touch_hint)
 
+	if TelemetryClient.is_web_build():
+		var notice := _make_label(13, MUTED_UI)
+		notice.name = "TelemetryNotice"
+		notice.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		notice.text = "本体验会匿名记录游玩过程数据，仅用于展览效果分析，\n不含姓名与账号。"
+		notice.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_start_content.add_child(notice)
+
 	var footer := HFlowContainer.new()
 	footer.add_theme_constant_override("h_separation", 16)
 	footer.add_theme_constant_override("v_separation", 8)

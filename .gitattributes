@@ -37,3 +37,6 @@
 
 # 展览二维码是打印交付物，直接存普通 Git，避免 LFS 指针。
 exhibition/qr/output/*.png -filter -diff -merge -text
+
+# CloudBase HTTP 云函数的启动脚本必须是 LF 换行。
+server/behavior-log/scf_bootstrap text eol=lf

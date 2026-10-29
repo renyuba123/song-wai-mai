@@ -1,0 +1,10 @@
+{
+  "name": "behavior-log",
+  "version": "1.0.0",
+  "private": true,
+  "description": "展览行为数据采集云函数",
+  "main": "index.js",
+  "dependencies": {
+    "@cloudbase/node-sdk": "^3.10.0"
+  }
+}

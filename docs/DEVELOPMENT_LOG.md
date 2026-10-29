@@ -1099,27 +1099,6 @@ PR #31 合并后，从 `origin/main` 的 `7c3d412` 起 `feature/jzy070407-menu-r
 
 本条记录随 `docs/jzy070407-sync-20261029-c` 分支提交、推送并建 PR。
 
-## 2026-10-29 17:03（Asia/Shanghai）导出后台行为数据的方法
-
-本轮需求（原文）：“我有一段时间无法直接操作服务器，请将如何导出后台数据记录的方法上传git，一边其他成员能够调取”。
-
-**做了什么：**
-
-- 新增 `docs/BEHAVIOR_DATA_EXPORT.md`，写明展览行为数据的位置、权限前提、三种导出方式、表结构、事件字典、常用查询、隐私注意事项和常见问题。
-- 新增 `tools/export_behavior_data.py`，用 CloudBase CLI 的 `tcb db execute --json` 只读查询 `public.behavior_events`，按 `id` 分批取数，输出 `behavior_events.csv`、`behavior_events_events.csv` 和 `summary.json`；支持 `--out`、`--since`、`--until`、`--batch-size`，默认环境 `passive-sailfish-d0e1nvt8175333a`。
-- 导出方式以命令行脚本为主，同时保留控制台 DMC（账号管理 → 数据库管理 → SQL 窗口 / 悬浮工具 → 导入导出）和拿到连接信息后的 `psql`/`pg_dump` 两条路径；文档里说明体验版共享集群通常没有外网直连，优先用前两种。
-- 文档补充权限准备：云函数的 `anon` 角色只有 INSERT 权限，导出必须使用有读权限的腾讯云子账号、API Key 或控制台数据库账号；提醒原维护者离开前把授权或密钥交接好。
-- `.gitignore` 增加 `exports/`，避免导出的 CSV、JSON 和备份被提交；`exhibition/README.md` 增加指向导出文档的链接。
-- 文档里保留 2026-10-29 的实测数字，便于其他成员判断自己的导出结果是否正常。
-
-**校验：**
-
-- `python tools/export_behavior_data.py --batch-size 40` 读取 108 行、14 个会话，事件计数 `{"finish": 2, "offer": 8, "pos": 298, "probe": 5, "session": 13, "start": 15}`，CSV 和 `summary.json` 正常生成。
-- 加 `--since "2026-10-29 16:00:00+08"` 复跑得到 60 行、3 个会话，时间过滤生效。
-- 两种导出都只执行 SELECT，没有写入或修改云端数据；脚本在 Windows 上通过 `tcb.cmd` 正常调用 CloudBase CLI。
-- 本轮只改文档、脚本和忽略规则，不涉及 Godot 场景与 GDScript，未跑 headless 测试。
-
-本条记录随 `docs/jzy070407-behavior-export` 分支提交、推送并建 PR。
 ## 2026-10-29 16:58（Asia/Shanghai）检查远端更新：PR #33、#34 已合并
 
 本轮需求（原文）：“检查 song-wai-mai 仓库的远端更新：进入 E:/Project/Game Work Team/song-wai-mai，先确认工作区状态，再执行 git fetch origin --prune。如果 origin/main 或 origin/refactor/modular-base 有新提交，按 CONTRIBUTING.md 和每轮工作规则安全整合（有未提交改动时先保留或提交，不覆盖），运行相关 Godot 测试，把本轮同步和测试结果追加到 docs/DEVELOPMENT_LOG.md，提交并推送；若出现冲突或权限问题，停止并向用户说明，不要强推。”
@@ -1143,3 +1122,56 @@ PR #31 合并后，从 `origin/main` 的 `7c3d412` 起 `feature/jzy070407-menu-r
 - 本轮没有冲突，也没有权限问题。
 
 本条记录随 `docs/jzy070407-sync-20261029-d` 分支提交、推送并建 PR。
+
+## 2026-10-29 17:03（Asia/Shanghai）导出后台行为数据的方法
+
+本轮需求（原文）：“我有一段时间无法直接操作服务器，请将如何导出后台数据记录的方法上传git，一边其他成员能够调取”。
+
+**做了什么：**
+
+- 新增 `docs/BEHAVIOR_DATA_EXPORT.md`，写明展览行为数据的位置、权限前提、三种导出方式、表结构、事件字典、常用查询、隐私注意事项和常见问题。
+- 新增 `tools/export_behavior_data.py`，用 CloudBase CLI 的 `tcb db execute --json` 只读查询 `public.behavior_events`，按 `id` 分批取数，输出 `behavior_events.csv`、`behavior_events_events.csv` 和 `summary.json`；支持 `--out`、`--since`、`--until`、`--batch-size`，默认环境 `passive-sailfish-d0e1nvt8175333a`。
+- 导出方式以命令行脚本为主，同时保留控制台 DMC（账号管理 → 数据库管理 → SQL 窗口 / 悬浮工具 → 导入导出）和拿到连接信息后的 `psql`/`pg_dump` 两条路径；文档里说明体验版共享集群通常没有外网直连，优先用前两种。
+- 文档补充权限准备：云函数的 `anon` 角色只有 INSERT 权限，导出必须使用有读权限的腾讯云子账号、API Key 或控制台数据库账号；提醒原维护者离开前把授权或密钥交接好。
+- `.gitignore` 增加 `exports/`，避免导出的 CSV、JSON 和备份被提交；`exhibition/README.md` 增加指向导出文档的链接。
+- 文档里保留 2026-10-29 的实测数字，便于其他成员判断自己的导出结果是否正常。
+
+**校验：**
+
+- `python tools/export_behavior_data.py --batch-size 40` 读取 108 行、14 个会话，事件计数 `{"finish": 2, "offer": 8, "pos": 298, "probe": 5, "session": 13, "start": 15}`，CSV 和 `summary.json` 正常生成。
+- 加 `--since "2026-10-29 16:00:00+08"` 复跑得到 60 行、3 个会话，时间过滤生效。
+- 两种导出都只执行 SELECT，没有写入或修改云端数据；脚本在 Windows 上通过 `tcb.cmd` 正常调用 CloudBase CLI。
+- 本轮只改文档、脚本和忽略规则，不涉及 Godot 场景与 GDScript，未跑 headless 测试。
+
+本条记录随 `docs/jzy070407-behavior-export` 分支提交、推送并建 PR。
+
+## 2026-10-29 17:10（Asia/Shanghai）接收新交接包、补完展览行为采集，导出方法统一到已合并文档
+
+本轮需求（原文）：“完成更新后：有新的交接包传入，读取后自动执行未完成项，同时我有一段时间无法直接操作服务器，请将如何导出后台数据记录的方法上传git，一边其他成员能够调取。”
+
+**交接包：**
+
+- `交接包接收/` 里新增 `song-wai-mai-ready-16569b9.zip`（57 MB，16:54 收到），解压后和 `origin/main` 的 `16569b9` 逐文件比对（忽略 `.godot`、`*.import` 和换行差异），只有两处内容不同：`project.godot` 的 `[gui]` 段被编辑器挪到了 `[input]` 前面，语义不变；`scripts/player/player_controller.gd` 的 `move_speed` 从 5.0 改成 18。后者是对方本地的调试数值，仓库里仍是 5.0，本轮没有把它带进来，交接包里也没有其他未提交的代码。
+- 包里的 `目前在干嘛` 还是之前那份（路网、模型导入、车头动画、UI 改版），没有新任务，也没有新的美术文件。
+
+**展览分支收尾（上一轮未提交的改动）：**
+
+- 先把两个未提交的部分整理成提交：`fix(player): scale touch look by viewport and hide scooter at steep pitch`（触屏视角按视口比例换算、低头超过 35° 隐藏自车）和 `feat: collect exhibition behavior telemetry through a CloudBase function`（`TelemetryClient`、云函数 `server/behavior-log`、开始界面的匿名提示、`test_telemetry`、CI 清单和 `node_modules/` 忽略规则）。
+- 合并 `origin/main` 的 `16569b9`（PR #33 同步记录、PR #34 小地图），四个文件冲突逐个处理：CI 测试清单取并集；`scripts/core/main.gd` 同时保留 `_telemetry` 和 `_mini_map`；`scripts/orders/order_hud.gd` 采用上游重做后的开始界面，把匿名提示作为 `TelemetryNotice` 放回操作说明和种子之间；`docs/DEVELOPMENT_LOG.md` 按时间顺序把 13:35 的 CloudBase 部署记录插到 13:19 和 13:42 两条之间。
+- 数据库实测：`behavior_events` 已有 108 批、341 条事件、14 个会话，最新一条在 16:42，说明公网采集链路在正常工作。
+
+**数据导出：**
+
+- 本轮先在本分支写了 `server/behavior-log/export.js`（Node 调用 `tcb db execute` 分页查询，导出 `sessions.csv` 和 `events.csv`，带 UTF-8 BOM、CRLF 换行），实跑得到 14 个会话、341 条事件。
+- 随后发现同一时间另一个会话已经通过 PR #36 把等价的导出说明合进 `main`（`docs/BEHAVIOR_DATA_EXPORT.md` 和 `tools/export_behavior_data.py`）。两份并存会重复维护、权限说明也容易写岔，因此再合并一次最新 `main`（`b4ed7f3`）后删掉本分支的 `export.js`，`server/behavior-log/README.md` 的导出长段落改成一句话指向已合并的文档，`exhibition/README.md` 采用 `main` 的写法，日志里 16:58 和 17:03 两条也按时间顺序重新排好。
+- 冲突处理：`.gitignore` 同时保留 `node_modules/` 和 `exports/` 两条忽略规则。
+
+**测试与校验：**
+
+- 合并后 `--headless --path . --import` 退出码 0，路网校验通过（节点 91、路段 144），城市生成通过（地块 764、建筑 764、站点 32、出入口 141）。
+- headless：`test_telemetry` 打印 `PASS telemetry`、`test_touch_controls` 打印 `PASS touch controls`、`test_menu_ui` 打印四条 PASS，退出码都是 0。
+- 窗口渲染：`test_main_scene` 打印 `PASS main scene nodes=91 lots=764 sites=32 starts=12 vehicles=4 order_seed=1 sky=true`，`test_orders` 打印 `PASS orders starts=12`、`PASS orders`，`test_phone_orders` 打印 `PASS phone orders`，退出码都是 0。`test_main_scene` 在 headless 下仍会在取餐交互后触发既有的 Dummy 渲染器崩溃，按本机环境问题处理。
+- 后续合并的 `main` 只改了文档、`.gitignore` 和 `tools/` 下的 Python 脚本，没有动 GDScript，上面的测试结果对最终代码仍然有效。
+- 合并过程没有出现无法判断的冲突，也没有权限问题。
+
+本条记录随 `feature/jzy070407-exhibition-qr` 分支提交、推送并更新 PR。
