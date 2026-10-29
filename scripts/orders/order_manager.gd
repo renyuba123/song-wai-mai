@@ -6,6 +6,7 @@ class_name OrderManager
 ## 本节点只处理场景、输入和展示。
 
 signal order_offered(order: DeliveryOrder)
+signal order_rejected(order: DeliveryOrder)
 signal order_started(order: DeliveryOrder)
 signal order_finished(success: bool)
 
@@ -21,6 +22,7 @@ var _world: WorldGenerator = null
 var _navigation: NavigationService = null
 var _player: PlayerController = null
 var _hud: OrderHUD = null
+var _phone: OrderPhone = null
 var _beacon: MeshInstance3D = null
 var _beacon_material: StandardMaterial3D = null
 var _route_guide: RouteGuide = null
@@ -53,6 +55,7 @@ func setup(
 	_player = player
 	_configured = world != null and navigation != null and player != null
 	_ensure_hud()
+	_ensure_phone()
 	_ensure_beacon()
 	_ensure_route_guide()
 	_route_guide.setup(_navigation)
@@ -67,6 +70,8 @@ func setup(
 	_pending_generation = false
 	_at_start_screen = true
 	_player.set_controls_enabled(false)
+	if _phone != null:
+		_phone.hide_offer()
 	_hud.show_start_menu(_city_seed())
 	_sync_signage()
 
@@ -87,6 +92,10 @@ func get_hud() -> OrderHUD:
 	return _hud
 
 
+func get_phone() -> OrderPhone:
+	return _phone
+
+
 func get_route_guide() -> RouteGuide:
 	return _route_guide
 
@@ -96,10 +105,18 @@ func is_start_screen_visible() -> bool:
 
 
 func is_offer_visible() -> bool:
-	return _pending_offer and _hud != null and _hud.is_offer_visible()
+	return (
+		_pending_offer
+		and _phone != null
+		and _phone.is_offer_visible()
+		and _hud != null
+		and _hud.is_offer_visible()
+	)
 
 
 func get_offer_text() -> String:
+	if _phone != null and _phone.is_offer_visible():
+		return _phone.get_screen_text()
 	return _hud.get_offer_text() if _hud != null else ""
 
 
@@ -116,8 +133,28 @@ func accept_order() -> bool:
 	if not _configured or not _pending_offer or _current_order == null:
 		return false
 	_pending_offer = false
+	if _phone != null:
+		_phone.hide_offer()
 	_hud.hide_offer()
 	_activate_order(_current_order)
+	return true
+
+
+func reject_order() -> bool:
+	## 拒单和超时走同一条路：丢掉当前订单，按新种子继续找下一单。
+	if not _configured or not _pending_offer or _current_order == null:
+		return false
+	var rejected := _current_order
+	var signature := OrderGenerator.signature(rejected)
+	_pending_offer = false
+	_current_order = null
+	if _phone != null:
+		_phone.hide_offer()
+	_hud.hide_offer()
+	if _route_guide != null:
+		_route_guide.hide_route()
+	order_rejected.emit(rejected)
+	_begin_generation(_order_seed + 1, signature)
 	return true
 
 
@@ -130,6 +167,8 @@ func return_to_start_menu() -> bool:
 	_session = null
 	_at_start_screen = true
 	_order_seed += 1
+	if _phone != null:
+		_phone.hide_offer()
 	if _beacon != null:
 		_beacon.visible = false
 	if _route_guide != null:
@@ -184,6 +223,12 @@ func handle_restart() -> bool:
 	return false
 
 
+func _process(delta: float) -> void:
+	if not _configured or not _pending_offer or _phone == null:
+		return
+	_phone.advance(delta)
+
+
 func _physics_process(delta: float) -> void:
 	if not _configured:
 		return
@@ -214,11 +259,18 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event is InputEventKey and event.is_echo():
 		return
-	if event.is_action_pressed("interact"):
+	if event.is_action_pressed("order_accept"):
+		if _pending_offer and accept_order():
+			get_viewport().set_input_as_handled()
+	elif event.is_action_pressed("order_reject"):
+		if _pending_offer and reject_order():
+			get_viewport().set_input_as_handled()
+	elif event.is_action_pressed("interact"):
 		var handled := false
 		if _at_start_screen:
 			handled = start_game()
 		elif _pending_offer:
+			# 保留 E 作为接单的兼容键，界面提示以 Y/N 为准。
 			handled = accept_order()
 		else:
 			handled = try_interact(_player.global_position)
@@ -237,6 +289,8 @@ func _begin_generation(seed_value: int, avoid_signature: String) -> void:
 	_pending_seed = seed_value
 	_avoid_signature = avoid_signature
 	_nav_wait_frames = 0
+	if _phone != null:
+		_phone.hide_offer()
 	if _beacon != null:
 		_beacon.visible = false
 	if _route_guide != null:
@@ -289,6 +343,8 @@ func _offer_order(order: DeliveryOrder) -> void:
 	var time_limit := OrderSession.calculate_time_limit(
 		order, _player.move_speed if _player != null else 5.0
 	)
+	if _phone != null:
+		_phone.show_offer(order, time_limit)
 	_hud.show_offer(order, time_limit)
 	order_offered.emit(order)
 
@@ -297,6 +353,8 @@ func _activate_order(order: DeliveryOrder) -> void:
 	_current_order = order
 	_order_seed = order.order_seed
 	_pending_offer = false
+	if _phone != null:
+		_phone.hide_offer()
 	_session = OrderSession.new(order, _player.move_speed if _player != null else 5.0)
 	_session.state_changed.connect(_on_session_state_changed)
 	_session.finished.connect(_on_session_finished)
@@ -313,6 +371,8 @@ func _activate_order(order: DeliveryOrder) -> void:
 func _restart_same_order() -> void:
 	if _current_order == null:
 		return
+	if _phone != null:
+		_phone.hide_offer()
 	_session = OrderSession.new(_current_order, _player.move_speed if _player != null else 5.0)
 	_session.state_changed.connect(_on_session_state_changed)
 	_session.finished.connect(_on_session_finished)
@@ -340,6 +400,8 @@ func _on_session_state_changed(_state: int) -> void:
 
 
 func _on_session_finished(_success: bool) -> void:
+	if _phone != null:
+		_phone.hide_offer()
 	if _beacon != null:
 		_beacon.visible = false
 	if _route_guide != null:
@@ -368,10 +430,31 @@ func _ensure_hud() -> void:
 	_hud = OrderHUD.new()
 	_hud.name = "OrderHUD"
 	_hud.start_pressed.connect(start_game)
-	_hud.accept_pressed.connect(accept_order)
 	_hud.next_order_pressed.connect(handle_restart)
 	_hud.menu_pressed.connect(return_to_start_menu)
 	add_child(_hud)
+
+
+func _ensure_phone() -> void:
+	if _player == null:
+		return
+	var anchor: Node3D = _player.camera if _player.camera != null else _player
+	if _phone == null:
+		_phone = OrderPhone.new()
+		_phone.name = "OrderPhone"
+		anchor.add_child(_phone)
+		_phone.accept_pressed.connect(accept_order)
+		_phone.reject_pressed.connect(reject_order)
+		_phone.offer_expired.connect(_on_offer_expired)
+	elif _phone.get_parent() != anchor:
+		_phone.reparent(anchor, false)
+	_phone.setup(_player.camera)
+	_phone.hide_offer()
+
+
+func _on_offer_expired() -> void:
+	## 手机倒计时归零：按拒单处理，继续生成下一单。
+	reject_order()
 
 
 func _city_seed() -> int:

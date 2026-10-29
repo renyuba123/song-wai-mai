@@ -5,7 +5,6 @@ class_name OrderHUD
 ## E 提示和结算面板。全部用代码创建，避免把 UI 节点和美术资源耦合进主场景。
 
 signal start_pressed
-signal accept_pressed
 signal next_order_pressed
 signal menu_pressed
 
@@ -28,10 +27,8 @@ var _start_layer: Control
 var _start_seed_label: Label
 var _start_button: Button
 
-var _offer_layer: Control
-var _offer_body: Label
-var _offer_hint: Label
-var _accept_button: Button
+var _offer_active := false
+var _offer_text := ""
 
 var _result_layer: Control
 var _result_title: Label
@@ -47,8 +44,9 @@ func _ready() -> void:
 
 
 func show_start_menu(city_seed: int) -> void:
+	_offer_active = false
+	_offer_text = ""
 	_start_layer.visible = true
-	_offer_layer.visible = false
 	_result_layer.visible = false
 	_status_panel.visible = false
 	_prompt_label.visible = false
@@ -62,36 +60,31 @@ func hide_start_menu() -> void:
 
 
 func show_offer(order: DeliveryOrder, time_limit: float) -> void:
+	## 接单详情在三维手机屏幕上；HUD 只保留左上角的新订单提醒。
 	if order == null:
 		return
+	_offer_active = true
+	_offer_text = OrderPhone.format_offer_text(order, time_limit)
 	_start_layer.visible = false
-	_offer_layer.visible = true
 	_result_layer.visible = false
-	_status_panel.visible = false
+	_status_panel.visible = true
+	_objective_label.text = "手机收到新订单"
+	_detail_label.text = "Y 接单 · N 拒单"
+	_arrow_label.text = ""
+	_arrow_label.visible = false
+	_hint_label.text = ""
+	_hint_label.visible = false
+	_prompt_label.text = ""
 	_prompt_label.visible = false
 	clear_error()
-	var pickup_length := maxf(order.pickup_path_length_m, 0.0)
-	var delivery_length := maxf(order.delivery_path_length_m, 0.0)
-	_offer_body.text = "\n".join([
-		"取餐：%s" % site_label(order.merchant),
-		"送达：%s" % site_label(order.customer),
-		"取餐路程 %d m · 送达路程 %d m" % [
-			roundi(pickup_length), roundi(delivery_length)
-		],
-		"限时 %s · 城市种子 %d · 订单种子 %d" % [
-			format_time(time_limit), order.city_seed, order.order_seed
-		],
-	])
-	_offer_hint.text = "按 E 或点击“接单”，倒计时开始"
-	_accept_button.grab_focus()
 
 
 func hide_offer() -> void:
-	_offer_layer.visible = false
+	_offer_active = false
 
 
 func show_waiting(text: String = "正在生成订单…") -> void:
-	_offer_layer.visible = false
+	_offer_active = false
 	_result_layer.visible = false
 	_status_panel.visible = true
 	_error_label.text = ""
@@ -99,13 +92,15 @@ func show_waiting(text: String = "正在生成订单…") -> void:
 	_objective_label.text = text
 	_detail_label.text = ""
 	_arrow_label.text = ""
+	_arrow_label.visible = false
 	_hint_label.text = ""
+	_hint_label.visible = false
 	_prompt_label.text = ""
 	_prompt_label.visible = false
 
 
 func show_active(order: DeliveryOrder, session: OrderSession) -> void:
-	_offer_layer.visible = false
+	_offer_active = false
 	_result_layer.visible = false
 	_status_panel.visible = true
 	_error_label.text = ""
@@ -119,6 +114,8 @@ func show_active(order: DeliveryOrder, session: OrderSession) -> void:
 		order.city_seed, order.order_seed
 	]
 	_arrow_label.text = ""
+	_arrow_label.visible = true
+	_hint_label.visible = true
 	_prompt_label.text = ""
 	_prompt_label.visible = false
 
@@ -149,8 +146,8 @@ func update_active(
 func show_result(order: DeliveryOrder, session: OrderSession) -> void:
 	if order == null or session == null:
 		return
+	_offer_active = false
 	_start_layer.visible = false
-	_offer_layer.visible = false
 	_status_panel.visible = false
 	_result_layer.visible = true
 	_result_title.text = "订单完成" if session.is_success() else "订单失败"
@@ -176,19 +173,23 @@ func show_result(order: DeliveryOrder, session: OrderSession) -> void:
 	_objective_label.text = session.get_objective_text()
 	_detail_label.text = ""
 	_arrow_label.text = ""
+	_arrow_label.visible = false
 	_hint_label.text = ""
+	_hint_label.visible = false
 	_prompt_label.text = ""
 	_prompt_label.visible = false
 
 
 func show_error(text: String) -> void:
-	_offer_layer.visible = false
+	_offer_active = false
 	_result_layer.visible = false
 	_status_panel.visible = true
 	_objective_label.text = "订单未开始"
 	_detail_label.text = ""
 	_arrow_label.text = ""
+	_arrow_label.visible = false
 	_hint_label.text = ""
+	_hint_label.visible = false
 	_prompt_label.text = ""
 	_prompt_label.visible = false
 	_error_label.text = text
@@ -221,7 +222,7 @@ func get_error_text() -> String:
 
 
 func get_offer_text() -> String:
-	return _offer_body.text
+	return _offer_text
 
 
 func get_start_button_text() -> String:
@@ -233,7 +234,7 @@ func is_start_menu_visible() -> bool:
 
 
 func is_offer_visible() -> bool:
-	return _offer_layer.visible
+	return _offer_active
 
 
 func is_result_visible() -> bool:
@@ -242,7 +243,7 @@ func is_result_visible() -> bool:
 
 func is_any_modal_visible() -> bool:
 	## 开始菜单、接单或结算面板挡在前面时，暂停层不应抢走 Esc。
-	return _start_layer.visible or _offer_layer.visible or _result_layer.visible
+	return _start_layer.visible or _offer_active or _result_layer.visible
 
 
 func get_result_title() -> String:
@@ -352,7 +353,6 @@ func _build() -> void:
 	_root.add_child(_error_label)
 
 	_build_start_layer()
-	_build_offer_layer()
 	_build_result_layer()
 	show_waiting()
 
@@ -377,20 +377,6 @@ func _build_start_layer() -> void:
 	_start_button = _make_button("开始游戏")
 	_start_button.pressed.connect(func() -> void: start_pressed.emit())
 	box.add_child(_start_button)
-
-
-func _build_offer_layer() -> void:
-	var modal := _build_modal(Vector2(620, 420), 34, ACCENT_COLOR)
-	_offer_layer = modal["layer"]
-	var box: VBoxContainer = modal["box"]
-	var title: Label = modal["title"]
-	title.text = "新的外卖订单"
-	_offer_body = modal["body"]
-	_offer_hint = modal["hint"]
-	_offer_hint.text = "按 E 或点击“接单”，倒计时开始"
-	_accept_button = _make_button("接单")
-	_accept_button.pressed.connect(func() -> void: accept_pressed.emit())
-	box.add_child(_accept_button)
 
 
 func _build_result_layer() -> void:

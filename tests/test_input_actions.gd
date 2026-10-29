@@ -10,6 +10,8 @@ const EXPECTED := {
 	"interact": KEY_E,
 	"pause": KEY_ESCAPE,
 	"restart": KEY_R,
+	"order_accept": KEY_Y,
+	"order_reject": KEY_N,
 }
 
 var _failed := false
