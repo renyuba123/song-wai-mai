@@ -924,6 +924,7 @@ Godot 4.7.2 `--headless --path . --import` 退出码 0，路网 150 个节点、
 **部署与微信小程序：**
 
 - 国内静态托管试过 EdgeOne Pages，单文件上限 25 MiB，放不下 39.5 MB 的 `index.wasm`，已排除。改用腾讯云 CloudBase 静态托管，命令行上传没有这个单文件限制，`@cloudbase/cli` 已通过 npmmirror 安装。
+- 试用局域网 HTTP 地址时浏览器提示 “Secure Context - Check web server configuration (use HTTPS)”。查 `index.js` 确认安全上下文是无条件检查，HTTP 下引擎不会启动；localhost 例外，CloudBase 默认域名是 HTTPS 不受影响。安卓 Chrome 可用 `chrome://flags/#unsafely-treat-insecure-origin-as-secure` 临时放行局域网地址，iOS 无对应开关。展览文档已补这一节。
 - 目前卡在账号登录：需要用户执行 `tcb login` 并选择或新建环境，之后运行 `tcb hosting deploy build/web / -e <环境 ID>` 得到访问地址，再回填 `links.json` 并重新生成 1 号二维码。
 - 微信小程序评估：Godot 没有官方小游戏导出，主包 4 MB、分包总量 30 MB 与我们 39.5 MB 的 wasm 差距太大，不采用。可行路线是认证企业小程序用 `web-view` 套 H5，但需要企业主体、ICP 备案域名和业务域名校验文件，二维码还得用小程序码才能扫码直进。结论是先以 H5 为主方案，微信内置浏览器可以直接运行；若主办方强制要求小程序入口，再补 `web-view` 页面骨架。
 

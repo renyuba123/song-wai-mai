@@ -67,6 +67,14 @@ Web 构建没有系统字体，项目通过 `project.godot` 的
 （Noto Sans SC，SIL Open Font License 1.1，授权文本见同目录 `OFL.txt`）。
 字体随仓库用 Git LFS 保存。
 
+### 必须用 HTTPS
+
+Godot 的 Web 构建启动前会检查浏览器安全上下文，局域网里用 HTTP 打开会提示
+“Secure Context - Check web server configuration (use HTTPS)”，引擎不会启动。
+`localhost` 例外，所以本机调试 `http://127.0.0.1:端口/` 可以正常跑。
+正式部署要用 HTTPS（CloudBase 默认域名自带证书）；安卓 Chrome 临时测试可以在
+`chrome://flags/#unsafely-treat-insecure-origin-as-secure` 里把局域网地址加进白名单。
+
 ## 部署
 
 国内静态托管需要账号登录。已验证 EdgeOne Pages 单个文件上限 25 MiB，
