@@ -738,6 +738,30 @@ GitHub Actions 报 `resident count grows after revisit`。实测首次访问商�
 
 运行全部十二组 Godot headless 测试，包括四 Seed 的模型、真实物理位移、动态生成/回收、对象池及完整城市/订单/交通回归。主场景旧“全图至少 100 辆”断言改为“附近有车且不超上限”，保留其余行为检查。无界面环境未验证实际模型门向、灯光、帧率和驾驶画面，见 TRAFFIC_STREAMING.md。本记录随功能提交。
 
+## 2026-10-29 10:13（Asia/Shanghai）人行道与地块导航基础
+
+本轮按“先不要涉及性能优化，优先进行功能搭建”的要求，暂停性能调优，转回功能开发。原先的寻路只在车行道上可用：人行道碰撞体没有加入导航源组，导航代理还沿用车行车辆级别的 4 米半径，玩家从出生点走到商家门口、再从商家走到顾客门口的路径会贴着车行道或被裁断。
+
+在 `feature/jzy070407-sidewalk-navigation` 分支完成三处改动：`CityBuilder` 的人行道碰撞体加入 `CollisionLayers.NAVIGATION_SOURCE_GROUP`，建筑碰撞体仍不加入，因此导航网格只覆盖道路和人行道，不会铺进建筑内部；`NavigationService` 的烘焙体素从 0.25 米级改成 2 米，代理半径 4 米改为 0.5 米、高度改为 1.8 米，按玩家尺寸烘焙；`test_city` 的人行道断言从“不应在导航源组”改为“应在导航源组”，`test_navigation_queries` 增加玩家起点、商家、顾客三个出生点的吸附误差检查和商家到顾客的配送路径检查。
+
+用临时探针实测：主场景实例化加导航烘焙合计约 2107 毫秒，导航网格 2282 个多边形；全部 32 个站点出生点里，吸附误差最大 2.19 米（customer_015）；玩家起点到商家路径 46 个点、约 1144.9 米，商家到顾客路径 82 个点、约 2471.4 米，连通正常。探针脚本没有提交。
+
+测试：`test_navigation_queries`、`test_city`、`test_contracts`、`test_orders`、`test_main_scene`、`test_traffic` 均为 PASS，退出码 0；`test_city_streaming` 因 99 个城市 GLB 仍是 LFS pointer、资源加载失败而失败（退出码 1），与本改动无关，记为环境阻塞。没有修改订单、UI、主场景和共享文件，因此没有加锁。
+
+## 2026-10-29 10:35（Asia/Shanghai）暂停菜单、设置与城市种子显示
+
+需求（任务原文）：Esc 打开暂停层：`get_tree().paused = true`，暂停层自身设 `process_mode = PROCESS_MODE_WHEN_PAUSED`，关闭玩家输入，释放并显示鼠标；再按 Esc 或点“继续”恢复。暂停层按钮：继续；重开本单：调用现有 `OrderManager.handle_restart()`；返回主菜单：调用现有 `OrderManager.return_to_start_menu()`。暂停层里显示当前城市种子和订单种子（从现有生成数据读取，拿不到就显示“—”，不要为此改生成逻辑）。开始菜单、接单选择、结算界面下按 Esc 不打开暂停层，也不误触发游戏操作。
+
+基于 origin/main 的 a25b008 建立独立分支 feature/jzy070407-pause-menu。新增 `scripts/core/pause_controller.gd`：根节点 `PROCESS_MODE_ALWAYS` 负责暂停时仍接收 Esc，内部全屏遮罩 `PROCESS_MODE_WHEN_PAUSED`，暂停时冻结场景树、经 `PlayerController.set_controls_enabled(false)` 停玩家输入并释放鼠标，恢复时还原暂停前的控制状态；城市和订单种子优先读当前 `DeliveryOrder.city_seed`、`order_seed`，拿不到显示“—”。`OrderHUD` 新增只读查询 `is_any_modal_visible()`，暂停只在活动订单且没有开始菜单、接单、结算面板时打开。`main.gd` 在 `orders.setup()` 之后用代码创建 `PauseMenu`，不改 `main.tscn`；重开本单、返回主菜单直接调用 OrderManager 现有接口，没有另写状态切换，`order_manager.gd` 和 `project.godot` 未改。
+
+新增 `tests/test_pause.gd`：验证开始菜单、接单、结算界面按 Esc 不暂停；配送中 Esc 暂停后场景树冻结、倒计时与玩家位置不变、种子显示与当前订单一致，再按 Esc 恢复；重开本单后种子和订单内容不变并回到本单起点；返回主菜单回到开始界面。CI 测试列表加入 test_pause，`docs/USER_GUIDE.md` 的暂停动作说明同步更新。
+
+测试：`--headless --path . --import` 退出码 0；`test_input_actions`、`test_pause`、`test_main_scene`、`test_traffic`、`test_traffic_streaming`、`test_god_view` 全部 PASS。`test_orders` 打印 `PASS orders` 后退出码 -1073741819（Windows 访问冲突，等价 exit 139），日志显示建筑与装饰 GLB 加载失败，按任务约定记为 99 个 GLB 仍是 LFS pointer 的环境阻塞。无界面环境没有人工检查暂停层实际排版和鼠标可用性。
+
+提交与推送：`d5e2f2c feat(core): add pause menu with seed display`；本条日志单独提交。推送和 PR 见本轮 status 记录。
+
+同步最新 main：PC 侧 `origin/main` 已前进到 `b872b50`（PR #18 合并人行道导航），本分支按协作规则合并 `origin/main`，解决 `docs/DEVELOPMENT_LOG.md` 追加位置的冲突（两条记录都保留，按时间排序），合并提交 `91f6062`。合并后重新 `--import` 并运行 `test_pause`、`test_input_actions`、`test_main_scene`、`test_navigation_queries`、`test_city`、`test_traffic`、`test_god_view`，全部 PASS、退出码 0；`test_orders` 仍是同样的 LFS pointer 环境阻塞。
+
 ## 2026-10-29 10:45（Asia/Shanghai）地面路线指引
 
 **本轮需求（原文）：** “用 NavigationService.find_path() 从玩家当前位置到当前订单目标，沿路面画一条可见折线（ImmediateMesh 或细长 MeshInstance3D 条带均可），略微抬高避免与地面 z-fighting。玩家明显偏离路线（例如超出阈值距离）或订单目标变化时重算；重算做节流，不要每帧跑 A*。开始菜单、接单选择、结算界面、无活动订单时隐藏路线。保留现有 HUD 的距离/箭头，不改 HUD。”
@@ -768,13 +792,3 @@ GitHub Actions 报 `resident count grows after revisit`。实测首次访问商�
 - 合并只在 `docs/DEVELOPMENT_LOG.md` 产生冲突，按时间顺序保留本条记录和人行道导航记录（`10:13`），合并提交 `b52018c`。
 
 **提交与分支：** 从 `origin/main` `a25b008` 建立 `feature/jzy070407-route-guidance`；功能与日志提交 `d24d158 feat(orders): add ground route guidance`，随后合并 `origin/main` `b872b50` 得到 `b52018c`；推送后向 `main` 建 PR，不直接推送 `main`，不强推。
-
-## 2026-10-29 10:13（Asia/Shanghai）人行道与地块导航基础
-
-本轮按“先不要涉及性能优化，优先进行功能搭建”的要求，暂停性能调优，转回功能开发。原先的寻路只在车行道上可用：人行道碰撞体没有加入导航源组，导航代理还沿用车行车辆级别的 4 米半径，玩家从出生点走到商家门口、再从商家走到顾客门口的路径会贴着车行道或被裁断。
-
-在 `feature/jzy070407-sidewalk-navigation` 分支完成三处改动：`CityBuilder` 的人行道碰撞体加入 `CollisionLayers.NAVIGATION_SOURCE_GROUP`，建筑碰撞体仍不加入，因此导航网格只覆盖道路和人行道，不会铺进建筑内部；`NavigationService` 的烘焙体素从 0.25 米级改成 2 米，代理半径 4 米改为 0.5 米、高度改为 1.8 米，按玩家尺寸烘焙；`test_city` 的人行道断言从“不应在导航源组”改为“应在导航源组”，`test_navigation_queries` 增加玩家起点、商家、顾客三个出生点的吸附误差检查和商家到顾客的配送路径检查。
-
-用临时探针实测：主场景实例化加导航烘焙合计约 2107 毫秒，导航网格 2282 个多边形；全部 32 个站点出生点里，吸附误差最大 2.19 米（customer_015）；玩家起点到商家路径 46 个点、约 1144.9 米，商家到顾客路径 82 个点、约 2471.4 米，连通正常。探针脚本没有提交。
-
-测试：`test_navigation_queries`、`test_city`、`test_contracts`、`test_orders`、`test_main_scene`、`test_traffic` 均为 PASS，退出码 0；`test_city_streaming` 因 99 个城市 GLB 仍是 LFS pointer、资源加载失败而失败（退出码 1），与本改动无关，记为环境阻塞。没有修改订单、UI、主场景和共享文件，因此没有加锁。
