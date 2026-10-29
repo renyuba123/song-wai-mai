@@ -59,12 +59,13 @@ godot --headless --path . --script res://tests/test_contracts.gd
 godot --headless --path . --script res://tests/test_input_actions.gd
 godot --headless --path . --script res://tests/test_navigation_queries.gd
 godot --headless --path . --script res://tests/test_city.gd
+godot --headless --path . --script res://tests/test_city_catalog.gd
 godot --headless --path . --script res://tests/test_god_view.gd
 godot --headless --path . --script res://tests/test_orders.gd
 godot --headless --path . --script res://tests/test_traffic.gd
 ```
 
-前两条检查路网生成、校验、寻路和主场景启动；中间三条分别检查共享数据契约、输入映射与玩家移动、导航查询接口；`test_city` 检查城市确定性、反向数据、主场景城市装配和站点可达性；`test_god_view` 检查测试用上帝视角只在调试构建创建、开关时相机和玩家状态正确切换并恢复；`test_orders` 检查订单生成、状态机、开始/接单/结算界面和撞车失败语义；`test_traffic` 检查车道数学、确定性车流、出生安全、命中 Area3D 和主场景撞车信号链。新增脚本后先执行一次 `godot --headless --path . --import`，让 Godot 注册 `class_name` 并生成 `.gd.uid`。
+前两条检查路网生成、校验、寻路和主场景启动；中间三条分别检查共享数据契约、输入映射与玩家移动、导航查询接口；`test_city` 检查城市确定性、反向数据、主场景城市装配和站点可达性；`test_city_catalog` 检查模型目录可加载、包围盒有效、分类数量和种子 118 的模型多样性；`test_god_view` 检查测试用上帝视角只在调试构建创建、开关时相机和玩家状态正确切换并恢复；`test_orders` 检查订单生成、状态机、开始/接单/结算界面和撞车失败语义；`test_traffic` 检查车道数学、确定性车流、出生安全、命中 Area3D 和主场景撞车信号链。新增脚本后先执行一次 `godot --headless --path . --import`，让 Godot 注册 `class_name` 并生成 `.gd.uid`。
 
 ## 2. 所有人：日常操作流程
 

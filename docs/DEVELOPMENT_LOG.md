@@ -840,3 +840,30 @@ Godot 4.7.2 headless 导入退出码 0，路网校验 150 个节点、214 条路
 Godot 4.7.2 `--headless --path . --import` 退出码 0，路网 150 个节点、214 条路段通过，城市 1637 个地块、1637 栋建筑、32 个站点通过。测试：`test_traffic_streaming`、`test_main_scene`、`test_contracts`、`test_pause`、`test_route_guidance` 退出码 0；`test_pedestrians`、`test_traffic`、`test_navigation_queries`、`test_orders` 都先打印 PASS，但部分运行在退出阶段以 Windows 访问冲突（退出码 139）结束，重复运行会在 0 和 139 之间变化，日志同批出现 3 到 5 条 `Failed loading resource`，仍是 99 个城市 GLB 为 LFS pointer 的既有环境问题，不是本次重建引入的断言失败。
 
 分发暂停：按用户要求，暂停向其他终端派发新任务，等待下一次声明。本条记录随新分支提交、推送并建 PR。
+
+## 2026-10-29 12:15（Asia/Shanghai）城市模型库扩充与朝向校正
+
+**本轮需求（原文）：** “按照大模块逐步继续，某一模块完成后给出下一模块方向”
+
+按模块推进的第一个大模块是“城市模型库扩充与朝向校正”，目标是在其他人分别调整人流、车速、NPC 车行方向和主控电动车物理模型的同时，把城市精细建筑的重复感和朝向问题先解决掉，让后续有模型的 demo 更像一座城市。
+
+实现内容：
+
+- 重新筛选 `assets/models/其他建筑模型/`：先给整个目录渲染接触表，再逐个保留有完整体量的建筑。建筑池从原来的 3 个其他建筑扩展到 43 个，明确排除地面片、围墙、桥、信号塔、广场和摊位，避免把没有门面或体积的物件当成建筑。清单写在 `scripts/dev/build_city_catalog.gd`，包围盒仍由脚本重新测量生成，不手工修改。
+- 补上此前遗漏的 `mall.glb`，取餐店面从 6 个增加到 7 个；送餐站点保持 7 个。`city_model_catalog.gd` 现为 59 个条目：7 个取餐、7 个送餐、43 个其他建筑、1 个树木、1 个灯杆。
+- 朝向校正：给取餐/送餐共 14 个店面分别渲染局部 +Z 和 −Z 两侧接触表，确认店面都在局部 +Z；现有 `Basis(UP, yaw + PI)` 已把 +Z 映射到临街方向，因此不需要给任何店铺追加单独偏航。另用街景和俯视截图检查了商家、顾客和远景下的模型比例、街道朝向与多样性。
+- 新增 `tests/test_city_catalog.gd`：检查每个目录条目路径非空、资源存在、没有重复路径、包围盒三轴有效、各分类数量下限；再用种子 118 生成完整布局，要求至少用到 40 种不同建筑模型，并确认两次生成的布局签名一致。当前输出 `PASS city catalog models=59 distinct_in_seed_118=55 buildings=1637`。
+- `.github/workflows/repository-integrity.yml` 测试循环、`README.md`、`docs/USER_GUIDE.md` 加入 `test_city_catalog`；`docs/CITY_STREAMING.md` 更新模型目录数量、筛选方式、朝向核对结论、缓存上限和仍需人工检查的 43 个新建筑。
+
+修改文件：`scripts/dev/build_city_catalog.gd`、`scripts/world/city_model_catalog.gd`、新增 `tests/test_city_catalog.gd`、`.github/workflows/repository-integrity.yml`、`README.md`、`docs/CITY_STREAMING.md`、`docs/USER_GUIDE.md`、`docs/DEVELOPMENT_LOG.md`。没有修改人流、车速、NPC 车行方向、主控电动车物理相关文件，也没有提交工作区里其他人员正在改的 `project.godot`、`scripts/core/main.gd`、`scripts/player/player_controller.gd`、`scripts/ui/`、`assets/fonts/`、`exhibition/`、`export_presets.cfg`、`tests/test_touch_controls.gd`。
+
+**测试与校验：**
+
+- Godot 4.7.2 `--headless --path . --import` 退出码 0；路网校验通过（节点 150、路段 214），城市生成通过（地块 1637、建筑 1637、站点 32、出入口 98）。
+- `test_city_catalog`：`PASS city catalog models=59 distinct_in_seed_118=55 buildings=1637`，退出码 0。
+- `test_main_scene`：`PASS main scene nodes=150 lots=1637 sites=32 starts=12 vehicles=11 order_seed=1 sky=true`，随后进程以 139 退出；错误发生在打印 PASS 之后，属于已知的 Windows headless 退出阶段访问冲突。
+- `test_city_streaming`：headless 运行时在导航烘焙后实例化精细模型时出现 `RendererDummy`/RID 访问冲突，未打印 PASS；改用窗口渲染运行同一脚本，完整通过四个种子，输出 `PASS city streaming`，退出码 0。种子 118/1/42/2026 的商家附近精细实例分别为 261/273/164/192，缓存模型 46–48 个，批次峰值 2.783/2.148/2.119/2.742 毫秒，生成耗时 145/162/167/156 毫秒。headless 崩溃点与本次模型目录改动无关：最小复现为“城市生成 + `navigation.build()` 后再创建任意 `MeshInstance3D`”，不创建精细模型也会损坏 dummy 渲染器的网格 RID；按既有环境问题记录，不把退出码当作断言失败。
+
+**后续方向：** 下一大模块计划做“站点与订单可读性”——给商家/顾客站点加真实店名和入口标识，突出当前订单目标并弱化非目标建筑，让玩家在扩展后的城市里能快速认出该去哪一家，而不是只看统一的任务光柱。
+
+本条记录随 `feature/jzy070407-city-dressing` 分支提交、推送并建 PR。

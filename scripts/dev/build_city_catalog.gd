@@ -13,10 +13,27 @@ func bounds(node: Node, transform := Transform3D.IDENTITY) -> AABB:
 	return result
 
 func _initialize() -> void:
+	# Curated after rendering a contact sheet of the whole source folder.
+	# Only volumetric buildings stay in "other"; ground planes, walls,
+	# bridges, antenna towers, plazas and market stalls are excluded.
 	var categories := {
-		"pickup": ["取外卖可用模型", ["bakery", "coffee", "Pizza", "Resturant", "mini_market", "confectionery"]],
-		"delivery": ["收外卖可用模型", ["hotel", "school", "bank", "book_shop", "gym", "cinema", "bar"]],
-		"other": ["其他建筑模型", ["公寓楼", "Asset_0002", "Asset_0011"]],
+		"pickup": ["取外卖可用模型", [
+			"bakery", "coffee", "Pizza", "Resturant", "mini_market", "confectionery", "mall",
+		]],
+		"delivery": ["收外卖可用模型", [
+			"hotel", "school", "bank", "book_shop", "gym", "cinema", "bar",
+		]],
+		"other": ["其他建筑模型", [
+			"Asset_0004", "Asset_0013", "Asset_0014", "Asset_0015", "Asset_0016",
+			"Asset_0017", "Asset_0020", "Asset_0021", "Asset_0023", "Asset_0024",
+			"Asset_0025", "Asset_0026", "Asset_0027", "Asset_0028", "Asset_0029",
+			"Asset_0030", "Asset_0031", "Asset_0032", "Asset_0033", "Asset_0035",
+			"Asset_0036", "Asset_0037", "Asset_0038", "Asset_0039", "Asset_0041",
+			"Asset_0042", "Asset_0043", "Asset_0044", "Asset_0045", "Asset_0047",
+			"Asset_0049", "Asset_0050", "Asset_0053", "Asset_0055", "Asset_0056",
+			"Asset_0060", "Asset_0061", "Asset_0062", "Asset_0065", "Asset_0066",
+			"Asset_0067", "Asset_0072", "公寓楼",
+		]],
 		"tree": ["装饰模型", ["Asset_0004"]],
 		"lamp": ["装饰模型", ["Asset_0027"]],
 	}
