@@ -9,12 +9,13 @@ signal navigation_baked
 
 @onready var _region: NavigationRegion3D = $NavigationRegion3D
 
-## 城市级地图的导航烘焙体素。默认 2400 米地图使用 4 米体素，
-## 否则默认 0.25 米体素会触发 Godot 的烘焙崩溃保护。
-@export var cell_size := 4.0
+## 城市级地图的导航烘焙体素。2400 米地图不能用默认 0.25 米体素，
+## 否则会触发 Godot 的烘焙崩溃保护；2 米体素足以保留人行道宽度。
+## 导航代理按玩家尺寸设置，不再沿用 4 米的车辆尺寸。
+@export var cell_size := 2.0
 @export var cell_height := 1.0
-@export var agent_radius := 4.0
-@export var agent_height := 4.0
+@export var agent_radius := 0.5
+@export var agent_height := 1.8
 @export var agent_max_climb := 1.0
 @export var agent_max_slope := 45.0
 
