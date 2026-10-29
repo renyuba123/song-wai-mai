@@ -27,10 +27,14 @@ var network: RoadNetwork = null
 var city: CityContent = null
 var report: Dictionary = {}
 var city_report: Dictionary = {}
+var site_signage: SiteSignage = null
 var _editor_regeneration_queued := false
 
 
 func _ready() -> void:
+	if not Engine.is_editor_hint():
+		# 店名牌只是运行时视觉提示；编辑器预览不创建，避免把节点写进主场景。
+		site_signage = _ensure_site_signage()
 	if Engine.is_editor_hint():
 		_queue_editor_regeneration()
 
@@ -67,11 +71,29 @@ func regenerate() -> void:
 	}
 	report = network.validate()
 	road_builder.build(network)
-	city_builder.population_layout = CityPopulationLayout.generate(city, streaming.chunk_size)
+	var layout := CityPopulationLayout.generate(city, streaming.chunk_size)
+	SiteNaming.apply(city, layout)
+	city_builder.population_layout = layout
 	city_builder.build(network, city)
-	streaming.configure(city_builder.population_layout, city_builder, city.player_start.position)
+	streaming.configure(layout, city_builder, city.player_start.position)
+	if site_signage != null:
+		site_signage.build(city)
 	_print_report()
 	world_generated.emit(network)
+
+
+func get_site_signage() -> SiteSignage:
+	## 订单管理器用它高亮当前目标；编辑器预览里为 null。
+	return site_signage
+
+
+func _ensure_site_signage() -> SiteSignage:
+	var node := get_node_or_null("SiteSignage") as SiteSignage
+	if node == null:
+		node = SiteSignage.new()
+		node.name = "SiteSignage"
+		add_child(node)
+	return node
 
 
 func _print_report() -> void:

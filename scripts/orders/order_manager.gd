@@ -68,6 +68,7 @@ func setup(
 	_at_start_screen = true
 	_player.set_controls_enabled(false)
 	_hud.show_start_menu(_city_seed())
+	_sync_signage()
 
 
 func get_current_order() -> DeliveryOrder:
@@ -136,6 +137,7 @@ func return_to_start_menu() -> bool:
 	if _player != null:
 		_player.set_controls_enabled(false)
 	_hud.show_start_menu(_city_seed())
+	_sync_signage()
 	return true
 
 
@@ -241,6 +243,7 @@ func _begin_generation(seed_value: int, avoid_signature: String) -> void:
 		_route_guide.hide_route()
 	if _hud != null:
 		_hud.show_waiting("正在生成订单…")
+	_sync_signage()
 	_attempt_generation()
 
 
@@ -282,6 +285,7 @@ func _offer_order(order: DeliveryOrder) -> void:
 		_route_guide.hide_route()
 	if _player != null:
 		_player.set_controls_enabled(false)
+	_sync_signage()
 	var time_limit := OrderSession.calculate_time_limit(
 		order, _player.move_speed if _player != null else 5.0
 	)
@@ -342,6 +346,7 @@ func _on_session_finished(_success: bool) -> void:
 		_route_guide.hide_route()
 	if _player != null:
 		_player.set_controls_enabled(false)
+	_sync_signage()
 	if _current_order != null and _session != null and _hud != null:
 		_hud.show_result(_current_order, _session)
 	order_finished.emit(_session.is_success() if _session != null else false)
@@ -427,6 +432,7 @@ func _ensure_beacon() -> void:
 
 func _update_beacon() -> void:
 	_ensure_beacon()
+	_sync_signage()
 	if _session == null or not _session.is_active():
 		_beacon.visible = false
 		return
@@ -441,3 +447,16 @@ func _update_beacon() -> void:
 	_beacon_material.albedo_color = color
 	_beacon_material.emission = color
 	_beacon.visible = true
+
+
+func _sync_signage() -> void:
+	## 把当前订单目标同步给城市店名牌；没有活动会话时恢复常态。
+	if _world == null:
+		return
+	var signage := _world.get_site_signage()
+	if signage == null:
+		return
+	var site: CitySite = null
+	if _session != null and _session.is_active():
+		site = _session.get_target_site()
+	signage.set_active_target(site.id if site != null else &"")
