@@ -1510,3 +1510,51 @@ PR #31 合并后，从 `origin/main` 的 `7c3d412` 起 `feature/jzy070407-menu-r
 - 合并后有 5 处文本冲突（CI 测试清单、`README.md`、`docs/USER_GUIDE.md`、`docs/DEVELOPMENT_LOG.md`、`order_manager.gd`），全部手工解决，没有强制推送。
 
 本条记录随 `feature/jzy070407-handoff-package-4` 分支提交、推送并建 PR。
+
+## 2026-10-29 20:56（Asia/Shanghai）补一个脚本：导出的数据直接生成地图 PNG
+
+本轮需求（原文）：“补一个py文件”。
+
+此前从服务器导出数据后，要生成地图图片得先转页面 JSON，再打开
+`exhibition/analytics/index.html` 手动点「下载地图 PNG」。本轮新增
+`tools/render_behavior_png.py`，把“CSV 转 JSON、无头浏览器截图”合成一条命令。
+
+**实现：**
+
+- 输入支持 `--csv`（导出的 `behavior_events_events.csv`）或 `--json`
+  （已经转好的 `analytics.json`），两者互斥；CSV 路径复用
+  `build_behavior_page_data.build_from_csv`，不重复解析逻辑。
+- 默认城市底图是 `exhibition/analytics/data/city-118.json`；有 `--city` 可换。
+- 在临时目录复制分析页的 HTML/CSS/JS，写入只含当前会话的
+  `data/sample-data.js`，并在 `</head>` 前注入样式，隐藏页头、工具栏、
+  右侧面板和说明文字，让画布铺满整个视口；截图内容与页面上的
+  「下载地图 PNG」一致，但不带界面元素。
+- 默认查找 Windows / macOS 常见路径的 Edge 或 Chrome，也支持
+  `--browser` 和 `SWM_BROWSER`；先试 `--headless=new`，失败再试旧
+  `--headless`，每个浏览器用独立临时配置目录，避免和正在运行的浏览器冲突。
+- 输出：单会话默认 `<输入同名>-map.png`；`--csv` 时同时把
+  `analytics.json` 写到 CSV 旁边；`--all` 写到旁边的 `maps/` 目录，
+  按会话编号和 ID 命名；`--session` 支持完整或部分会话 ID；
+  `--size` 默认 2000；`--keep` 保留临时页面用于排查。
+- 会话没有 `pos` 事件时打印提示，仍然出图，但只有路网和任务点；
+  这是为了提醒旧版 Web 构建的导出数据不会有轨迹。
+
+**验证：**
+
+- 用 `exports/game-sample/analytics.json`（117 条事件、105 个位置点、
+  7 个计时点、取餐和结算各 1 次）渲染 2000×2000 PNG，约 1188 KB；
+  逐像素看过截图：路网、拥挤度、速度热力轨迹、起点/取餐/送达和
+  00:29 到 03:29 的计时点都正常。
+- 用这份示例造了两会话的临时 CSV，跑 `--csv --all --size 1200`：
+  自动写出 `analytics.json`，并生成
+  `maps/behavior-map-01-synthetic-a.png` 和
+  `maps/behavior-map-02-synthetic-b.png` 两张 1200×1200 图，内容正确。
+- `--session s04972 --size 800` 命中唯一会话并生成 800×800 图。
+- 用 Pillow 读回 PNG，尺寸和 RGB 模式符合预期；临时 CSV、测试图和
+  导出产物都已删除，没有进入仓库。
+
+**修改文件：** 新增 `tools/render_behavior_png.py`；修改
+`docs/BEHAVIOR_DATA_EXPORT.md`、`exhibition/README.md`、`.gitignore`、
+`docs/DEVELOPMENT_LOG.md`。
+
+本条记录随 `feature/jzy070407-render-png` 分支提交、推送并建 PR。

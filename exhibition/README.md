@@ -112,6 +112,17 @@ tcb hosting deploy build/web / -e <环境 ID>
 在页面上点「载入数据」打开；完整步骤见
 [docs/BEHAVIOR_DATA_EXPORT.md](../docs/BEHAVIOR_DATA_EXPORT.md#生成分析页数据)。
 
+不想手动打开页面时，用 `tools/render_behavior_png.py` 直接出地图 PNG：
+
+```bash
+python tools/render_behavior_png.py \
+  --csv exports/behavior-20261029/behavior_events_events.csv
+```
+
+它会调用本机的 Edge / Chrome 无头截图，默认在 CSV 旁边生成
+`analytics.json` 和 `analytics-map.png`；`--all` 按会话各出一张，
+`--session` 选单个会话，`--size` 调分辨率。参数和排查方法见
+[docs/BEHAVIOR_DATA_EXPORT.md](../docs/BEHAVIOR_DATA_EXPORT.md#直接生成地图-png)。
 想用游戏本体自己录一单示例，运行
 `Godot --path . --rendering-method gl_compatibility --script res://tools/record_sample_session.gd`：
 脚本会自动接单、沿真实寻路骑行并采集，把页面 JSON 写到

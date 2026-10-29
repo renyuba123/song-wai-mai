@@ -212,6 +212,40 @@ python tools/build_behavior_page_data.py --demo \
   --out exhibition/analytics/data/sample-data.js --js
 ```
 
+## 直接生成地图 PNG
+
+不想开浏览器点按钮时，用 `tools/render_behavior_png.py` 一条命令出图。
+脚本把数据嵌进临时的分析页，再用本机的 Edge / Chrome 无头模式截图，
+所以内容与页面上「下载地图 PNG」一致：路网、拥挤度、速度热力轨迹、
+任务起止点和计时点都在，但不带页面工具栏和右侧面板。
+
+从导出的 CSV 直接出图，同时把页面 JSON 写到 CSV 旁边：
+
+```bash
+python tools/render_behavior_png.py \
+  --csv exports/behavior-20261029/behavior_events_events.csv
+```
+
+默认生成 `exports/behavior-20261029/analytics.json` 和
+`exports/behavior-20261029/analytics-map.png`。也可以从已有的页面 JSON 出图：
+
+```bash
+python tools/render_behavior_png.py \
+  --json exports/behavior-20261029/analytics.json \
+  --out exports/behavior-20261029/map.png
+```
+
+- `--all`：每个会话各出一张，写到输入文件旁边的 `maps/` 目录，
+  文件名形如 `behavior-map-01-<会话 ID>.png`。
+- `--session <完整或部分会话 ID>`：只渲染指定会话。
+- `--size 3000`：截图边长，默认 2000；数值越大文件越大，文字越清楚。
+- `--browser <路径>` 或环境变量 `SWM_BROWSER`：指定 Edge / Chrome。
+  默认依次查找 Windows 和 macOS 的常见安装位置。
+- `--keep`：保留临时页面目录，截图失败时用来排查。
+
+导出的 PNG 和 CSV、JSON 一样属于内部资料，不要提交进仓库或贴到公开群。
+如果提示“这个会话没有 pos 事件”，说明数据来自旧版 Web 构建或没有开始配送；
+旧数据仍能出图，但只有路网和任务点，没有轨迹，需要先更新线上游戏版本。
 ### 用游戏本体录一单示例
 
 上面的演示轨迹是脚本按路网推算出来的。想确认采集链路和页面画的是游戏里
