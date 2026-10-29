@@ -1609,3 +1609,63 @@ PR #31 合并后，从 `origin/main` 的 `7c3d412` 起 `feature/jzy070407-menu-r
 **修改文件：** `scripts/core/telemetry_client.gd`、`tests/test_telemetry.gd`、`docs/BEHAVIOR_DATA_EXPORT.md`、`docs/DEVELOPMENT_LOG.md`。
 
 本条记录随 `feature/jzy070407-local-record-flag` 分支提交、推送并建 PR。
+## 2026-10-29 22:08（Asia/Shanghai）重新上传 Web 版并修复部署回滚
+
+本轮需求（原文）：“打开一下网页端”，随后是“重新上传新版本”和“直接更新服务器”。
+
+**过程：**
+
+- 线上仍是 14:58 的旧构建。手动触发 `Deploy web build` 后，合并 #43、#44、#45 的推送又连续触发部署；工作流并发组取消旧任务，最后落在 main `6a5326c` 的运行 `40880026526`。
+- 该运行在 `tcb hosting deploy --safe --verify` 阶段上传完 8 个文件后报
+  `一致性校验失败：missing=/index.apple-touch-icon.png,...,/index.wasm`，触发安全回滚；
+  回滚没有恢复完整旧站，静态托管只剩 3 个 `.import` 文件，首页变成 404。
+- 新建 `fix/jzy070407-web-deploy-verify`，把部署命令改为
+  `--concurrency 5 --retry-count 5 --entry index.html`，去掉 `--safe --verify`，
+  并把探活扩展到 `index.pck` 和 `index.wasm`。在该分支手动运行工作流
+  `40884175865`，部署成功。
+- 本机 `tcb` 已登录，但本机只有 mono 版 Godot，无法导出 Web；尝试重新下载标准版
+  Godot 和 CI artifact 都因 GitHub 网络中断失败，因此没有走本地重传，等 CI 直接完成。
+
+**验证：**
+
+- 运行 `40884175865` 结论 success，工作流自带的页面、`index.pck`、`index.wasm` 探活均通过。
+- 线上首页 HTTP 200，`index.html` 5,450 字节、`index.pck` 32,061,440 字节、
+  `index.wasm` 39,514,754 字节，`Last-Modified` 均为 2026-10-29 13:42 UTC。
+- 下载线上 `index.pck`，按 PCK v4 目录取出 `scripts/core/telemetry_client.gdc`，
+  用 zstd 解出 39,544 字节；里面能查到 `checkpoint`、`sendBeacon`、`road`、`cars`、
+  `near`、`speed`、`left`、`pickup`、`finish`，确认线上已是记录位置、道路和计时点的新版本。
+- 重新打开线上网页端，页面正常加载。
+
+**修改文件：** `.github/workflows/deploy-web.yml`、`docs/WEB_DEPLOY.md`、
+`docs/DEVELOPMENT_LOG.md`。
+
+本条记录随 `fix/jzy070407-web-deploy-verify` 分支提交、推送并建 PR。
+## 2026-10-29 21:45（Asia/Shanghai）修正 Web 自动部署的云端路径：去掉 `/`，让一致性校验能对上
+
+现象：配置好 `TCB_SECRET_ID`、`TCB_SECRET_KEY` 后，`main` 合并 #42/#43/#44 触发的部署任务在 `Deploy to CloudBase hosting` 一步失败，日志为：
+
+```text
+一致性发布失败，已自动回滚，备份保留于 .cloudbase-backup/…/：
+一致性校验失败：missing=/index.apple-touch-icon.png,/index.audio.worklet.js,…,/index.html,/index.js,/index.pck,/index.png,/index.wasm; mismatched=[]
+```
+
+排查：
+
+- 用同一对密钥在本地 `tcb login` 后执行 `tcb hosting list -e passive-sailfish-d0e1nvt8175333a`，根目录只有 `__auth/*`、`cloud-admin/index.html` 和三个 `index.*.png.import` 残留，游戏文件已经随回滚删除，线上首页返回的是 COS 的 `NoSuchKey` 404 页面。
+- 读 CloudBase CLI 3.8.10 的 `uploadDirectoryConsistent`：本地清单的 Key 用 `path.join(cloudPath, 相对路径)` 生成，`cloudPath` 是 `/` 时会拼出 `/index.html`；远端清单直接取 COS 的 Key，没有前导斜杠。两边用带斜杠和不带斜杠的字符串比较，所有文件都被判成 missing，`--safe` 随即回滚。上传本身没有问题，是校验拼接的写法导致的误判。
+- CLI 自带示例写的是 `tcb hosting deploy ./dist`（省略云端路径即上传到根目录），工作流多写了一个 `/`。
+
+修改：
+
+- `.github/workflows/deploy-web.yml` 的发布命令改为 `tcb hosting deploy build/web -e "$TCB_ENV_ID" --concurrency 10 --safe --verify`，并加注释说明不能传 `/`。
+- `docs/WEB_DEPLOY.md` 同步修改命令示例，补上这段原因说明，避免以后又照着旧写法加回斜杠。
+
+验证：
+
+- 本机与 CI 用的是同一个 CLI 版本（3.8.10），本地 `tcb hosting list` 与线上首页 404 的结果相互印证了回滚确实生效。
+- 工作流改动只涉及发布命令和文档，`--import` 与全部 Godot 测试在上一轮 `b2901e2` 上已经通过，这次没有改 GDScript。
+- 修复是否生效要等下一次部署运行回填；触发方式为在 `main` 合并后自动执行，或在 Actions 里手动 Run workflow。
+
+**修改文件：** `.github/workflows/deploy-web.yml`、`docs/WEB_DEPLOY.md`、`docs/DEVELOPMENT_LOG.md`。
+
+本条记录随 `fix/jzy070407-web-deploy-path` 分支提交、推送并建 PR。

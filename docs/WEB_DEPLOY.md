@@ -66,8 +66,16 @@ gh variable set TCB_SITE_URL --body "https://passive-sailfish-d0e1nvt8175333a-14
    并检查 `index.html`、`index.wasm`、`index.pck` 都非空。
 5. 上传构建产物 artifact。
 6. 用 `tcb login --apiKeyId … --apiKey …` 非交互登录，再执行
-   `tcb hosting deploy build/web / -e <环境 ID> --concurrency 10 --safe --verify`。
+   `tcb hosting deploy build/web / -e <环境 ID> --concurrency 5 --retry-count 5 --entry index.html`。
+   入口文件 `index.html` 最后上传，避免页面先于资源出现。
+   **不要加 `--safe --verify`**：CDN 尚未同步时它会误报所有文件 missing，
+   然后按“安全回滚”把整站删到只剩 `.import` 文件（2026-10-29 实际发生过）。
+7. 用 `curl` 访问线上地址，确认页面包含 Godot 标记，并且 `index.pck`、`index.wasm`
+   都返回 200。
+   `tcb hosting deploy build/web -e <环境 ID> --concurrency 10 --safe --verify`。
    `--safe` 会在发布前备份、失败时自动回滚；`--verify` 发布后核对远端文件与本地一致。
+   云端路径参数不要写 `/`：CLI 会把本地清单的 Key 拼成 `/index.html`，和 COS 里没有前导斜杠的
+   `index.html` 对不上，`--verify` 会误判全部文件缺失并触发回滚。省略第二个参数就是上传到根目录。
 7. 用 `curl` 访问线上地址，确认返回的页面里包含 Godot 相关标记。
 
 `:8080` 之类的调试端口不需要开放，静态托管只需要普通 HTTPS 访问。
@@ -88,8 +96,12 @@ Godot_v4.7.2-stable_win64_console.exe --headless --path . \
 # 3. 登录并发布
 npm install -g @cloudbase/cli --registry=https://registry.npmmirror.com
 tcb login
-tcb hosting deploy build/web / -e passive-sailfish-d0e1nvt8175333a --safe --verify
+tcb hosting deploy build/web / -e passive-sailfish-d0e1nvt8175333a \
+  --concurrency 5 --retry-count 5 --entry index.html
+tcb hosting deploy build/web -e passive-sailfish-d0e1nvt8175333a --safe --verify
 ```
+
+同样不要加 `--safe --verify`，原因见上一节第 6 步。
 
 .NET 版 Godot（`Godot_v4.7.2-stable_mono_win64`）不能导出 Web，必须用标准版。
 
@@ -102,6 +114,7 @@ tcb hosting deploy build/web / -e passive-sailfish-d0e1nvt8175333a --safe --veri
 | `git lfs fsck --pointers` 失败 | 有 LFS 文件没真正上传，本地执行 `git lfs push origin --all` 后重试 |
 | 导出报模板缺失 | 工作流缓存里模板不完整，删掉 `godot-4.7.2-stable-web-templates` 缓存重跑 |
 | 页面打不开或 404 | 确认 `-e` 的环境 ID 与 `TCB_SITE_URL` 指向同一个环境 |
+| 部署日志报 `一致性校验失败：missing=...` 后整站 404 | `--safe --verify` 在 CDN 同步前误判并回滚。去掉这两个参数直接上传，入口文件用 `--entry index.html` 放最后；仓库已在 2026-10-29 修正工作流 |
 | 页面能开但黑屏 | 打开浏览器控制台看 `index.wasm` 是否 404 或 MIME 类型不对；必要时在托管控制台检查文件名大小写 |
 
 ## 与展览二维码的关系
