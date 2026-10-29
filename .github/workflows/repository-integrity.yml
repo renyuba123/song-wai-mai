@@ -92,6 +92,6 @@ jobs:
           set -euo pipefail
           GODOT=/tmp/godot/Godot_v4.7.2-stable_linux.x86_64
           "$GODOT" --headless --path . --import
-          for test in test_road_network test_main_scene test_contracts test_input_actions test_navigation_queries test_city test_city_catalog test_god_view test_orders test_phone_orders test_traffic test_city_population test_city_streaming test_traffic_streaming test_pause test_route_guidance test_pedestrians test_site_readability test_touch_controls; do
+          for test in test_road_network test_main_scene test_contracts test_input_actions test_navigation_queries test_city test_city_catalog test_god_view test_orders test_menu_ui test_phone_orders test_traffic test_city_population test_city_streaming test_traffic_streaming test_pause test_route_guidance test_pedestrians test_site_readability test_touch_controls; do
             "$GODOT" --headless --path . --script "res://tests/${test}.gd"
           done

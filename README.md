@@ -44,6 +44,7 @@ tests/
   test_city_catalog.gd      城市模型目录完整性、数量与种子多样性测试
   test_god_view.gd          测试用上帝视角开关与状态恢复测试
   test_orders.gd            订单生成、状态机、开始/接单/结算界面测试
+  test_menu_ui.gd           开始界面和结算页面的文案、统计与布局测试
   test_phone_orders.gd      三维接单手机、屏幕倒计时、Y/N、点击接单/拒单与配送中常驻测试
   test_route_guidance.gd    地面路线可见性、贴路面高度、移动实时重算、偏航/传送/目标切换与节流测试
   test_site_readability.gd  站点店名确定性、三维标牌与订单目标高亮测试
@@ -73,6 +74,7 @@ godot --headless --path . --script res://tests/test_city.gd
 godot --headless --path . --script res://tests/test_city_catalog.gd
 godot --headless --path . --script res://tests/test_god_view.gd
 godot --headless --path . --script res://tests/test_orders.gd
+godot --headless --path . --script res://tests/test_menu_ui.gd
 godot --headless --path . --script res://tests/test_phone_orders.gd
 godot --headless --path . --script res://tests/test_route_guidance.gd
 godot --headless --path . --script res://tests/test_site_readability.gd
