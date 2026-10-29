@@ -256,12 +256,15 @@ func get_result_body() -> String:
 static func site_label(site: CitySite) -> String:
 	if site == null:
 		return "未知站点"
+	var prefix := "商家" if site.kind == CitySite.Kind.MERCHANT else "顾客"
+	if not site.display_name.is_empty():
+		# 有店名时先显示店名，再补角色，方便和三维标牌对上。
+		return "%s（%s）" % [site.display_name, prefix]
 	var raw := String(site.id)
 	var parts := raw.split("_")
 	var suffix := parts[parts.size() - 1] if parts.size() > 1 else raw
 	if suffix.is_empty():
 		suffix = "???"
-	var prefix := "商家" if site.kind == CitySite.Kind.MERCHANT else "顾客"
 	return "%s #%s" % [prefix, suffix]
 
 

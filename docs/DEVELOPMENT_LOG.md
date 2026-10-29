@@ -894,3 +894,31 @@ Godot 4.7.2 `--headless --path . --import` 退出码 0，路网 150 个节点、
 - headless 运行同一测试仍会在导航烘焙后创建路线网格时触发 RendererDummy/RID 访问冲突（退出码 139），与上一模块记录的最小复现一致，属于本机 Windows headless 环境问题；窗口渲染结果和断言通过。
 
 本条记录随 `feature/jzy070407-route-fixes` 分支提交、推送并建 PR。
+
+## 2026-10-29 12:42（Asia/Shanghai）站点与订单可读性
+
+**本轮需求（原文）：** “按照大模块逐步继续，某一模块完成后给出下一模块方向”
+
+上一模块“城市模型库扩充与朝向校正”完成后给出的下一模块方向是“站点与订单可读性”：给商家/顾客站点加真实店名和入口标识，突出当前订单目标并弱化非目标站点，让玩家在模型丰富后的城市里能快速认出该去哪一家，而不是只看统一的任务光柱。上一轮用户提出的导航指引问题（高光提示线过高、无法实时演算）已在独立的 `feature/jzy070407-route-fixes` 分支和 PR #25 中处理，本轮没有重复修改路线代码。
+
+实现内容：
+
+- 新增 `SiteNaming`：为 7 个取餐店面、7 个送餐站点各准备 2 到 3 个中文店名，按最终选中的建筑模型取候选列表，再用站点编号做确定性哈希挑选。同一城市种子、同一布局总是得到同一组店名；接单界面、活动目标、三维店名牌共用 `CitySite.display_name`，`CitySite` 新增同名导出字段，单独生成没有布局的 `CityContent` 时保持为空。
+- 新增 `SiteSignage`：`WorldGenerator` 在运行时创建节点，布局生成后为每个站点在入口上方 3.2 米放置朝向镜头的 `Label3D`；商家用暖黄色、顾客用浅蓝色，160 米外淡出。当前订单目标加“★”、放大并始终可见（`no_depth_test`），其余站点的标牌降低透明度，避免整条街的店名同时抢眼。
+- 订单流程同步店名：接单界面的“取餐/送达”改为“城市广场（商家）”“拾光书店（顾客）”这种先店名后角色的格式；活动目标显示“前往「城市广场」取餐”“送达「拾光书店」”；没有店名时仍回退到原来的“商家 #007”“顾客 #012”。`OrderManager` 在接单、取餐、送达、重开、返回主菜单和结算时同步 `SiteSignage` 的高亮目标，目标信标继续用颜色区分取餐/送达。
+- 截图检查：在 1600×900 窗口靠近商家观察，店名牌中文渲染正常，当前目标“★ 城市广场”显示在信标上方；最初同时给信标加了“取餐点 · 城市广场”文字，两个标签在近距离互相压住且被信标柱遮挡，改成只保留三维店名牌后画面更干净，因此没有保留重复的信标文字。
+- 新增 `tests/test_site_readability.gd`：检查全部 32 个站点都有店名、店名与最终模型/编号确定一致、三维标牌与店名一致、接单界面包含双方店名和角色、取餐/送达阶段目标文本与星标切换、结算后取消高亮；未知模型不会凭空生成店名。更新 `tests/test_orders.gd` 中固定的“商家 #007”“顾客 #012”“送达顾客”断言，保留无店名回退用例并增加有店名用例。
+- `.github/workflows/repository-integrity.yml` 测试循环、`README.md`、`docs/USER_GUIDE.md` 加入 `test_site_readability` 和店名/标牌说明。
+
+修改文件：新增 `scripts/world/site_naming.gd`、`scripts/world/site_signage.gd`、`tests/test_site_readability.gd`；修改 `scripts/world/city_site.gd`、`scripts/world/world_generator.gd`、`scripts/orders/order_hud.gd`、`scripts/orders/order_session.gd`、`scripts/orders/order_manager.gd`、`tests/test_orders.gd`、`.github/workflows/repository-integrity.yml`、`README.md`、`docs/USER_GUIDE.md`、`docs/DEVELOPMENT_LOG.md`。没有修改人流、车速、NPC 车行方向、主控电动车物理相关文件。
+
+**测试与校验：**
+
+- Godot 4.7.2 `--headless --path . --import` 退出码 0；路网校验通过（节点 150、路段 214），城市生成通过（地块 1637、建筑 1637、站点 32、出入口 98）。
+- 窗口渲染 1280×720：`test_site_readability` 输出 `PASS site readability`、退出码 0；`test_orders` 输出 `PASS orders starts=12` 和 `PASS orders`、退出码 0；`test_route_guidance` 输出 `PASS route guidance`、退出码 0。
+- headless：`test_site_readability` 打印 `PASS site readability`，随后以既有 Windows 退出阶段访问冲突 139 结束；`test_orders` 打印 `PASS orders`，同样在退出阶段 139；`test_city` 输出 `PASS city` 后 139；`test_contracts` 退出码 0。`test_route_guidance` 在 headless 下因导航烘焙后创建路线网格触发已知 RendererDummy/RID 问题，没有打印 PASS，改在窗口渲染下通过。以上均与既有 headless 环境现象一致，不视为断言失败。
+- `git diff --check` 通过。
+
+**后续方向：** 下一大模块计划做“交通与行人规则化”：让现有的汽车和行人不再只是各走各的，而是在路口按信号灯停走、车辆对前方行人和障碍减速，并让玩家能看懂什么时候可以安全过街。这样城市模型和站点已经可辨认，接下来补上街道本身的行为可信度。
+
+本条记录随 `feature/jzy070407-site-readability` 分支提交、推送并建 PR。

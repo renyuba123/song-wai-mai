@@ -100,10 +100,16 @@ func can_interact(player_position: Vector3) -> bool:
 
 
 func get_objective_text() -> String:
+	var site := get_target_site()
+	var display_name := site.display_name if site != null else ""
 	match state:
 		State.TO_MERCHANT:
+			if not display_name.is_empty():
+				return "前往「%s」取餐" % display_name
 			return "前往商家取餐"
 		State.TO_CUSTOMER:
+			if not display_name.is_empty():
+				return "送达「%s」" % display_name
 			return "送达顾客"
 		State.DELIVERED:
 			return "订单完成"

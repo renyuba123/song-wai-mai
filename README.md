@@ -45,6 +45,7 @@ tests/
   test_god_view.gd          测试用上帝视角开关与状态恢复测试
   test_orders.gd            订单生成、状态机、开始/接单/结算界面测试
   test_route_guidance.gd    地面路线可见性、贴路面高度、移动实时重算、偏航/传送/目标切换与节流测试
+  test_site_readability.gd  站点店名确定性、三维标牌与订单目标高亮测试
   test_traffic.gd           车道、确定性车流、命中检测与撞车失败测试
 docs/
   ROADMAP.md            已确认的开发路线图
@@ -72,6 +73,7 @@ godot --headless --path . --script res://tests/test_city_catalog.gd
 godot --headless --path . --script res://tests/test_god_view.gd
 godot --headless --path . --script res://tests/test_orders.gd
 godot --headless --path . --script res://tests/test_route_guidance.gd
+godot --headless --path . --script res://tests/test_site_readability.gd
 godot --headless --path . --script res://tests/test_traffic.gd
 ```
 
@@ -94,6 +96,7 @@ godot --headless --path . --script res://tests/test_traffic.gd
 - 调试/测试构建中按 **F3** 打开测试用上帝视角：正交俯视、WASD 平移、滚轮缩放，再按 F3 返回玩家。正式导出不会创建该节点，也不注册额外输入动作。
 - 阶段二订单闭环已经可用：随机起点、商家和顾客，接单后从起点出发，靠近商家按 **E** 取餐，靠近顾客按 **E** 送达，超时失败；相同城市/订单种子结果一致。
 - 游戏 UI 全部由 `scripts/orders/order_hud.gd` 代码创建：开始界面、待接订单信息（商家、顾客、路程、限时）、活动目标与倒计时、成功/失败结算，以及“下一单”“返回主菜单”按钮。菜单和结算期间关闭玩家移动并释放鼠标。
+- 站点店名由 `SiteNaming` 按最终建筑模型和站点编号确定性分配，HUD 与三维标牌共用同一份 `CitySite.display_name`；`SiteSignage` 在每家店入口上方显示店名牌，当前订单目标加“★”并常显，其余站点的标牌降低透明度。
 - 交通系统按城市种子确定性生成方块占位汽车，每个路段最多一辆；`max_vehicles` 默认上限 256，当前 2400 米地图的 214 条路段都会生成汽车。车辆沿右侧车道双向行驶并在路口继续随机路线，不进入导航烘焙，也不与其它车辆或建筑碰撞，避免车流卡死。
 - 配送中碰到汽车会立即判定“被来往汽车撞倒，配送失败”，结算保留真实用时；主菜单、接单界面、结算界面和上帝视角下不会误判。行人、交通灯和车辆避让尚未实现。
 

@@ -327,11 +327,21 @@ func _check_hud_direction() -> void:
 	var merchant := CitySite.new()
 	merchant.id = &"merchant_007"
 	merchant.kind = CitySite.Kind.MERCHANT
-	_expect(OrderHUD.site_label(merchant) == "商家 #007", "商家站点显示名称错误")
+	_expect(OrderHUD.site_label(merchant) == "商家 #007", "商家站点回退名称错误")
+	merchant.display_name = "麦香面包房"
+	_expect(
+		OrderHUD.site_label(merchant) == "麦香面包房（商家）",
+		"商家站点未优先显示店名"
+	)
 	var customer := CitySite.new()
 	customer.id = &"customer_012"
 	customer.kind = CitySite.Kind.RESIDENTIAL
-	_expect(OrderHUD.site_label(customer) == "顾客 #012", "顾客站点显示名称错误")
+	_expect(OrderHUD.site_label(customer) == "顾客 #012", "顾客站点回退名称错误")
+	customer.display_name = "拾光书店"
+	_expect(
+		OrderHUD.site_label(customer) == "拾光书店（顾客）",
+		"顾客站点未优先显示店名"
+	)
 
 
 func _check_manager() -> void:
@@ -359,7 +369,11 @@ func _check_manager() -> void:
 		_orders.get_session().state == OrderSession.State.TO_CUSTOMER,
 		"经理取餐后状态错误"
 	)
-	_expect(hud.get_objective_text() == "送达顾客", "经理取餐后 HUD 未更新")
+	var customer_name := order.customer.display_name
+	var expected_objective := (
+		"送达「%s」" % customer_name if not customer_name.is_empty() else "送达顾客"
+	)
+	_expect(hud.get_objective_text() == expected_objective, "经理取餐后 HUD 未更新")
 	var beacon := _orders.get_node_or_null("TargetBeacon") as MeshInstance3D
 	_expect(beacon != null and beacon.visible, "目标信标未显示")
 
