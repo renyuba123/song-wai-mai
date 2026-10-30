@@ -116,12 +116,8 @@ jobs:
           # --safe --verify 在 CDN 尚未同步时会误报 missing 并回滚整站
           # （2026-10-29 曾因此把静态托管删到只剩 .import 文件）。
           # 这里直接上传，入口文件放最后，避免页面先于资源出现。
-          tcb hosting deploy build/web / -e "$TCB_ENV_ID" \
-            --concurrency 5 --retry-count 5 --entry index.html
-          # 不要传 "/" 当云端路径：CLI 会把本地清单的 key 拼成 /index.html，
-          # 与 COS 里没有前导斜杠的 index.html 对不上，--verify 会误判全部缺失并回滚。
           tcb hosting deploy build/web -e "$TCB_ENV_ID" \
-            --concurrency 10 --safe --verify
+            --concurrency 5 --retry-count 5 --entry index.html
           echo "已在环境 $TCB_ENV_ID 的静态托管根目录发布 build/web"
 
       - name: Smoke test the deployed page

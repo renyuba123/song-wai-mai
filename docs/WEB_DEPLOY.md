@@ -72,11 +72,10 @@ gh variable set TCB_SITE_URL --body "https://passive-sailfish-d0e1nvt8175333a-14
    然后按“安全回滚”把整站删到只剩 `.import` 文件（2026-10-29 实际发生过）。
 7. 用 `curl` 访问线上地址，确认页面包含 Godot 标记，并且 `index.pck`、`index.wasm`
    都返回 200。
-   `tcb hosting deploy build/web -e <环境 ID> --concurrency 10 --safe --verify`。
-   `--safe` 会在发布前备份、失败时自动回滚；`--verify` 发布后核对远端文件与本地一致。
-   云端路径参数不要写 `/`：CLI 会把本地清单的 Key 拼成 `/index.html`，和 COS 里没有前导斜杠的
-   `index.html` 对不上，`--verify` 会误判全部文件缺失并触发回滚。省略第二个参数就是上传到根目录。
-7. 用 `curl` 访问线上地址，确认返回的页面里包含 Godot 相关标记。
+
+Web 使用 Compatibility 渲染器，没有 Forward+ 的法线缓冲。玩家相机在 Web
+运行时会切换到 `assets/Shaders/edge_detection_web.gdshader`，用屏幕颜色梯度
+近似描边，保留像素化、量化和抖动效果；桌面版继续使用原 shader。
 
 `:8080` 之类的调试端口不需要开放，静态托管只需要普通 HTTPS 访问。
 
@@ -96,9 +95,8 @@ Godot_v4.7.2-stable_win64_console.exe --headless --path . \
 # 3. 登录并发布
 npm install -g @cloudbase/cli --registry=https://registry.npmmirror.com
 tcb login
-tcb hosting deploy build/web / -e passive-sailfish-d0e1nvt8175333a \
+tcb hosting deploy build/web -e passive-sailfish-d0e1nvt8175333a \
   --concurrency 5 --retry-count 5 --entry index.html
-tcb hosting deploy build/web -e passive-sailfish-d0e1nvt8175333a --safe --verify
 ```
 
 同样不要加 `--safe --verify`，原因见上一节第 6 步。
