@@ -13,6 +13,7 @@ const PEDESTRIAN_SLOWDOWN_MULTIPLIER := 0.42
 const PEDESTRIAN_MIN_IMPACT_SPEED_MPS := 1.5
 const PEDESTRIAN_HIT_SIZE := Vector3(1.3, 1.8, 2.8)
 const PEDESTRIAN_HIT_CENTER := Vector3(0.0, 0.9, -0.45)
+const WEB_POST_PROCESS_SHADER := preload("res://assets/Shaders/edge_detection_web.gdshader")
 
 @export_group("Movement")
 ## 最高车速（米/秒）。交接包把车流提速到 18 m/s，主控需要更快才能穿插。
@@ -90,6 +91,7 @@ var _steer_angle := 0.0
 
 
 func _ready() -> void:
+	_configure_post_process_shader()
 	collision_layer = CollisionLayers.PLAYER
 	collision_mask = CollisionLayers.PLAYER_MASK
 	_ensure_pedestrian_hit_area()
@@ -104,6 +106,22 @@ func _ready() -> void:
 	if speedometer_needle:
 		_needle_base_y = speedometer_needle.rotation.y
 		speedometer_needle.rotation.y = _needle_base_y + deg_to_rad(needle_zero_angle)
+
+
+func _configure_post_process_shader() -> void:
+	if not OS.has_feature("web"):
+		return
+	var post_process := camera.get_node_or_null("MeshInstance3D") as MeshInstance3D
+	if post_process == null or post_process.mesh == null:
+		return
+	var original_material := post_process.mesh.material as ShaderMaterial
+	if original_material == null:
+		return
+	var web_material := original_material.duplicate() as ShaderMaterial
+	web_material.shader = WEB_POST_PROCESS_SHADER
+	var web_mesh := post_process.mesh.duplicate() as Mesh
+	web_mesh.material = web_material
+	post_process.mesh = web_mesh
 
 
 func set_controls_enabled(enabled: bool) -> void:
